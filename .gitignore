@@ -1,0 +1,31 @@
+# Local/private datasets.
+/all-projects-full.json
+/project WPM.json
+/sample json.json
+/data/
+
+# Internal planning and editor instructions.
+/.cursor/
+/hướng đi mới.md
+/map-wpm-id-vao-csv.md
+/SPEC-TAI-TAO-0.6.0.md
+/TONG-HOP.md
+
+# Generated packages and audit output.
+/dist/
+/outputs/
+*.zip
+*.inspect.ndjson
+
+# Local configuration and credentials.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# OS/editor noise.
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

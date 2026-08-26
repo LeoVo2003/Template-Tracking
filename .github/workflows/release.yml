@@ -1,0 +1,64 @@
+name: Release WordPress plugin
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate tag and plugin version
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin_version="$(sed -n 's/^[[:space:]]*\* Version: \([^[:space:]]*\).*/\1/p' mac-project-tracker.php | head -n 1)"
+          constant_version="$(sed -n "s/^define( 'MAC_TRACKER_VERSION', '\([^']*\)' );/\1/p" mac-project-tracker.php | head -n 1)"
+          tag_version="${GITHUB_REF_NAME#v}"
+
+          if [[ -z "$plugin_version" || "$plugin_version" != "$constant_version" ]]; then
+            echo "Plugin header version and MAC_TRACKER_VERSION do not match."
+            exit 1
+          fi
+
+          if [[ "$tag_version" != "$plugin_version" ]]; then
+            echo "Tag $GITHUB_REF_NAME must match plugin version $plugin_version."
+            exit 1
+          fi
+
+      - name: Build installable WordPress ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_root="build/mac-project-tracker"
+          asset="mac-project-tracker-${GITHUB_REF_NAME}.zip"
+
+          mkdir -p "$package_root"
+          cp mac-project-tracker.php "$package_root/"
+          cp README.md "$package_root/"
+          cp -R assets includes "$package_root/"
+          (cd build && zip -qr "../$asset" mac-project-tracker)
+
+          unzip -l "$asset"
+          echo "ASSET=$asset" >> "$GITHUB_ENV"
+
+      - name: Create or update GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$ASSET" \
+              --title "MAC Project Tracker ${GITHUB_REF_NAME#v}" \
+              --generate-notes
+          fi
