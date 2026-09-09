@@ -582,6 +582,11 @@
 	font-size: 10px;
 }
 .mac-tracker-palette-meta .mac-tracker-snapshot-kind { margin-top: 0; }
+.mac-tracker-palette-domain {
+	color: var(--willow-deep);
+	font-weight: 700;
+	word-break: break-all;
+}
 .mac-tracker-source-box {
 	display: flex;
 	flex-direction: column;

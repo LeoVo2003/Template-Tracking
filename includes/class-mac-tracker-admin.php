@@ -867,6 +867,7 @@ class MAC_Tracker_Admin {
 				$source_type = trim( (string) ( $record['source_type'] ?? '' ) );
 				$source_type = '' !== $source_type ? $source_type : 'unknown';
 				$status      = (string) ( $record['status'] ?? '' );
+				$pin_domain  = trim( (string) ( $record['domain'] ?? '' ) );
 				?>
 				<article class="mac-tracker-palette-card mac-tracker-palette-card--<?php echo esc_attr( sanitize_html_class( $status ) ); ?>">
 					<div class="mac-tracker-palette-card__header">
@@ -875,6 +876,9 @@ class MAC_Tracker_Admin {
 							<div class="mac-tracker-palette-meta">
 								<span>#<?php echo esc_html( $record['wpm_project_id'] ); ?></span>
 								<?php $this->render_snapshot_identity( $record ); ?>
+								<?php if ( '' !== $pin_domain ) : ?>
+									<span class="mac-tracker-palette-domain"><?php echo esc_html( $pin_domain ); ?></span>
+								<?php endif; ?>
 							</div>
 						</div>
 						<?php $this->status_badge( $status ); ?>

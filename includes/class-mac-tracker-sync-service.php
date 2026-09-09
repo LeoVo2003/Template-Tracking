@@ -8,6 +8,8 @@ class MAC_Tracker_Sync_Service {
 	const CRON_MANUAL = 'mac_tracker_sync_manual';
 	const LOCK_KEY    = 'mac_tracker_sync_lock';
 	const WEBSITE_ACTION_TASK_TYPE = '[Website] Action Design';
+	const PIN_BACKFILL_CURSOR = 'mac_tracker_pin_backfill_cursor';
+	const PIN_BACKFILL_QUOTA  = 150;
 
 	/** @var MAC_Tracker_Repository */
 	private $repository;
@@ -97,8 +99,10 @@ class MAC_Tracker_Sync_Service {
 		$pages_fetched      = 0;
 		$sync_source        = 'real';
 		$seen_wpm_ids       = array();
-		$pin_backfill       = 0;
-		$pin_backfill_miss  = 0;
+		$pin_backfill           = 0;
+		$pin_backfill_miss      = 0;
+		$pin_backfill_attempted = 0;
+		$pin_backfill_cursor    = 0;
 
 		try {
 			while ( $page <= 200 ) {
@@ -180,44 +184,77 @@ class MAC_Tracker_Sync_Service {
 			}
 
 			// Cancelled/deleted pins often missing from paginated list — fetch by id.
+			// Rotating cursor: each run resumes after the last attempted WPM id and
+			// wraps to the smallest missing pin, so a backlog larger than the per-run
+			// quota is fully covered across successive syncs (no id starves).
 			$pin_ids = $this->repository->list_pinned_project_ids();
+			$missing = array();
 			foreach ( $pin_ids as $pin_id ) {
 				if ( isset( $seen_wpm_ids[ $pin_id ] ) || $this->repository->is_purged_project( $pin_id ) ) {
 					continue;
 				}
-				if ( $pin_backfill + $pin_backfill_miss >= 150 ) {
-					break;
+				$missing[] = $pin_id;
+			}
+
+			if ( empty( $missing ) ) {
+				delete_option( self::PIN_BACKFILL_CURSOR );
+			} else {
+				$cursor        = (int) get_option( self::PIN_BACKFILL_CURSOR, 0 );
+				$after_cursor  = array();
+				$before_cursor = array();
+				foreach ( $missing as $pin_id ) {
+					if ( $pin_id > $cursor ) {
+						$after_cursor[] = $pin_id;
+					} else {
+						$before_cursor[] = $pin_id;
+					}
+				}
+				// IDs above the cursor first, then wrap to the rest of the backlog.
+				$backfill_order = array_merge( $after_cursor, $before_cursor );
+				$attempted      = 0;
+				$last_pin_id    = $cursor;
+				foreach ( $backfill_order as $pin_id ) {
+					if ( $attempted >= self::PIN_BACKFILL_QUOTA ) {
+						break;
+					}
+					++$attempted;
+					++$pin_backfill_attempted;
+					$last_pin_id = $pin_id;
+
+					$one = $this->client->fetch_project_by_id( $pin_id );
+					if ( is_wp_error( $one ) ) {
+						++$pin_backfill_miss;
+						continue;
+					}
+					$raw_project = isset( $one['items'][0] ) && is_array( $one['items'][0] ) ? $one['items'][0] : null;
+					if ( ! $raw_project ) {
+						++$pin_backfill_miss;
+						continue;
+					}
+
+					$seen_wpm_ids[ $pin_id ] = true;
+					$project_result          = $this->sync_project( $raw_project, $sync_source );
+					if ( is_wp_error( $project_result ) ) {
+						++$pin_backfill_miss;
+						continue;
+					}
+
+					++$pin_backfill;
+					$snapshots_created += (int) ( $project_result['created'] ?? 0 );
+					$snapshots_updated += (int) ( $project_result['updated'] ?? 0 );
+					$snapshots_existed += (int) ( $project_result['existed'] ?? 0 );
+					$done_task_triggers += (int) ( $project_result['done_task_triggers'] ?? 0 );
+					$done_after_cutoff += (int) ( $project_result['done_after_cutoff'] ?? 0 );
+					if ( empty( $project_result['skipped'] ) ) {
+						++$processed;
+					} else {
+						++$skipped;
+					}
 				}
 
-				$one = $this->client->fetch_project_by_id( $pin_id );
-				if ( is_wp_error( $one ) ) {
-					++$pin_backfill_miss;
-					continue;
-				}
-				$raw_project = isset( $one['items'][0] ) && is_array( $one['items'][0] ) ? $one['items'][0] : null;
-				if ( ! $raw_project ) {
-					++$pin_backfill_miss;
-					continue;
-				}
-
-				$seen_wpm_ids[ $pin_id ] = true;
-				$project_result          = $this->sync_project( $raw_project, $sync_source );
-				if ( is_wp_error( $project_result ) ) {
-					++$pin_backfill_miss;
-					continue;
-				}
-
-				++$pin_backfill;
-				$snapshots_created += (int) ( $project_result['created'] ?? 0 );
-				$snapshots_updated += (int) ( $project_result['updated'] ?? 0 );
-				$snapshots_existed += (int) ( $project_result['existed'] ?? 0 );
-				$done_task_triggers += (int) ( $project_result['done_task_triggers'] ?? 0 );
-				$done_after_cutoff += (int) ( $project_result['done_after_cutoff'] ?? 0 );
-				if ( empty( $project_result['skipped'] ) ) {
-					++$processed;
-				} else {
-					++$skipped;
-				}
+				// Covered the whole backlog this run → restart from the top next time.
+				$pin_backfill_cursor = $attempted >= count( $backfill_order ) ? 0 : $last_pin_id;
+				update_option( self::PIN_BACKFILL_CURSOR, $pin_backfill_cursor, false );
 			}
 
 			// Pins missing from WPM API still get Project label from CSV Projects column.
@@ -231,7 +268,7 @@ class MAC_Tracker_Sync_Service {
 			$pin_count         = $this->repository->count_pins();
 			$storage           = $this->repository->snapshot_storage_stats();
 			$message           = sprintf(
-				'Full sync OK: %1$d projects / %2$d API pages; AD done %3$d (≥%4$s: %5$d); visible %6$d; new %7$d / existed %8$d / labels %9$d; skipped %10$d; pins %11$d; pin-by-id %12$d miss %13$d; DB total %14$d action %15$d projects %16$d.',
+				'Full sync OK: %1$d projects / %2$d API pages; AD done %3$d (≥%4$s: %5$d); visible %6$d; new %7$d / existed %8$d / labels %9$d; skipped %10$d; pins %11$d; pin-backfill attempted %12$d ok %13$d miss %14$d next-cursor %15$d; DB total %16$d action %17$d projects %18$d.',
 				$processed,
 				$pages_fetched,
 				$done_task_triggers,
@@ -243,8 +280,10 @@ class MAC_Tracker_Sync_Service {
 				$snapshots_updated,
 				$skipped,
 				$pin_count,
+				$pin_backfill_attempted,
 				$pin_backfill,
 				$pin_backfill_miss,
+				$pin_backfill_cursor,
 				(int) $storage['total'],
 				(int) $storage['action_design'],
 				(int) $storage['distinct_projects']
@@ -261,9 +300,11 @@ class MAC_Tracker_Sync_Service {
 				'done_task_triggers' => $done_task_triggers,
 				'done_after_cutoff'  => $done_after_cutoff,
 				'visible_snapshots'  => $visible_snapshots,
-				'pin_backfill'       => $pin_backfill,
-				'pin_backfill_miss'  => $pin_backfill_miss,
-				'duration_seconds'   => $duration,
+				'pin_backfill'           => $pin_backfill,
+				'pin_backfill_miss'      => $pin_backfill_miss,
+				'pin_backfill_attempted' => $pin_backfill_attempted,
+				'pin_backfill_cursor'    => $pin_backfill_cursor,
+				'duration_seconds'       => $duration,
 				'message'            => $message,
 			);
 		} finally {

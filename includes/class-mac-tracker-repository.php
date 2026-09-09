@@ -1251,7 +1251,7 @@ class MAC_Tracker_Repository {
 					FROM {$this->colors_table} c
 					INNER JOIN {$this->projects_table} p ON p.id = c.project_id
 					WHERE c.status = %s
-					AND p.sync_source = 'real'
+					AND p.sync_source IN ('real', 'pin')
 					AND p.wpm_project_id >= %d
 					ORDER BY c.updated_at DESC
 					LIMIT %d",
@@ -1269,7 +1269,7 @@ class MAC_Tracker_Repository {
 					p.wpm_project_id, p.record_kind, p.wpm_action_task_id
 				FROM {$this->colors_table} c
 				INNER JOIN {$this->projects_table} p ON p.id = c.project_id
-				WHERE p.sync_source = 'real'
+				WHERE p.sync_source IN ('real', 'pin')
 				AND p.wpm_project_id >= %d
 				ORDER BY c.updated_at DESC
 				LIMIT %d",
@@ -1291,7 +1291,7 @@ class MAC_Tracker_Repository {
 					"SELECT COUNT(*)
 					FROM {$this->colors_table} c
 					INNER JOIN {$this->projects_table} p ON p.id = c.project_id
-					WHERE p.sync_source = 'real'
+					WHERE p.sync_source IN ('real', 'pin')
 					AND p.wpm_project_id >= %d",
 					MAC_TRACKER_MIN_WPM_PROJECT_ID
 				)
@@ -1304,7 +1304,7 @@ class MAC_Tracker_Repository {
 				FROM {$this->colors_table} c
 				INNER JOIN {$this->projects_table} p ON p.id = c.project_id
 				WHERE c.status = %s
-				AND p.sync_source = 'real'
+				AND p.sync_source IN ('real', 'pin')
 				AND p.wpm_project_id >= %d",
 				$status,
 				MAC_TRACKER_MIN_WPM_PROJECT_ID

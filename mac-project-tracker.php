@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MAC Project Tracker
  * Description: Synchronizes pinned WPM project snapshots, prepares template-color reviews, and exposes approved palettes in a WordPress dashboard.
- * Version: 0.6.17
+ * Version: 0.6.18
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Author: MAC Marketing
@@ -12,7 +12,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'MAC_TRACKER_VERSION', '0.6.17' );
+define( 'MAC_TRACKER_VERSION', '0.6.18' );
 define( 'MAC_TRACKER_MIN_WPM_PROJECT_ID', 3006 );
 define( 'MAC_TRACKER_ACTION_TASK_ERA_ID', 3707 );
 /** Action Design done rows are created only on/after this date (YYYY-MM-DD, date part of completed_at). */
