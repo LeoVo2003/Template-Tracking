@@ -210,6 +210,19 @@ class MAC_Tracker_Repository {
 	public function cursor() { return absint( get_option( 'mac_tracker_backfill_cursor', 0 ) ); }
 	public function set_cursor( $project_id ) { update_option( 'mac_tracker_backfill_cursor', absint( $project_id ), false ); }
 
+	/** Remove only local tracker records. Connection settings are intentionally retained. */
+	public function clear_local_data() {
+		$tables = array( $this->colors, $this->projects, $this->pins, $this->logs );
+		foreach ( $tables as $table ) {
+			if ( false === $this->wpdb->query( "DELETE FROM {$table}" ) ) {
+				return new WP_Error( 'mac_tracker_clear_failed', $this->wpdb->last_error ?: 'Unable to clear local tracker data.' );
+			}
+		}
+		delete_option( 'mac_tracker_backfill_cursor' );
+		delete_option( 'mac_tracker_sync_queued_at' );
+		return true;
+	}
+
 	/** One bulk query for the Projects screen; no WPM/API call and no N+1. */
 	public function project_page( array $filters = array() ) {
 		$per_page = isset( $filters['per_page'] ) ? (int) $filters['per_page'] : 0;

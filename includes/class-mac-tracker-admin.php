@@ -20,6 +20,7 @@ class MAC_Tracker_Admin {
 		add_action( 'admin_post_mac_tracker_test_connection', array( $this, 'handle_test_connection' ) );
 		add_action( 'admin_post_mac_tracker_queue_sync', array( $this, 'handle_queue_sync' ) );
 		add_action( 'admin_post_mac_tracker_import_pins', array( $this, 'handle_import_pins' ) );
+		add_action( 'admin_post_mac_tracker_clear_data', array( $this, 'handle_clear_data' ) );
 	}
 
 	public function register_menu() {
@@ -130,6 +131,7 @@ class MAC_Tracker_Admin {
 		<form class="mac-tracker-upload" method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<?php wp_nonce_field( 'mac_tracker_import_pins' ); ?><input type="hidden" name="action" value="mac_tracker_import_pins"><label><span>CSV file</span><input type="file" name="pin_csv" accept=".csv,text/csv" required></label><button class="button button-primary" type="submit">Import pins</button>
 		</form></section>
+		<section class="mac-tracker-danger-zone" aria-label="Reset local tracker data"><div><p class="mac-tracker-eyebrow">Start over</p><h2>Clear local tracker data</h2><p>Deletes local snapshots, imported pins, color records and sync logs. WPM connection settings and your CSV file are kept.</p></div><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return window.confirm('Clear all local tracker data? This cannot be undone.');"><?php wp_nonce_field( 'mac_tracker_clear_data' ); ?><input type="hidden" name="action" value="mac_tracker_clear_data"><button class="button mac-tracker-button--danger" type="submit">Clear all data</button></form></section>
 		<?php $this->page_end();
 	}
 
@@ -197,6 +199,19 @@ class MAC_Tracker_Admin {
 		$message = sprintf( 'Imported %d pins.', (int) $result['imported'] );
 		if ( ! empty( $result['errors'] ) ) { $message .= ' ' . count( $result['errors'] ) . ' row(s) were skipped.'; }
 		$this->redirect( 'mac-project-tracker-pins', $message, 'success' );
+	}
+
+	public function handle_clear_data() {
+		$this->require_request( 'mac_tracker_clear_data' );
+		if ( $this->sync->is_running() ) {
+			$this->redirect( 'mac-project-tracker-pins', 'Wait for the running sync to finish before clearing data.', 'error' );
+		}
+		wp_clear_scheduled_hook( MAC_Tracker_Sync_Service::MANUAL_CRON_HOOK );
+		$result = $this->repository->clear_local_data();
+		if ( is_wp_error( $result ) ) {
+			$this->redirect( 'mac-project-tracker-pins', $result->get_error_message(), 'error' );
+		}
+		$this->redirect( 'mac-project-tracker-pins', 'Local tracker data cleared. Import the CSV pin file, then queue a WPM sync.', 'success' );
 	}
 
 	private function page_start( $title, $description, $screen ) {
