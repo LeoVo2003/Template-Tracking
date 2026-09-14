@@ -69,6 +69,9 @@ const manualProjectIds = new Map([
   [norm('60803SE1 PROX3 LAMIA NAILS'), 2956],
   [norm('30346SE1 PROX3 NAIL TALK & TAN'), 3777],
 ]);
+const manualProjectNames = new Map([
+  [norm('30346SE1 PROX3 NAIL TALK & TAN'), '30309SE1 PROX3 NAIL TALK & TAN'],
+]);
 const pinRows = csvRows(fs.readFileSync(pinPath, 'utf8'));
 const pinHeaders = pinRows.shift();
 const historicPins = new Map(pinRows.map((row) => Object.fromEntries(pinHeaders.map((header, i) => [header || `H${i + 1}`, row[i] || '']))).map((row) => [norm(row.Projects), row]));
@@ -106,12 +109,13 @@ for (const row of source) {
   if (match.confidence === 'exact') exactCount += 1;
   if (match.confidence === 'fuzzy') fuzzyCount += 1;
   if (!match.project) {
-    const historicPin = historicPins.get(norm(row.Projects));
+		const historicPin = historicPins.get(norm(row.Projects));
     const legacy = historicPin ? null : legacyProject(row.Projects);
 		const manualProjectId = manualProjectIds.get(norm(row.Projects)) || 0;
+		const projectName = manualProjectNames.get(norm(row.Projects)) || row.Projects;
     unmappedCount += 1;
     const due = csvDueDate(row['Due Date']);
-		output.push({ record_kind: 'csv_pin', match_confidence: historicPin ? 'historic_pin' : (legacy ? 'legacy_wpm' : (manualProjectId ? 'manual' : 'unmapped')), project_id: historicPin ? historicPin.project_id : (legacy ? legacy.id : manualProjectId), action_task_id: '', website: row.Website, projects: row.Projects, layout_web: row['Layout web'], member: row.Member, date: due.date, time: due.time, source_row: source.indexOf(row) + 2 });
+		output.push({ record_kind: 'csv_pin', match_confidence: historicPin ? 'historic_pin' : (legacy ? 'legacy_wpm' : (manualProjectId ? 'manual' : 'unmapped')), project_id: historicPin ? historicPin.project_id : (legacy ? legacy.id : manualProjectId), action_task_id: '', website: row.Website, projects: projectName, layout_web: row['Layout web'], member: row.Member, date: due.date, time: due.time, source_row: source.indexOf(row) + 2 });
     pinCount += 1;
     continue;
   }
