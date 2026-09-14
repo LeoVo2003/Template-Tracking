@@ -125,4 +125,8 @@ for (const row of source) {
 const columns = ['record_kind', 'match_confidence', 'project_id', 'action_task_id', 'website', 'projects', 'layout_web', 'member', 'date', 'time', 'source_row'];
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 fs.writeFileSync(outputPath, `${columns.join(',')}\n${output.map((row) => columns.map((column) => escape(row[column])).join(',')).join('\n')}\n`, 'utf8');
-console.log(JSON.stringify({ source_rows: source.length, output_rows: output.length, exact_matches: exactCount, fuzzy_matches: fuzzyCount, unmapped: unmappedCount, action_design_rows: actionCount, csv_pin_rows: pinCount }, null, 2));
+const pinOutputPath = outputPath.replace(/\.csv$/i, '-pin-import.csv');
+const pinColumns = ['Website', 'Projects', 'Layout web', 'Member', 'project_id', 'date', 'time'];
+const importPins = output.filter((row) => row.record_kind === 'csv_pin' && row.project_id).map((row) => ({ Website: row.website, Projects: row.projects, 'Layout web': row.layout_web, Member: row.member, project_id: row.project_id, date: row.date, time: row.time }));
+fs.writeFileSync(pinOutputPath, `${pinColumns.join(',')}\n${importPins.map((row) => pinColumns.map((column) => escape(row[column])).join(',')).join('\n')}\n`, 'utf8');
+console.log(JSON.stringify({ source_rows: source.length, output_rows: output.length, exact_matches: exactCount, fuzzy_matches: fuzzyCount, unmapped: unmappedCount, action_design_rows: actionCount, csv_pin_rows: pinCount, importable_pin_rows: importPins.length, pin_import_path: pinOutputPath }, null, 2));
