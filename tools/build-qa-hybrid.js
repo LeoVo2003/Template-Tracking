@@ -63,6 +63,7 @@ const headers = sourceRows.shift();
 const source = sourceRows.filter((row) => row.some((value) => value.trim() !== '')).map((row) => Object.fromEntries(headers.map((header, i) => [header || `H${i + 1}`, row[i] || ''])));
 const projects = JSON.parse(fs.readFileSync(wpmPath, 'utf8'));
 const exact = new Map(projects.map((project) => [norm(project.full_name), project]));
+const fullById = new Map(projects.map((project) => [Number(project.id), project]));
 const legacyProjects = JSON.parse(fs.readFileSync(legacyPath, 'utf8'));
 // Confirmed historical corrections that are absent from the supplied WPM exports.
 const manualProjectIds = new Map([
@@ -85,7 +86,10 @@ function matchProject(rawName) {
     const score = similarity(rawName, project.full_name);
     if (!best || score > best.score) best = { project, score };
   }
-  return best && best.score >= 0.72 ? { project: best.project, confidence: 'fuzzy' } : { project: null, confidence: 'unmapped' };
+	if (best && best.score >= 0.72) return { project: best.project, confidence: 'fuzzy' };
+	const legacy = legacyProject(rawName);
+	if (legacy && fullById.has(Number(legacy.id))) return { project: fullById.get(Number(legacy.id)), confidence: 'legacy_wpm' };
+	return { project: null, confidence: 'unmapped' };
 }
 function legacyProject(rawName) {
   const wantedZip = zip(rawName);
