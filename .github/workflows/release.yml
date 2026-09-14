@@ -1,0 +1,46 @@
+name: Release WordPress plugin
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate tag and plugin version
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin_version="$(sed -n 's/^[[:space:]]*\* Version: \([^[:space:]]*\).*/\1/p' mac-project-tracker.php | head -n 1)"
+          constant_version="$(sed -n "s/^define( 'MAC_TRACKER_VERSION', '\([^']*\)' );/\1/p" mac-project-tracker.php | head -n 1)"
+          tag_version="${GITHUB_REF_NAME#v}"
+          test -n "$plugin_version"
+          test "$plugin_version" = "$constant_version"
+          test "$tag_version" = "$plugin_version"
+
+      - name: Build installable ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="build/mac-project-tracker"
+          asset="mac-project-tracker-${GITHUB_REF_NAME}.zip"
+          mkdir -p "$root"
+          cp mac-project-tracker.php README.md "$root/"
+          cp -R assets includes "$root/"
+          (cd build && zip -qr "../$asset" mac-project-tracker)
+          test "$(unzip -Z1 "$asset" | head -n 1)" = "mac-project-tracker/"
+          echo "ASSET=$asset" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$ASSET" --title "MAC Project Tracker ${GITHUB_REF_NAME#v}" --generate-notes

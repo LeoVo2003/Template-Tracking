@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MAC Project Tracker
  * Description: Internal WPM project tracker.
- * Version: 0.3.0
+ * Version: 0.7.0
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Author: MAC Marketing
@@ -12,7 +12,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'MAC_TRACKER_VERSION', '0.3.0' );
+define( 'MAC_TRACKER_VERSION', '0.7.0' );
 define( 'MAC_TRACKER_MIN_WPM_PROJECT_ID', 3006 );
 define( 'MAC_TRACKER_ACTION_TASK_ERA_ID', 3707 );
 define( 'MAC_TRACKER_AD_COMPLETED_CUTOFF', '2026-07-01' );
@@ -29,6 +29,7 @@ require_once MAC_TRACKER_DIR . 'includes/class-mac-tracker-pin-import.php';
 require_once MAC_TRACKER_DIR . 'includes/class-mac-tracker-wpm-client.php';
 require_once MAC_TRACKER_DIR . 'includes/class-mac-tracker-sync-service.php';
 require_once MAC_TRACKER_DIR . 'includes/class-mac-tracker-admin.php';
+require_once MAC_TRACKER_DIR . 'includes/class-mac-tracker-github-updater.php';
 
 register_activation_hook( MAC_TRACKER_FILE, array( 'MAC_Tracker_Activator', 'activate' ) );
 register_deactivation_hook( MAC_TRACKER_FILE, array( 'MAC_Tracker_Activator', 'deactivate' ) );
@@ -40,6 +41,7 @@ function mac_tracker_boot() {
 	$repository = new MAC_Tracker_Repository();
 	$sync       = new MAC_Tracker_Sync_Service( $repository );
 	$sync->register();
+	( new MAC_Tracker_GitHub_Updater() )->register();
 	if ( is_admin() ) {
 		( new MAC_Tracker_Admin( $repository, $sync ) )->register();
 	}
