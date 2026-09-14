@@ -7,7 +7,7 @@ WordPress admin plugin for synchronizing immutable project snapshots from WPM, t
 - PHP 7.4-compatible WordPress plugin with idempotent `dbDelta` migration.
 - Immutable project snapshots, color-record table, CSV pin table, and sync logs.
 - Full WPM pagination with the fixed `Tracking-Template-Header` header.
-- IDs below `3006` are ignored. Direct project-domain rows are retired and are not created by new syncs.
+- Every WPM project is read. A WPM snapshot is created only for a completed `[Website] Action Design` task; CSV pins are the only other snapshot type.
 - Every observed done `[Website] Action Design` task creates its own row; multiple valid tasks create multiple snapshots.
 - Existing snapshots are never deleted or overwritten; only display labels are refreshed.
 - Exact baseline CSV headers are supported and date/time are stored as UTC.
@@ -26,7 +26,7 @@ Color extraction/review, OneDrive resolver, and image workers remain later phase
 4. Open **MAC Tracker → Settings**, save the HTTPS WPM endpoint and `Tracking-Template-Header` value.
 5. Open **Pin import** to upload the baseline CSV, then click **Sync now** from Dashboard or Projects.
 
-Version `0.7.5` makes the GitHub release visible through the standard WordPress update transient, in addition to the Update URI hook. Activation performs no external request and imports no demo data.
+Version `0.7.6` removes the retired Domain record type during its one-time database migration. Manual sync events are due immediately before WP-Cron is spawned, so quiet sites do not leave a sync permanently queued. Activation performs no external request and imports no demo data.
 
 ## GitHub releases and auto-update
 

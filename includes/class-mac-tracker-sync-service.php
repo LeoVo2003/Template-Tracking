@@ -39,7 +39,12 @@ class MAC_Tracker_Sync_Service {
 			return new WP_Error( 'mac_tracker_sync_running', 'A sync is already running.' );
 		}
 		if ( ! wp_next_scheduled( self::MANUAL_CRON_HOOK ) ) {
-			wp_schedule_single_event( time() + 5, self::MANUAL_CRON_HOOK );
+			// Make the event due before calling spawn_cron(). The old five-second
+			// delay could leave a manual sync queued forever on a quiet site.
+			$scheduled = wp_schedule_single_event( time(), self::MANUAL_CRON_HOOK, array(), true );
+			if ( is_wp_error( $scheduled ) ) {
+				return $scheduled;
+			}
 		}
 		update_option( 'mac_tracker_sync_queued_at', MAC_Tracker_Time::now_utc(), false );
 		if ( function_exists( 'spawn_cron' ) ) {
@@ -101,28 +106,31 @@ class MAC_Tracker_Sync_Service {
 			}
 
 			$seen      = array();
+			$scanned   = 0;
 			$processed = 0;
 			$created   = 0;
 			$errors    = 0;
 			foreach ( $result['items'] as $raw_project ) {
 				$project = MAC_Tracker_Normalizer::project( $raw_project );
-				if ( ! $project || $project['id'] < MAC_TRACKER_MIN_WPM_PROJECT_ID ) {
+				if ( ! $project ) {
 					continue;
 				}
+				++$scanned;
 				$seen[ $project['id'] ] = true;
 				$one = $this->sync_project( $project );
 				if ( is_wp_error( $one ) ) {
 					++$errors;
 					continue;
 				}
-				++$processed;
+				$processed += (int) $one['eligible'];
 				$created += (int) $one['created'];
 			}
 
 			$backfill = $this->backfill_missing_pins( array_keys( $seen ), $client );
 			$message  = sprintf(
-				'pages=%d, processed=%d, created=%d, backfill=%d/%d, errors=%d, %s',
+				'pages=%d, scanned=%d, eligible_action_tasks=%d, created=%d, backfill=%d/%d, errors=%d, %s',
 				(int) $result['pages'],
+				$scanned,
 				$processed,
 				$created,
 				(int) $backfill['found'],
@@ -134,6 +142,7 @@ class MAC_Tracker_Sync_Service {
 
 			return array(
 				'pages'     => (int) $result['pages'],
+				'scanned'   => $scanned,
 				'processed' => $processed,
 				'created'   => $created,
 				'backfill'  => $backfill,
@@ -149,10 +158,8 @@ class MAC_Tracker_Sync_Service {
 
 	/** Implements the current snapshot rules from hướng đi mới.md. */
 	public function sync_project( array $project ) {
-		$created = 0;
-		if ( (int) $project['id'] < MAC_TRACKER_MIN_WPM_PROJECT_ID ) {
-			return array( 'created' => 0 );
-		}
+		$created  = 0;
+		$eligible = 0;
 		$this->repository->refresh_snapshot_labels( $project['id'], $project );
 
 		$base = array(
@@ -174,6 +181,7 @@ class MAC_Tracker_Sync_Service {
 			if ( ! $task['is_action_design'] || ! $this->task_is_completed( $task ) ) {
 				continue;
 			}
+			++$eligible;
 			$action_snapshot = $this->repository->upsert_snapshot(
 				array_merge( $base, array(
 					'record_kind'          => 'action_design',
@@ -190,7 +198,7 @@ class MAC_Tracker_Sync_Service {
 			$created += ! empty( $action_snapshot['created'] ) ? 1 : 0;
 		}
 
-		return array( 'created' => $created );
+		return array( 'created' => $created, 'eligible' => $eligible );
 	}
 
 	private function backfill_missing_pins( array $seen_wpm_ids, MAC_Tracker_WPM_Client $client ) {

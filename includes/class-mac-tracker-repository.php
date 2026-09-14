@@ -26,7 +26,7 @@ class MAC_Tracker_Repository {
 		$kind       = sanitize_key( $snapshot['record_kind'] ?? '' );
 		$task_id    = absint( $snapshot['wpm_action_task_id'] ?? 0 );
 
-		if ( $project_id <= 0 || ! in_array( $kind, array( 'domain', 'csv_pin', 'action_design' ), true ) ) {
+		if ( $project_id <= 0 || ! in_array( $kind, array( 'csv_pin', 'action_design' ), true ) ) {
 			return new WP_Error( 'mac_tracker_snapshot_invalid', 'Invalid project snapshot.' );
 		}
 		if ( 'action_design' === $kind && $task_id <= 0 ) {
@@ -221,7 +221,7 @@ class MAC_Tracker_Repository {
 		}
 
 		$kind = sanitize_key( $filters['kind'] ?? '' );
-		if ( in_array( $kind, array( 'domain', 'action_design', 'csv_pin' ), true ) ) {
+		if ( in_array( $kind, array( 'action_design', 'csv_pin' ), true ) ) {
 			$where[] = 'p.record_kind = %s';
 			$args[]  = $kind;
 		}

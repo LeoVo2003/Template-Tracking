@@ -22,6 +22,7 @@ class MAC_Tracker_Activator {
 
 	private static function migrate() {
 		global $wpdb;
+		$previous_version = (string) get_option( 'mac_tracker_db_version', '' );
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		$charset  = $wpdb->get_charset_collate();
 		$projects = $wpdb->prefix . 'mac_tracker_projects';
@@ -100,6 +101,11 @@ class MAC_Tracker_Activator {
 
 		foreach ( $queries as $query ) {
 			dbDelta( $query );
+		}
+		// Domain was a retired pre-0.7.2 record kind, never a valid snapshot.
+		// This one-time migration preserves CSV pins and Action Design rows.
+		if ( version_compare( $previous_version, '0.7.6', '<' ) ) {
+			( new MAC_Tracker_Repository() )->purge_domain_snapshots();
 		}
 		update_option( 'mac_tracker_db_version', MAC_TRACKER_VERSION, false );
 	}
