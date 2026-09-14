@@ -171,22 +171,8 @@ class MAC_Tracker_Sync_Service {
 			'raw'             => $project['raw'],
 		);
 
-		// Legacy era: the one domain snapshot exists only when WPM has a domain.
-		if ( $project['id'] < MAC_TRACKER_ACTION_TASK_ERA_ID && '' !== $project['domain'] ) {
-			$domain_snapshot = $this->repository->upsert_snapshot(
-				array_merge( $base, array(
-					'record_kind' => 'domain',
-					'website_url' => $project['domain'],
-					'layout_url'  => $project['layout'],
-				) )
-			);
-			if ( is_wp_error( $domain_snapshot ) ) {
-				return $domain_snapshot;
-			}
-			$created += ! empty( $domain_snapshot['created'] ) ? 1 : 0;
-		}
-
-		// Every observed done Action Design task receives its own immutable row.
+		// Only observed done Action Design tasks become WPM snapshots. Direct
+		// project-domain rows from older tracker versions are intentionally retired.
 		foreach ( $project['tasks'] as $task ) {
 			if ( ! $task['is_action_design'] || ! $this->task_is_done( $task['status'] ) ) {
 				continue;

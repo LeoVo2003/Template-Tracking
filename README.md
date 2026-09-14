@@ -7,8 +7,8 @@ WordPress admin plugin for synchronizing immutable project snapshots from WPM, t
 - PHP 7.4-compatible WordPress plugin with idempotent `dbDelta` migration.
 - Immutable project snapshots, color-record table, CSV pin table, and sync logs.
 - Full WPM pagination with the fixed `Tracking-Template-Header` header.
-- IDs below `3006` are ignored for WPM snapshots; IDs `3006–3706` create one legacy row.
-- From ID `3707`, each observed done `[Website] Action Design` task creates its own row; multiple valid tasks create multiple snapshots.
+- IDs below `3006` are ignored. Direct project-domain rows are retired and are not created by new syncs.
+- Every observed done `[Website] Action Design` task creates its own row; multiple valid tasks create multiple snapshots.
 - Existing snapshots are never deleted or overwritten; only display labels are refreshed.
 - Exact baseline CSV headers are supported and date/time are stored as UTC.
 - Missing pins use a rotating detail backfill cursor with a 150-request quota per run.
@@ -26,13 +26,13 @@ Color extraction/review, OneDrive resolver, and image workers remain later phase
 4. Open **MAC Tracker → Settings**, save the HTTPS WPM endpoint and `Tracking-Template-Header` value.
 5. Open **Pin import** to upload the baseline CSV, then click **Sync now** from Dashboard or Projects.
 
-Version `0.7.1` validates the exact WPM list route, adds a read-only connection test, and refreshes the admin as a local-cache operations ledger. Activation performs no external request and imports no demo data.
+Version `0.7.2` retires direct-Domain snapshots and provides one explicit cleanup action that preserves CSV pins and Action Design data. Activation performs no external request and imports no demo data.
 
 ## GitHub releases and auto-update
 
 The public source repository is `https://github.com/LeoVo2003/Template-Tracking`. Pushing a tag such as `v0.7.0` builds a `mac-project-tracker-v0.7.0.zip` asset and creates a GitHub Release. The plugin checks the newest public release through the native WordPress update system.
 
-The site currently on `0.2.0` must be upgraded manually once to `0.7.0`, because `0.2.0` has no updater. After that bootstrap upgrade, future releases (including `0.7.1`) show the normal WordPress **Update now** button.
+The site currently on `0.2.0` must be upgraded manually once to `0.7.1`, because `0.2.0` has no updater. After that bootstrap upgrade, future releases (including `0.7.2`) show the normal WordPress **Update now** button.
 
 ## Expected WPM response
 

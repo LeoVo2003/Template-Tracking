@@ -18,6 +18,7 @@ class MAC_Tracker_Admin {
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 		add_action( 'admin_post_mac_tracker_save_settings', array( $this, 'handle_save_settings' ) );
 		add_action( 'admin_post_mac_tracker_test_connection', array( $this, 'handle_test_connection' ) );
+		add_action( 'admin_post_mac_tracker_cleanup_domains', array( $this, 'handle_cleanup_domains' ) );
 		add_action( 'admin_post_mac_tracker_queue_sync', array( $this, 'handle_queue_sync' ) );
 		add_action( 'admin_post_mac_tracker_import_pins', array( $this, 'handle_import_pins' ) );
 	}
@@ -88,7 +89,7 @@ class MAC_Tracker_Admin {
 			<input type="hidden" name="page" value="mac-project-tracker-projects">
 			<label><span>Search</span><input name="search" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="Project, website, ZIP or WPM ID"></label>
 			<label><span>Assignee</span><select name="assignee"><option value="">All assignees</option><?php foreach ( $this->repository->list_assignees() as $name ) : ?><option value="<?php echo esc_attr( $name ); ?>" <?php selected( $filters['assignee'], $name ); ?>><?php echo esc_html( $name ); ?></option><?php endforeach; ?></select></label>
-			<label><span>Snapshot type</span><select name="kind"><option value="">All types</option><option value="domain" <?php selected( $filters['kind'], 'domain' ); ?>>Domain</option><option value="action_design" <?php selected( $filters['kind'], 'action_design' ); ?>>Action Design</option><option value="csv_pin" <?php selected( $filters['kind'], 'csv_pin' ); ?>>CSV pin</option></select></label>
+			<label><span>Snapshot type</span><select name="kind"><option value="">All types</option><option value="action_design" <?php selected( $filters['kind'], 'action_design' ); ?>>Action Design</option><option value="csv_pin" <?php selected( $filters['kind'], 'csv_pin' ); ?>>CSV pin</option></select></label>
 			<label><span>Website</span><select name="website"><option value="">Any</option><option value="yes" <?php selected( $filters['website'], 'yes' ); ?>>Has website</option><option value="no" <?php selected( $filters['website'], 'no' ); ?>>Missing</option></select></label>
 			<label><span>Layout</span><select name="layout"><option value="">Any</option><option value="yes" <?php selected( $filters['layout'], 'yes' ); ?>>Has layout</option><option value="no" <?php selected( $filters['layout'], 'no' ); ?>>Missing</option></select></label>
 			<label><span>Rows</span><select name="per_page"><option value="0" <?php selected( $filters['per_page'], 0 ); ?>>All</option><option value="50" <?php selected( $filters['per_page'], 50 ); ?>>50</option><option value="100" <?php selected( $filters['per_page'], 100 ); ?>>100</option><option value="200" <?php selected( $filters['per_page'], 200 ); ?>>200</option></select></label>
@@ -133,7 +134,8 @@ class MAC_Tracker_Admin {
 
 	public function render_settings() {
 		$this->require_capability();
-		$settings = (array) get_option( 'mac_tracker_settings', array() );
+		$settings     = (array) get_option( 'mac_tracker_settings', array() );
+		$domain_count = $this->repository->domain_snapshot_count();
 		$this->page_start( 'Connection settings', 'The API header value is encrypted in this WordPress database and is never displayed again.', 'settings' );
 		?>
 		<section class="mac-tracker-panel mac-tracker-panel--narrow"><div class="mac-tracker-panel__head"><div><p class="mac-tracker-eyebrow">WPM REST API</p><h2>Connect the tracker</h2><p>Requests use the fixed <code>Tracking-Template-Header</code> header. Sync runs through WP-Cron after saving.</p></div></div>
@@ -145,6 +147,7 @@ class MAC_Tracker_Admin {
 			<div class="mac-tracker-settings-actions"><button class="button button-primary" type="submit">Save connection</button></div>
 		</form></section>
 		<section class="mac-tracker-connection-check" aria-label="Connection test"><div><p class="mac-tracker-eyebrow">Safe check</p><h2>Test before syncing</h2><p>Checks one WPM response only. It does not create, update, or remove project snapshots.</p></div><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_test_connection' ); ?><input type="hidden" name="action" value="mac_tracker_test_connection"><button class="button" type="submit">Test connection</button></form></section>
+		<section class="mac-tracker-cleanup-zone" aria-label="Legacy data cleanup"><div><p class="mac-tracker-eyebrow">One-time cleanup</p><h2>Remove retired Domain rows</h2><p><strong><?php echo esc_html( number_format_i18n( $domain_count ) ); ?></strong> legacy Domain snapshot<?php echo 1 === $domain_count ? '' : 's'; ?> will be removed. CSV pins and Action Design rows stay untouched. New syncs no longer create Domain rows.</p></div><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_cleanup_domains' ); ?><input type="hidden" name="action" value="mac_tracker_cleanup_domains"><button class="button mac-tracker-button--danger" type="submit" <?php disabled( 0 === $domain_count ); ?>>Remove <?php echo esc_html( number_format_i18n( $domain_count ) ); ?> Domain rows</button></form></section>
 		<?php $this->page_end();
 	}
 
@@ -173,6 +176,19 @@ class MAC_Tracker_Admin {
 			$this->redirect( 'mac-project-tracker-settings', $result->get_error_message(), 'error' );
 		}
 		$this->redirect( 'mac-project-tracker-settings', 'Connection verified. WPM returned a valid project response.', 'success' );
+	}
+
+	public function handle_cleanup_domains() {
+		$this->require_request( 'mac_tracker_cleanup_domains' );
+		$result = $this->repository->purge_domain_snapshots();
+		if ( is_wp_error( $result ) ) {
+			$this->redirect( 'mac-project-tracker-settings', $result->get_error_message(), 'error' );
+		}
+		$this->redirect(
+			'mac-project-tracker-settings',
+			sprintf( 'Removed %d retired Domain snapshot(s). CSV pins and Action Design rows were kept.', (int) $result['snapshots'] ),
+			'success'
+		);
 	}
 
 	public function handle_queue_sync() {

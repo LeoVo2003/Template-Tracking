@@ -135,6 +135,64 @@ class MAC_Tracker_Repository {
 		return array_map( 'intval', (array) $this->wpdb->get_col( "SELECT wpm_project_id FROM {$this->pins} ORDER BY pin_position ASC, id ASC" ) );
 	}
 
+	/** Count retired direct-domain snapshots without touching Action Design or CSV pin data. */
+	public function domain_snapshot_count() {
+		return (int) $this->wpdb->get_var(
+			$this->wpdb->prepare( "SELECT COUNT(*) FROM {$this->projects} WHERE record_kind = %s", 'domain' )
+		);
+	}
+
+	/**
+	 * One-time cleanup for domain rows made by pre-0.7.2 tracker logic.
+	 * Related color records are removed as well so the color table has no orphan IDs.
+	 * CSV pins and Action Design rows use other record kinds and are never selected.
+	 *
+	 * @return array|WP_Error
+	 */
+	public function purge_domain_snapshots() {
+		$ids = array_map(
+			'intval',
+			(array) $this->wpdb->get_col(
+				$this->wpdb->prepare( "SELECT id FROM {$this->projects} WHERE record_kind = %s", 'domain' )
+			)
+		);
+		if ( empty( $ids ) ) {
+			return array( 'snapshots' => 0, 'colors' => 0 );
+		}
+
+		$this->wpdb->query( 'START TRANSACTION' );
+		$placeholders = implode( ', ', array_fill( 0, count( $ids ), '%d' ) );
+		$color_sql    = $this->wpdb->prepare( "DELETE FROM {$this->colors} WHERE project_id IN ({$placeholders})", $ids );
+		$colors       = $this->wpdb->query( $color_sql );
+		if ( false === $colors ) {
+			$this->wpdb->query( 'ROLLBACK' );
+			return new WP_Error( 'mac_tracker_domain_cleanup_colors', $this->wpdb->last_error ?: 'Unable to remove legacy palette records.' );
+		}
+
+		$deleted = $this->wpdb->query(
+			$this->wpdb->prepare( "DELETE FROM {$this->projects} WHERE record_kind = %s", 'domain' )
+		);
+		if ( false === $deleted ) {
+			$this->wpdb->query( 'ROLLBACK' );
+			return new WP_Error( 'mac_tracker_domain_cleanup', $this->wpdb->last_error ?: 'Unable to remove legacy Domain snapshots.' );
+		}
+		$this->wpdb->query( 'COMMIT' );
+
+		$now = MAC_Tracker_Time::now_utc();
+		$this->wpdb->insert(
+			$this->logs,
+			array(
+				'status'      => 'maintenance',
+				'processed'   => (int) $deleted,
+				'message'     => sprintf( 'Cleanup removed %d retired Domain snapshot(s) and %d related palette record(s).', (int) $deleted, (int) $colors ),
+				'started_at'  => $now,
+				'finished_at' => $now,
+			)
+		);
+
+		return array( 'snapshots' => (int) $deleted, 'colors' => (int) $colors );
+	}
+
 	public function missing_pin_ids( array $seen_wpm_ids ) {
 		return array_values( array_diff( $this->pin_ids(), array_map( 'intval', $seen_wpm_ids ) ) );
 	}

@@ -427,6 +427,27 @@
 .mac-tracker-connection-check > div { max-width: 520px; }
 .mac-tracker-connection-check h2 { font-size: var(--text-lg); }
 
+.mac-tracker-cleanup-zone {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	max-width: 760px;
+	gap: var(--space-5);
+	margin-top: var(--space-5);
+	padding: var(--space-5);
+	background: var(--surface);
+	border: 1px solid #e7cfcf;
+	border-left: 3px solid var(--danger);
+}
+.mac-tracker-cleanup-zone > div { max-width: 540px; }
+.mac-tracker-cleanup-zone h2 { margin: var(--space-2) 0 0; font: 700 var(--text-lg)/1.1 var(--font-display); letter-spacing: -.035em; }
+.mac-tracker-cleanup-zone p:not(.mac-tracker-eyebrow) { margin: var(--space-2) 0 0; color: var(--bark); font-size: var(--text-sm); line-height: 1.6; }
+.mac-tracker-cleanup-zone p strong { color: var(--danger); font-family: var(--font-mono); }
+.mac-tracker-wrap .button.mac-tracker-button--danger { color: #fff; border-color: var(--danger); background: var(--danger); }
+.mac-tracker-wrap .button.mac-tracker-button--danger:hover,
+.mac-tracker-wrap .button.mac-tracker-button--danger:focus { color: #fff; border-color: #884343; background: #884343; }
+.mac-tracker-wrap .button.mac-tracker-button--danger:disabled { color: #8d9991; border-color: var(--line); background: var(--muted-soft); }
+
 .mac-tracker-empty { display: grid; justify-items: center; gap: var(--space-2); padding: 56px var(--space-5); color: var(--bark); text-align: center; }
 .mac-tracker-empty .dashicons { width: 38px; height: 38px; color: var(--willow-soft); font-size: 38px; }
 .mac-tracker-empty strong { color: var(--ink); font-family: var(--font-display); font-size: var(--text-lg); }
@@ -463,7 +484,8 @@
 	.mac-tracker-workbench,
 	.mac-tracker-project-intro,
 	.mac-tracker-panel__head,
-	.mac-tracker-connection-check { align-items: flex-start; flex-direction: column; }
+	.mac-tracker-connection-check,
+	.mac-tracker-cleanup-zone { align-items: flex-start; flex-direction: column; }
 	.mac-tracker-summary-grid,
 	.mac-tracker-filters,
 	.mac-tracker-upload { grid-template-columns: 1fr; }
