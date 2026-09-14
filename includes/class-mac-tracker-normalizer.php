@@ -53,7 +53,6 @@ class MAC_Tracker_Normalizer {
 		$total_page = self::first_nullable_int( $pagination, array( 'total_pages', 'total_page', 'last_page' ) );
 		$total      = self::first_nullable_int( $pagination, array( 'total', 'total_count', 'count' ) );
 
-		$domain = self::url( $project['domain_url'] ?? $project['domain'] ?? '' );
 		return array(
 			'page'        => max( 1, $page ),
 			'per_page'    => max( 1, $per_page ),
@@ -87,6 +86,8 @@ class MAC_Tracker_Normalizer {
 				}
 			}
 		}
+
+		$domain = self::url( $project['domain_url'] ?? $project['domain'] ?? '' );
 
 		return array(
 			'id'              => $id,

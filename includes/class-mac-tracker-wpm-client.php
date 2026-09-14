@@ -3,7 +3,7 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Read-only WPM REST client. Settings/storage are added in a later phase.
+ * Read-only WPM REST client. Connection settings are supplied by the sync job.
  */
 class MAC_Tracker_WPM_Client {
 

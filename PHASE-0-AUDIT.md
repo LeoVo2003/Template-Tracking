@@ -73,7 +73,7 @@ The Projects page must render cached local snapshots immediately. It must not ca
 
 ## Phase 0 result
 
-Phase 0 is complete when the next phase can use the fixture without depending on production WPM, OneDrive, Gemini, or WordPress credentials. The Phase 2–4 data layer is now present in the working tree; admin/runtime screens remain intentionally deferred.
+Phase 0 is complete when the next phase can use the fixture without depending on production WPM, OneDrive, Gemini, or WordPress credentials. The Phase 2–4 data layer and the first admin/runtime UI are now present in the working tree.
 
 ## Phase 2–4 implementation checkpoint
 
@@ -84,4 +84,4 @@ Phase 0 is complete when the next phase can use the fixture without depending on
 - `MAC_Tracker_Sync_Service` applies the `3006` cutoff, the `3707` era rule, Action Design + done + `2026-07-01` cutoff, immutable snapshots, and a rotating 150-ID backfill cursor.
 - No API secret is stored in source, fixtures, logs, or HTML.
 
-The import/sync entry points are callable from PHP (`mac_tracker_import_pin_csv()` and `mac_tracker_run_full_sync()`) until the Phase 9 admin screen and Phase 10 background queue are added.
+The first admin screens now provide Pin import, Settings, Dashboard and cached Projects. Manual sync is queued through WP-Cron; its background queue is protected by a lock.

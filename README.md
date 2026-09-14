@@ -2,29 +2,31 @@
 
 WordPress admin plugin for synchronizing immutable project snapshots from WPM, tracking one template-color source per snapshot, reviewing 4-6 proposed colors, and showing only approved palettes.
 
-## Current base (Phase 2–4)
+## Current base (UI + sync foundation)
 
 - PHP 7.4-compatible WordPress plugin with idempotent `dbDelta` migration.
 - Immutable project snapshots, color-record table, CSV pin table, and sync logs.
 - Full WPM pagination with the fixed `Tracking-Template-Header` header.
 - IDs below `3006` are ignored for WPM snapshots; IDs `3006–3706` create one legacy row.
-- From ID `3707`, only done `[Website] Action Design` tasks completed on/after `2026-07-01` create rows; multiple valid tasks create multiple snapshots.
+- From ID `3707`, each observed done `[Website] Action Design` task creates its own row; multiple valid tasks create multiple snapshots.
 - Existing snapshots are never deleted or overwritten; only display labels are refreshed.
 - Exact baseline CSV headers are supported and date/time are stored as UTC.
 - Missing pins use a rotating detail backfill cursor with a 150-request quota per run.
-- `list_snapshots()` reads project + color fields with one bulk query for the future Projects page.
+- Dashboard, Projects, Pin import, and Settings are available in WordPress admin.
+- Projects reads snapshots in one local bulk query. It never calls WPM or loads rows incrementally.
+- Sync Now queues a background WP-Cron job protected by a lock; hourly sync is enabled after WPM connection is saved.
 
-The admin UI, color extraction, OneDrive resolver, and background queue are intentionally later phases.
+Color extraction/review, OneDrive resolver, and image workers remain later phases.
 
 ## Installation
 
 1. Zip the `mac-project-tracker` directory.
 2. In WordPress Admin open **Plugins → Add New Plugin → Upload Plugin**.
 3. Upload the ZIP and activate **MAC Project Tracker**.
-4. Activate the plugin to create the local tables.
-5. Until the admin screens are added, call `mac_tracker_import_pin_csv( $path )` and `mac_tracker_run_full_sync( $endpoint, $secret, $filters )` from a trusted WordPress runner. Never put the secret in Git or page HTML.
+4. Open **MAC Tracker → Settings**, save the HTTPS WPM endpoint and `Tracking-Template-Header` value.
+5. Open **Pin import** to upload the baseline CSV, then click **Sync now** from Dashboard or Projects.
 
-Version `0.2.0` is the rebuild foundation; activation performs no external request and imports no demo data.
+Version `0.3.0` adds the rebuild admin UI and background sync; activation performs no external request and imports no demo data.
 
 ## GitHub releases
 
@@ -77,7 +79,6 @@ The plugin accepts a response with a `data` or `projects` array, or a raw JSON l
 
 ## Next implementation step
 
-1. Add the admin Settings/Dashboard/Projects screens with one bulk local query.
-2. Add Action Design → `csv_pin` domain matching and Color Review.
-3. Add private OneDrive/SharePoint mapping and image/OCR/Gemini workers.
-4. Move Full Sync/backfill to a locked background queue and then add GitHub release automation.
+1. Add Action Design → `csv_pin` domain matching and Color Review.
+2. Add private OneDrive/SharePoint mapping and image/OCR/Gemini workers.
+3. Add GitHub release automation and test staging → production rollout.

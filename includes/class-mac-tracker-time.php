@@ -4,6 +4,16 @@ defined( 'ABSPATH' ) || exit;
 class MAC_Tracker_Time {
 	public static function now_utc() { return gmdate( 'Y-m-d H:i:s' ); }
 
+	public static function bangkok_label( $utc_value ) {
+		$utc_value = trim( (string) $utc_value );
+		if ( '' === $utc_value ) { return '—'; }
+		try {
+			$date = new DateTime( $utc_value, new DateTimeZone( 'UTC' ) );
+			$date->setTimezone( new DateTimeZone( 'Asia/Bangkok' ) );
+			return $date->format( 'd/m/Y H:i' ) . ' ICT';
+		} catch ( Exception $exception ) { return '—'; }
+	}
+
 	public static function normalize_utc( $value ) {
 		$value = trim( (string) $value );
 		if ( '' === $value ) { return null; }
