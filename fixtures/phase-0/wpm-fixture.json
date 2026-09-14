@@ -1,0 +1,106 @@
+{
+  "data": [
+    {
+      "id": 2999,
+      "name": "Legacy Below Minimum",
+      "zipcode": "00000",
+      "package": "SE1 PROX3",
+      "domain_url": "legacy.example.com",
+      "tasks": []
+    },
+    {
+      "id": 3006,
+      "name": "Baseline Pin Salon",
+      "zipcode": "95678",
+      "package": "SE1 PROX3",
+      "domain_url": "https://baseline.example.com/",
+      "web_layout": "https://templates.macusaone.com/demo-f03/home-02/",
+      "assignee": { "name": "Assignee One" },
+      "tasks": []
+    },
+    {
+      "id": 3707,
+      "name": "Domain Match Salon",
+      "zipcode": "77084",
+      "package": "SE1 PROX3",
+      "domain_url": "https://a.example.com/",
+      "tasks": [
+        {
+          "id": 1001,
+          "status": "done",
+          "completed_at": "2026-07-15T10:00:00Z",
+          "task_type": { "name": "[Website] Action Design" },
+          "extra_data": {
+            "web_demo_url": "https://a.example.com/",
+            "color_template": "#123456 #ABCDEF #FFFFFF #222222"
+          }
+        },
+        {
+          "id": 1002,
+          "status": "done",
+          "completed_at": "2026-07-15T11:00:00Z",
+          "task_type": { "name": "[Website] Action Design" },
+          "extra_data": {
+            "web_demo_url": "https://b.example.com/",
+            "color_template": "#FF0000 #00FF00 #0000FF #111111"
+          }
+        }
+      ]
+    },
+    {
+      "id": 3708,
+      "name": "Done Then Cancelled",
+      "zipcode": "33625",
+      "package": "SE1 PROX3",
+      "domain_url": "https://cancelled.example.com/",
+      "status": "cancelled",
+      "tasks": [
+        {
+          "id": 1003,
+          "status": "cancelled",
+          "completed_at": "2026-07-16T10:00:00Z",
+          "task_type": { "name": "[Website] Action Design" },
+          "extra_data": {
+            "web_demo_url": "https://cancelled.example.com/",
+            "color_template": "https://1drv.ms/i/example-palette"
+          }
+        }
+      ]
+    },
+    {
+      "id": 3709,
+      "name": "Multiple Done Snapshots",
+      "zipcode": "75065",
+      "package": "SEM PROX4",
+      "domain_url": "https://multi.example.com/",
+      "tasks": [
+        {
+          "id": 1004,
+          "status": "done",
+          "completed_at": "2026-06-30T10:00:00Z",
+          "task_type": { "name": "[Website] Action Design" },
+          "extra_data": {
+            "web_demo_url": "https://multi.example.com/",
+            "color_template": "#101010 #202020 #303030 #404040"
+          }
+        },
+        {
+          "id": 1005,
+          "status": "complete",
+          "completed_at": "2026-07-20T10:00:00Z",
+          "task_type": { "name": "[Website] Action Design" },
+          "extra_data": {
+            "web_demo_url": "https://multi.example.com/",
+            "color_template": "#111111 #222222 #333333 #444444"
+          }
+        }
+      ]
+    }
+  ],
+  "pagination": {
+    "page_index": 1,
+    "page_size": 100,
+    "total": 5,
+    "total_page": 1
+  }
+}
