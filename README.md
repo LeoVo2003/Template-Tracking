@@ -26,13 +26,13 @@ Color extraction/review, OneDrive resolver, and image workers remain later phase
 4. Open **MAC Tracker → Settings**, save the HTTPS WPM endpoint and `Tracking-Template-Header` value.
 5. Open **Pin import** to upload the baseline CSV, then click **Sync now** from Dashboard or Projects.
 
-Version `0.7.2` retires direct-Domain snapshots and provides one explicit cleanup action that preserves CSV pins and Action Design data. Activation performs no external request and imports no demo data.
+Version `0.7.3` keeps completed Action Design tasks eligible even when a project or task is later cancelled, while direct-Domain snapshots remain retired. Activation performs no external request and imports no demo data.
 
 ## GitHub releases and auto-update
 
 The public source repository is `https://github.com/LeoVo2003/Template-Tracking`. Pushing a tag such as `v0.7.0` builds a `mac-project-tracker-v0.7.0.zip` asset and creates a GitHub Release. The plugin checks the newest public release through the native WordPress update system.
 
-The site currently on `0.2.0` must be upgraded manually once to `0.7.1`, because `0.2.0` has no updater. After that bootstrap upgrade, future releases (including `0.7.2`) show the normal WordPress **Update now** button.
+The site currently on `0.2.0` must be upgraded manually once to `0.7.1`, because `0.2.0` has no updater. After that bootstrap upgrade, future releases (including `0.7.3`) show the normal WordPress **Update now** button.
 
 ## Expected WPM response
 

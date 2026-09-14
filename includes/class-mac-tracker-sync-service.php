@@ -154,9 +154,6 @@ class MAC_Tracker_Sync_Service {
 			return array( 'created' => 0 );
 		}
 		$this->repository->refresh_snapshot_labels( $project['id'], $project );
-		if ( $this->project_is_inactive( $project ) ) {
-			return array( 'created' => 0 );
-		}
 
 		$base = array(
 			'wpm_project_id'  => $project['id'],
@@ -174,7 +171,7 @@ class MAC_Tracker_Sync_Service {
 		// Only observed done Action Design tasks become WPM snapshots. Direct
 		// project-domain rows from older tracker versions are intentionally retired.
 		foreach ( $project['tasks'] as $task ) {
-			if ( ! $task['is_action_design'] || ! $this->task_is_done( $task['status'] ) ) {
+			if ( ! $task['is_action_design'] || ! $this->task_is_completed( $task ) ) {
 				continue;
 			}
 			$action_snapshot = $this->repository->upsert_snapshot(
@@ -270,8 +267,11 @@ class MAC_Tracker_Sync_Service {
 	}
 
 	private function release_lock() { delete_option( self::LOCK_OPTION ); }
-	private function task_is_done( $status ) { return in_array( strtolower( trim( (string) $status ) ), array( 'done', 'complete', 'completed' ), true ); }
-	private function project_is_inactive( array $project ) { return ! empty( $project['is_archived'] ) || in_array( strtolower( trim( (string) $project['status'] ) ), array( 'cancelled', 'canceled', 'deleted', 'archived' ), true ); }
+	/** A completed timestamp keeps a task eligible after WPM later changes its status. */
+	private function task_is_completed( array $task ) {
+		$status = strtolower( trim( (string) ( $task['status'] ?? '' ) ) );
+		return in_array( $status, array( 'done', 'complete', 'completed' ), true ) || '' !== trim( (string) ( $task['completed_at'] ?? '' ) );
+	}
 	private function duration( $started ) { return 'duration=' . number_format( microtime( true ) - $started, 1 ) . 's'; }
 	private function with_duration( $message, $started ) { return $message . ', ' . $this->duration( $started ); }
 }
