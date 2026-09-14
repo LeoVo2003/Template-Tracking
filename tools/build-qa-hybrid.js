@@ -64,6 +64,11 @@ const source = sourceRows.filter((row) => row.some((value) => value.trim() !== '
 const projects = JSON.parse(fs.readFileSync(wpmPath, 'utf8'));
 const exact = new Map(projects.map((project) => [norm(project.full_name), project]));
 const legacyProjects = JSON.parse(fs.readFileSync(legacyPath, 'utf8'));
+// Confirmed historical corrections that are absent from the supplied WPM exports.
+const manualProjectIds = new Map([
+  [norm('60803SE1 PROX3 LAMIA NAILS'), 2956],
+  [norm('30346SE1 PROX3 NAIL TALK & TAN'), 3777],
+]);
 const pinRows = csvRows(fs.readFileSync(pinPath, 'utf8'));
 const pinHeaders = pinRows.shift();
 const historicPins = new Map(pinRows.map((row) => Object.fromEntries(pinHeaders.map((header, i) => [header || `H${i + 1}`, row[i] || '']))).map((row) => [norm(row.Projects), row]));
@@ -103,9 +108,10 @@ for (const row of source) {
   if (!match.project) {
     const historicPin = historicPins.get(norm(row.Projects));
     const legacy = historicPin ? null : legacyProject(row.Projects);
+		const manualProjectId = manualProjectIds.get(norm(row.Projects)) || 0;
     unmappedCount += 1;
     const due = csvDueDate(row['Due Date']);
-		output.push({ record_kind: 'csv_pin', match_confidence: historicPin ? 'historic_pin' : (legacy ? 'legacy_wpm' : 'unmapped'), project_id: historicPin ? historicPin.project_id : (legacy ? legacy.id : ''), action_task_id: '', website: row.Website, projects: row.Projects, layout_web: row['Layout web'], member: row.Member, date: due.date, time: due.time, source_row: source.indexOf(row) + 2 });
+		output.push({ record_kind: 'csv_pin', match_confidence: historicPin ? 'historic_pin' : (legacy ? 'legacy_wpm' : (manualProjectId ? 'manual' : 'unmapped')), project_id: historicPin ? historicPin.project_id : (legacy ? legacy.id : manualProjectId), action_task_id: '', website: row.Website, projects: row.Projects, layout_web: row['Layout web'], member: row.Member, date: due.date, time: due.time, source_row: source.indexOf(row) + 2 });
     pinCount += 1;
     continue;
   }
