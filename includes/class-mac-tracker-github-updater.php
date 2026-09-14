@@ -12,6 +12,11 @@ class MAC_Tracker_GitHub_Updater {
 
 	public function register() {
 		add_filter( 'update_plugins_github.com', array( $this, 'filter_update' ), 10, 4 );
+		// Some hosts do not invoke the Update URI hostname hook consistently.
+		// Injecting the same response into WordPress' update transient makes the
+		// public GitHub release visible on the normal Plugins/Updates screens.
+		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'inject_update_transient' ), 20 );
+		add_filter( 'site_transient_update_plugins', array( $this, 'inject_update_transient' ), 20 );
 		add_filter( 'plugins_api', array( $this, 'filter_plugin_information' ), 20, 3 );
 	}
 
@@ -22,12 +27,36 @@ class MAC_Tracker_GitHub_Updater {
 			return $update;
 		}
 
+		$candidate = $this->build_update( isset( $plugin_data['Version'] ) ? (string) $plugin_data['Version'] : MAC_TRACKER_VERSION, $plugin_file );
+		return is_array( $candidate ) ? $candidate : $update;
+	}
+
+	/** Make this plugin visible in the standard WordPress update transient. */
+	public function inject_update_transient( $transient ) {
+		if ( ! is_object( $transient ) ) {
+			return $transient;
+		}
+
+		$plugin_file = plugin_basename( MAC_TRACKER_FILE );
+		$candidate   = $this->build_update( MAC_TRACKER_VERSION, $plugin_file );
+		if ( ! is_array( $candidate ) ) {
+			return $transient;
+		}
+		if ( ! isset( $transient->response ) || ! is_array( $transient->response ) ) {
+			$transient->response = array();
+		}
+		$transient->response[ $plugin_file ] = (object) $candidate;
+
+		return $transient;
+	}
+
+	/** @return array|false */
+	private function build_update( $current, $plugin_file ) {
 		$release = $this->get_latest_release();
 		$version = is_array( $release ) ? $this->release_version( $release ) : '';
 		$package = is_array( $release ) ? $this->release_package_url( $release ) : '';
-		$current = isset( $plugin_data['Version'] ) ? (string) $plugin_data['Version'] : MAC_TRACKER_VERSION;
-		if ( '' === $version || '' === $package || ! version_compare( $version, $current, '>' ) ) {
-			return $update;
+		if ( '' === $version || '' === $package || ! version_compare( $version, (string) $current, '>' ) ) {
+			return false;
 		}
 
 		return array(

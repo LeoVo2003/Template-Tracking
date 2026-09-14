@@ -26,13 +26,13 @@ Color extraction/review, OneDrive resolver, and image workers remain later phase
 4. Open **MAC Tracker → Settings**, save the HTTPS WPM endpoint and `Tracking-Template-Header` value.
 5. Open **Pin import** to upload the baseline CSV, then click **Sync now** from Dashboard or Projects.
 
-Version `0.7.4` replaces the tracker interface with the Premium design system: Inter, JetBrains Mono, accessible blue/violet semantic tokens, and consistent 4–32px spacing. Activation performs no external request and imports no demo data.
+Version `0.7.5` makes the GitHub release visible through the standard WordPress update transient, in addition to the Update URI hook. Activation performs no external request and imports no demo data.
 
 ## GitHub releases and auto-update
 
 The public source repository is `https://github.com/LeoVo2003/Template-Tracking`. Pushing a tag such as `v0.7.0` builds a `mac-project-tracker-v0.7.0.zip` asset and creates a GitHub Release. The plugin checks the newest public release through the native WordPress update system.
 
-The site currently on `0.2.0` must be upgraded manually once to `0.7.1`, because `0.2.0` has no updater. After that bootstrap upgrade, future releases (including `0.7.4`) show the normal WordPress **Update now** button.
+Installations on `0.2.0` have no updater; installations on older `0.7.x` may not run the original Update URI hook. Both must be upgraded manually once to `0.7.5`. After that bootstrap, future releases show the normal WordPress **Update now** button.
 
 ## Expected WPM response
 
