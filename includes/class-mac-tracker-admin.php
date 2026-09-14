@@ -101,7 +101,7 @@ class MAC_Tracker_Admin {
 				<div class="mac-tracker-empty"><span class="dashicons dashicons-archive"></span><strong>No project snapshots yet</strong><p>Import the pin baseline or save WPM Settings and run a background sync.</p></div>
 			<?php else : ?>
 				<div class="mac-tracker-table-scroll"><table class="widefat fixed striped mac-tracker-project-table"><thead><tr>
-					<?php $this->sort_header( 'id', 'ID', $filters ); ?><?php $this->sort_header( 'project', 'Project', $filters ); ?><?php $this->sort_header( 'website', 'Website', $filters ); ?><?php $this->sort_header( 'layout', 'Layout', $filters ); ?><?php $this->sort_header( 'assignee', 'Assignee', $filters ); ?><?php $this->sort_header( 'palette', 'Palette', $filters ); ?>
+					<?php $this->sort_header( 'id', 'ID', $filters ); ?><?php $this->sort_header( 'project', 'Project', $filters ); ?><?php $this->sort_header( 'website', 'Website', $filters ); ?><?php $this->sort_header( 'layout', 'Layout', $filters ); ?><?php $this->sort_header( 'assignee', 'Assignee', $filters ); ?><?php $this->sort_header( 'date', 'Date', $filters ); ?><?php $this->sort_header( 'time', 'Time', $filters ); ?><?php $this->sort_header( 'palette', 'Palette', $filters ); ?>
 				</tr></thead><tbody>
 					<?php foreach ( $page['rows'] as $row ) : ?>
 						<tr>
@@ -110,6 +110,8 @@ class MAC_Tracker_Admin {
 							<td><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></td>
 							<td><?php $this->url_link( $row['layout_url'], $this->layout_label( $row['layout_url'] ) ); ?></td>
 							<td><?php echo esc_html( $this->person_name( $row['assignee_json'] ) ?: '—' ); ?></td>
+							<td class="mac-tracker-date"><?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></td>
+							<td class="mac-tracker-date"><?php echo esc_html( MAC_Tracker_Time::bangkok_time( $row['task_completed_at'] ) ); ?></td>
 							<td><span class="mac-tracker-status mac-tracker-status--muted">Color later</span></td>
 						</tr>
 					<?php endforeach; ?>

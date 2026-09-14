@@ -5,13 +5,28 @@ class MAC_Tracker_Time {
 	public static function now_utc() { return gmdate( 'Y-m-d H:i:s' ); }
 
 	public static function bangkok_label( $utc_value ) {
+		$parts = self::bangkok_parts( $utc_value );
+		return $parts ? $parts['date'] . ' ' . $parts['time'] . ' ICT' : '—';
+	}
+
+	public static function bangkok_date( $utc_value ) {
+		$parts = self::bangkok_parts( $utc_value );
+		return $parts ? $parts['date'] : '—';
+	}
+
+	public static function bangkok_time( $utc_value ) {
+		$parts = self::bangkok_parts( $utc_value );
+		return $parts ? $parts['time'] : '—';
+	}
+
+	private static function bangkok_parts( $utc_value ) {
 		$utc_value = trim( (string) $utc_value );
-		if ( '' === $utc_value ) { return '—'; }
+		if ( '' === $utc_value ) { return null; }
 		try {
 			$date = new DateTime( $utc_value, new DateTimeZone( 'UTC' ) );
 			$date->setTimezone( new DateTimeZone( 'Asia/Bangkok' ) );
-			return $date->format( 'd/m/Y H:i' ) . ' ICT';
-		} catch ( Exception $exception ) { return '—'; }
+			return array( 'date' => $date->format( 'd/m/Y' ), 'time' => $date->format( 'H:i' ) );
+		} catch ( Exception $exception ) { return null; }
 	}
 
 	public static function normalize_utc( $value ) {

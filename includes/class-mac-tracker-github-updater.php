@@ -18,6 +18,60 @@ class MAC_Tracker_GitHub_Updater {
 		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'inject_update_transient' ), 20 );
 		add_filter( 'site_transient_update_plugins', array( $this, 'inject_update_transient' ), 20 );
 		add_filter( 'plugins_api', array( $this, 'filter_plugin_information' ), 20, 3 );
+		add_filter( 'plugin_action_links_' . plugin_basename( MAC_TRACKER_FILE ), array( $this, 'plugin_action_links' ) );
+		add_action( 'admin_post_mac_tracker_check_updates', array( $this, 'handle_check_updates' ) );
+		add_action( 'admin_notices', array( $this, 'check_update_notice' ) );
+	}
+
+	/** Add a direct GitHub version check beside Deactivate in Plugins. */
+	public function plugin_action_links( $links ) {
+		if ( ! current_user_can( 'update_plugins' ) ) {
+			return $links;
+		}
+		$url  = wp_nonce_url( admin_url( 'admin-post.php?action=mac_tracker_check_updates' ), 'mac_tracker_check_updates' );
+		$link = '<a href="' . esc_url( $url ) . '">Check updates</a>';
+		array_unshift( $links, $link );
+		return $links;
+	}
+
+	/** Clear only this plugin's cache, refresh WordPress' transient, then return to Plugins. */
+	public function handle_check_updates() {
+		if ( ! current_user_can( 'update_plugins' ) ) {
+			wp_die( esc_html__( 'You do not have permission to check plugin updates.' ) );
+		}
+		check_admin_referer( 'mac_tracker_check_updates' );
+		delete_site_transient( self::CACHE_KEY );
+		wp_clean_plugins_cache( true );
+
+		$release = $this->get_latest_release();
+		$version = is_array( $release ) ? $this->release_version( $release ) : '';
+		$state   = '' === $version ? 'unavailable' : ( version_compare( $version, MAC_TRACKER_VERSION, '>' ) ? 'available' : 'current' );
+		if ( function_exists( 'wp_update_plugins' ) ) {
+			wp_update_plugins();
+		}
+
+		wp_safe_redirect( add_query_arg( array( 'mac_tracker_update_check' => $state, 'mac_tracker_latest' => $version ), admin_url( 'plugins.php' ) ) );
+		exit;
+	}
+
+	/** Render a precise result after the manual check without exposing credentials. */
+	public function check_update_notice() {
+		if ( ! is_admin() || empty( $GLOBALS['pagenow'] ) || 'plugins.php' !== $GLOBALS['pagenow'] || empty( $_GET['mac_tracker_update_check'] ) ) {
+			return;
+		}
+		$state   = sanitize_key( wp_unslash( $_GET['mac_tracker_update_check'] ) );
+		$version = sanitize_text_field( wp_unslash( $_GET['mac_tracker_latest'] ?? '' ) );
+		if ( 'available' === $state ) {
+			$message = 'MAC Project Tracker ' . $version . ' is available. WordPress can now show Update now.';
+			$class   = 'notice-success';
+		} elseif ( 'current' === $state ) {
+			$message = 'MAC Project Tracker is already up to date (' . MAC_TRACKER_VERSION . ').';
+			$class   = 'notice-info';
+		} else {
+			$message = 'GitHub could not be checked right now. Try again shortly.';
+			$class   = 'notice-error';
+		}
+		echo '<div class="notice ' . esc_attr( $class ) . ' is-dismissible"><p>' . esc_html( $message ) . '</p></div>';
 	}
 
 	public function filter_update( $update, $plugin_data, $plugin_file, $locales ) {

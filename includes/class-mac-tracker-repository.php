@@ -47,6 +47,16 @@ class MAC_Tracker_Repository {
 
 		if ( $existing_id > 0 ) {
 			$this->refresh_snapshot_labels( $project_id, $snapshot );
+			// Date/Time is a corrected source field: CSV supplies its historical
+			// timestamp and WPM Action Design supplies Due Date. Refresh only this
+			// value; Website, Layout, Assignee and palette stay immutable.
+			if ( array_key_exists( 'task_completed_at', $snapshot ) ) {
+				$this->wpdb->update(
+					$this->projects,
+					array( 'task_completed_at' => $snapshot['task_completed_at'], 'updated_at' => MAC_Tracker_Time::now_utc() ),
+					array( 'id' => $existing_id )
+				);
+			}
 			return array( 'id' => $existing_id, 'created' => false );
 		}
 
@@ -205,7 +215,11 @@ class MAC_Tracker_Repository {
 		$per_page = isset( $filters['per_page'] ) ? (int) $filters['per_page'] : 0;
 		$per_page = in_array( $per_page, array( 50, 100, 200 ), true ) ? $per_page : 0;
 		$page     = max( 1, absint( $filters['paged'] ?? 1 ) );
-		$where    = array( '1=1' );
+		// A CSV pin is the verified historical fallback. Once WPM has an
+		// Action Design snapshot for the same project, show the task row(s)
+		// instead of duplicating that project with its CSV row.
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
+		$where    = array( $visible );
 		$args     = array();
 
 		$search = trim( (string) ( $filters['search'] ?? '' ) );
@@ -242,7 +256,7 @@ class MAC_Tracker_Repository {
 		$where_sql = implode( ' AND ', $where );
 		$order_map = array(
 			'id' => 'p.wpm_project_id', 'project' => 'p.name', 'website' => 'p.website_url',
-			'layout' => 'p.layout_url', 'assignee' => 'p.assignee_json', 'palette' => 'c.status',
+			'layout' => 'p.layout_url', 'assignee' => 'p.assignee_json', 'date' => 'p.task_completed_at', 'time' => 'p.task_completed_at', 'palette' => 'c.status',
 		);
 		$sort     = sanitize_key( $filters['orderby'] ?? 'id' );
 		$order_by = $order_map[ $sort ] ?? $order_map['id'];
@@ -270,8 +284,9 @@ class MAC_Tracker_Repository {
 	}
 
 	public function dashboard_stats() {
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
 		return (array) $this->wpdb->get_row(
-			"SELECT COUNT(*) AS snapshots, COUNT(DISTINCT wpm_project_id) AS projects, SUM(record_kind = 'action_design') AS action_design, SUM(record_kind = 'csv_pin') AS csv_pins FROM {$this->projects}",
+			"SELECT COUNT(*) AS snapshots, COUNT(DISTINCT p.wpm_project_id) AS projects, SUM(p.record_kind = 'action_design') AS action_design, SUM(p.record_kind = 'csv_pin') AS csv_pins FROM {$this->projects} p WHERE {$visible}",
 			ARRAY_A
 		);
 	}
@@ -294,7 +309,8 @@ class MAC_Tracker_Repository {
 	}
 
 	public function list_assignees() {
-		$raw = (array) $this->wpdb->get_col( "SELECT DISTINCT assignee_json FROM {$this->projects} WHERE assignee_json IS NOT NULL AND assignee_json <> ''" );
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
+		$raw = (array) $this->wpdb->get_col( "SELECT DISTINCT p.assignee_json FROM {$this->projects} p WHERE {$visible} AND p.assignee_json IS NOT NULL AND p.assignee_json <> ''" );
 		$names = array();
 		foreach ( $raw as $value ) {
 			$person = json_decode( $value, true );

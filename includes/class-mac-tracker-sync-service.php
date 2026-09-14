@@ -175,10 +175,10 @@ class MAC_Tracker_Sync_Service {
 			'raw'             => $project['raw'],
 		);
 
-		// Only observed done Action Design tasks become WPM snapshots. Direct
-		// project-domain rows from older tracker versions are intentionally retired.
+		// Action Design is the authoritative WPM source. CSV pins are the
+		// historical fallback; direct Domain rows are never created.
 		foreach ( $project['tasks'] as $task ) {
-			if ( ! $task['is_action_design'] || ! $this->task_is_completed( $task ) ) {
+			if ( ! $task['is_action_design'] || ! $this->task_is_done( $task['status'] ) ) {
 				continue;
 			}
 			++$eligible;
@@ -189,7 +189,9 @@ class MAC_Tracker_Sync_Service {
 					'website_url'          => '' !== $task['demo_url'] ? $task['demo_url'] : $project['domain'],
 					'layout_url'           => '' !== $task['layout_url'] ? $task['layout_url'] : $project['layout'],
 					'template_color_raw'   => $task['color_template'],
-					'task_completed_at'    => MAC_Tracker_Time::normalize_utc( $task['completed_at'] ),
+					// The Projects timeline uses the Action Design due date, not its
+					// completion timestamp. A missing Due Date remains blank in UI.
+					'task_completed_at'    => MAC_Tracker_Time::normalize_utc( $task['due_at'] ),
 				) )
 			);
 			if ( is_wp_error( $action_snapshot ) ) {
@@ -275,10 +277,9 @@ class MAC_Tracker_Sync_Service {
 	}
 
 	private function release_lock() { delete_option( self::LOCK_OPTION ); }
-	/** A completed timestamp keeps a task eligible after WPM later changes its status. */
-	private function task_is_completed( array $task ) {
-		$status = strtolower( trim( (string) ( $task['status'] ?? '' ) ) );
-		return in_array( $status, array( 'done', 'complete', 'completed' ), true ) || '' !== trim( (string) ( $task['completed_at'] ?? '' ) );
+	/** Existing snapshots remain after status changes; new ones require done now. */
+	private function task_is_done( $status ) {
+		return in_array( strtolower( trim( (string) $status ) ), array( 'done', 'complete', 'completed' ), true );
 	}
 	private function duration( $started ) { return 'duration=' . number_format( microtime( true ) - $started, 1 ) . 's'; }
 	private function with_duration( $message, $started ) { return $message . ', ' . $this->duration( $started ); }
