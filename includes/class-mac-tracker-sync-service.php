@@ -67,6 +67,15 @@ class MAC_Tracker_Sync_Service {
 		return (bool) wp_next_scheduled( self::MANUAL_CRON_HOOK );
 	}
 
+	/** Confirm the saved WPM route and header without writing any local snapshots. */
+	public function test_connection() {
+		$client = $this->client_from_settings();
+		if ( is_wp_error( $client ) ) {
+			return $client;
+		}
+		return $client->test_connection();
+	}
+
 	/**
 	 * Full sync runs in cron, never in the Projects request. It preserves prior
 	 * snapshots and records a short audit log instead of exposing credentials.
@@ -250,12 +259,20 @@ class MAC_Tracker_Sync_Service {
 		if ( '' === $endpoint || '' === $secret ) {
 			return new WP_Error( 'mac_tracker_wpm_unconfigured', 'WPM endpoint or API header value is missing.' );
 		}
+		$endpoint = MAC_Tracker_WPM_Client::normalize_endpoint( $endpoint );
+		if ( is_wp_error( $endpoint ) ) {
+			return $endpoint;
+		}
 		return new MAC_Tracker_WPM_Client( $endpoint, $secret, 100 );
 	}
 
 	private function is_configured() {
 		$settings = (array) get_option( 'mac_tracker_settings', array() );
-		return ! empty( $settings['wpm_endpoint'] ) && '' !== MAC_Tracker_Crypto::decrypt( get_option( 'mac_tracker_wpm_secret', '' ) );
+		if ( empty( $settings['wpm_endpoint'] ) ) {
+			return false;
+		}
+		$endpoint = MAC_Tracker_WPM_Client::normalize_endpoint( $settings['wpm_endpoint'] );
+		return ! is_wp_error( $endpoint ) && '' !== MAC_Tracker_Crypto::decrypt( get_option( 'mac_tracker_wpm_secret', '' ) );
 	}
 
 	private function acquire_lock() {
