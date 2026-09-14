@@ -31,6 +31,8 @@ class MAC_Tracker_Pin_Import {
 		$headers = array_map( array( $this, 'normalize_header' ), $headers );
 
 		$imported = 0;
+		$registered = 0;
+		$roster_ids = array();
 		$errors   = array();
 		$row_no   = 1;
 		while ( false !== ( $values = fgetcsv( $handle ) ) ) {
@@ -44,6 +46,14 @@ class MAC_Tracker_Pin_Import {
 			$project_id = absint( $row['project_id'] ?? $row['wpm_project_id'] ?? 0 );
 			if ( $project_id <= 0 ) {
 				$errors[] = sprintf( 'Row %d: missing project_id.', $row_no );
+				continue;
+			}
+			$roster_ids[] = $project_id;
+			$record_kind = sanitize_key( $row['record_kind'] ?? 'csv_pin' );
+			if ( 'action_design' === $record_kind ) {
+				// The row reserves this WPM project in the approved scope. Its real
+				// Action Design snapshot is created only after WPM confirms task done.
+				++$registered;
 				continue;
 			}
 
@@ -82,7 +92,8 @@ class MAC_Tracker_Pin_Import {
 		}
 
 		fclose( $handle );
-		return array( 'imported' => $imported, 'errors' => $errors );
+		$this->repository->set_roster_ids( $roster_ids );
+		return array( 'imported' => $imported, 'registered' => $registered, 'roster' => count( array_unique( $roster_ids ) ), 'errors' => $errors );
 	}
 
 	private function normalize_header( $value ) {

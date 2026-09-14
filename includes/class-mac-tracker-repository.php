@@ -209,6 +209,15 @@ class MAC_Tracker_Repository {
 
 	public function cursor() { return absint( get_option( 'mac_tracker_backfill_cursor', 0 ) ); }
 	public function set_cursor( $project_id ) { update_option( 'mac_tracker_backfill_cursor', absint( $project_id ), false ); }
+	/** The approved CSV roster is the only WPM scope allowed to create snapshots. */
+	public function set_roster_ids( array $project_ids ) {
+		$project_ids = array_values( array_unique( array_filter( array_map( 'absint', $project_ids ) ) ) );
+		update_option( 'mac_tracker_roster_ids', $project_ids, false );
+	}
+
+	public function roster_ids() {
+		return array_values( array_unique( array_filter( array_map( 'absint', (array) get_option( 'mac_tracker_roster_ids', array() ) ) ) ) );
+	}
 
 	/** Remove only local tracker records. Connection settings are intentionally retained. */
 	public function clear_local_data() {
@@ -220,6 +229,7 @@ class MAC_Tracker_Repository {
 		}
 		delete_option( 'mac_tracker_backfill_cursor' );
 		delete_option( 'mac_tracker_sync_queued_at' );
+		delete_option( 'mac_tracker_roster_ids' );
 		return true;
 	}
 

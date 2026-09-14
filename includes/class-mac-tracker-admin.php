@@ -127,7 +127,7 @@ class MAC_Tracker_Admin {
 		$this->require_capability();
 		$this->page_start( 'Pin baseline', 'Import the approved manual project list. Pins remain if WPM later removes a project.', 'pins' );
 		?>
-		<section class="mac-tracker-panel mac-tracker-panel--narrow"><div class="mac-tracker-panel__head"><div><p class="mac-tracker-eyebrow">CSV import</p><h2><?php echo esc_html( number_format_i18n( $this->repository->pin_count() ) ); ?> saved pins</h2><p>Required field: <code>project_id</code>. Website, Projects, Layout web, Member, Date and Time are accepted when present.</p></div></div>
+		<section class="mac-tracker-panel mac-tracker-panel--narrow"><div class="mac-tracker-panel__head"><div><p class="mac-tracker-eyebrow">Master roster import</p><h2><?php echo esc_html( number_format_i18n( $this->repository->pin_count() ) ); ?> saved pins</h2><p>Import the full hybrid CSV (466 rows). CSV pin rows are displayed immediately; Action Design rows only register the approved WPM scope and appear after WPM confirms them.</p></div></div>
 		<form class="mac-tracker-upload" method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<?php wp_nonce_field( 'mac_tracker_import_pins' ); ?><input type="hidden" name="action" value="mac_tracker_import_pins"><label><span>CSV file</span><input type="file" name="pin_csv" accept=".csv,text/csv" required></label><button class="button button-primary" type="submit">Import pins</button>
 		</form></section>
@@ -196,7 +196,7 @@ class MAC_Tracker_Admin {
 		}
 		$result = ( new MAC_Tracker_Pin_Import( $this->repository ) )->import_file( $_FILES['pin_csv']['tmp_name'] );
 		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker-pins', $result->get_error_message(), 'error' ); }
-		$message = sprintf( 'Imported %d pins.', (int) $result['imported'] );
+		$message = sprintf( 'Imported %d CSV pins and registered %d Action Design projects in a %d-project WPM scope.', (int) $result['imported'], (int) ( $result['registered'] ?? 0 ), (int) ( $result['roster'] ?? 0 ) );
 		if ( ! empty( $result['errors'] ) ) { $message .= ' ' . count( $result['errors'] ) . ' row(s) were skipped.'; }
 		$this->redirect( 'mac-project-tracker-pins', $message, 'success' );
 	}

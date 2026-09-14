@@ -93,6 +93,13 @@ class MAC_Tracker_Sync_Service {
 		$log_id  = $this->repository->begin_sync_log();
 		$started = microtime( true );
 		try {
+			$roster_ids = $this->repository->roster_ids();
+			if ( empty( $roster_ids ) ) {
+				$error = new WP_Error( 'mac_tracker_roster_missing', 'Import the hybrid master CSV before syncing WPM.' );
+				$this->repository->finish_sync_log( $log_id, 'failed', 0, $error->get_error_message() );
+				return $error;
+			}
+			$roster = array_fill_keys( $roster_ids, true );
 			$client = $this->client_from_settings();
 			if ( is_wp_error( $client ) ) {
 				$this->repository->finish_sync_log( $log_id, 'failed', 0, $client->get_error_message() );
@@ -116,6 +123,9 @@ class MAC_Tracker_Sync_Service {
 					continue;
 				}
 				++$scanned;
+				if ( ! isset( $roster[ $project['id'] ] ) ) {
+					continue;
+				}
 				$seen[ $project['id'] ] = true;
 				$one = $this->sync_project( $project );
 				if ( is_wp_error( $one ) ) {
@@ -128,9 +138,10 @@ class MAC_Tracker_Sync_Service {
 
 			$backfill = $this->backfill_missing_pins( array_keys( $seen ), $client );
 			$message  = sprintf(
-				'pages=%d, scanned=%d, eligible_action_tasks=%d, created=%d, backfill=%d/%d, errors=%d, %s',
+				'pages=%d, scanned=%d, roster=%d, eligible_action_tasks=%d, created=%d, backfill=%d/%d, errors=%d, %s',
 				(int) $result['pages'],
 				$scanned,
+				count( $roster_ids ),
 				$processed,
 				$created,
 				(int) $backfill['found'],
