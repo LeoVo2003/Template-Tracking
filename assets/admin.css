@@ -23,6 +23,7 @@
 	--space-4: 16px;
 	--space-5: 24px;
 	--space-6: 32px;
+	--text-2xs: 11px;
 	--text-xs: 12px;
 	--text-sm: 14px;
 	--text-md: 16px;
@@ -347,7 +348,7 @@
 
 .mac-tracker-table-shell { overflow: hidden; }
 .mac-tracker-table-scroll { overflow-x: auto; }
-.mac-tracker-project-table { min-width: 1080px; margin: 0; border: 0; border-collapse: separate; border-spacing: 0; box-shadow: none; }
+.mac-tracker-project-table { min-width: 1010px; margin: 0; border: 0; border-collapse: separate; border-spacing: 0; box-shadow: none; }
 .mac-tracker-project-table thead th { padding: 0; background: #F0E5D5; border-bottom: 1px solid var(--line); }
 .mac-tracker-project-table thead th a { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-4); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; letter-spacing: .05em; text-decoration: none; text-transform: uppercase; }
 .mac-tracker-project-table thead th a:hover,
@@ -361,7 +362,11 @@
 .mac-tracker-id strong { font-family: var(--font-mono); font-size: var(--text-xs); }
 .mac-tracker-id span { margin-top: var(--space-1); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); }
 .mac-tracker-project-name { font-size: var(--text-xs); line-height: 1.5; }
-.mac-tracker-date { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); white-space: nowrap; }
+.mac-tracker-col--date { width: 92px; }
+.mac-tracker-col--time { width: 64px; }
+.mac-tracker-date { padding-right: var(--space-2) !important; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: -.02em; white-space: nowrap; }
+.mac-tracker-date--day { width: 92px; }
+.mac-tracker-date--time { width: 64px; }
 .mac-tracker-url { display: inline-flex; max-width: 220px; align-items: center; gap: var(--space-1); overflow: hidden; color: var(--primary); font-family: var(--font-mono); font-size: var(--text-xs); text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
 .mac-tracker-url:hover { color: var(--primary-hover); text-decoration: underline; }
 .mac-tracker-url .dashicons { width: 14px; height: 14px; font-size: 14px; flex: 0 0 auto; }

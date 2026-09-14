@@ -101,17 +101,17 @@ class MAC_Tracker_Admin {
 				<div class="mac-tracker-empty"><span class="dashicons dashicons-archive"></span><strong>No project snapshots yet</strong><p>Import the pin baseline or save WPM Settings and run a background sync.</p></div>
 			<?php else : ?>
 				<div class="mac-tracker-table-scroll"><table class="widefat fixed striped mac-tracker-project-table"><thead><tr>
-					<?php $this->sort_header( 'id', 'ID', $filters ); ?><?php $this->sort_header( 'project', 'Project', $filters ); ?><?php $this->sort_header( 'website', 'Website', $filters ); ?><?php $this->sort_header( 'layout', 'Layout', $filters ); ?><?php $this->sort_header( 'assignee', 'Assignee', $filters ); ?><?php $this->sort_header( 'date', 'Date', $filters ); ?><?php $this->sort_header( 'time', 'Time', $filters ); ?><?php $this->sort_header( 'palette', 'Palette', $filters ); ?>
+					<?php $this->sort_header( 'id', 'ID', $filters ); ?><?php $this->sort_header( 'project', 'Project', $filters ); ?><?php $this->sort_header( 'website', 'Website', $filters ); ?><?php $this->sort_header( 'layout', 'Layout', $filters ); ?><?php $this->sort_header( 'assignee', 'Assignee', $filters ); ?><?php $this->sort_header( 'date', 'Date', $filters, 'mac-tracker-col--date' ); ?><?php $this->sort_header( 'time', 'Time', $filters, 'mac-tracker-col--time' ); ?><?php $this->sort_header( 'palette', 'Palette', $filters ); ?>
 				</tr></thead><tbody>
 					<?php foreach ( $page['rows'] as $row ) : ?>
 						<tr>
 							<td class="mac-tracker-id"><strong>#<?php echo esc_html( $row['wpm_project_id'] ); ?></strong><span><?php echo esc_html( $this->record_hint( $row ) ); ?></span></td>
 							<td><strong class="mac-tracker-project-name"><?php echo esc_html( $this->project_label( $row ) ); ?></strong></td>
 							<td><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></td>
-							<td><?php $this->url_link( $row['layout_url'], $this->layout_label( $row['layout_url'] ) ); ?></td>
+							<td><?php $this->url_link( $this->layout_url( $row['layout_url'] ), $this->layout_label( $row['layout_url'] ) ); ?></td>
 							<td><?php echo esc_html( $this->person_name( $row['assignee_json'] ) ?: '—' ); ?></td>
-							<td class="mac-tracker-date"><?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></td>
-							<td class="mac-tracker-date"><?php echo esc_html( MAC_Tracker_Time::bangkok_time( $row['task_completed_at'] ) ); ?></td>
+							<td class="mac-tracker-date mac-tracker-date--day"><?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></td>
+							<td class="mac-tracker-date mac-tracker-date--time"><?php echo esc_html( MAC_Tracker_Time::bangkok_time( $row['task_completed_at'] ) ); ?></td>
 							<td><span class="mac-tracker-status mac-tracker-status--muted">Color later</span></td>
 						</tr>
 					<?php endforeach; ?>
@@ -244,12 +244,12 @@ class MAC_Tracker_Admin {
 		);
 	}
 
-	private function sort_header( $field, $label, array $filters ) {
+	private function sort_header( $field, $label, array $filters, $class = '' ) {
 		$current = $filters['orderby'] === $field;
 		$order   = $current && 'desc' === strtolower( $filters['order'] ) ? 'asc' : 'desc';
 		$args    = array_merge( $filters, array( 'orderby' => $field, 'order' => $order, 'paged' => 1, 'page' => 'mac-project-tracker-projects' ) );
 		$url = add_query_arg( $args, admin_url( 'admin.php' ) );
-		echo '<th scope="col" class="mac-tracker-sort' . ( $current ? ' is-active' : '' ) . '"><a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '<span aria-hidden="true" class="dashicons ' . ( $current && 'asc' === strtolower( $filters['order'] ) ? 'dashicons-arrow-up-alt2' : 'dashicons-arrow-down-alt2' ) . '"></span></a></th>';
+		echo '<th scope="col" class="mac-tracker-sort ' . esc_attr( $class ) . ( $current ? ' is-active' : '' ) . '"><a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '<span aria-hidden="true" class="dashicons ' . ( $current && 'asc' === strtolower( $filters['order'] ) ? 'dashicons-arrow-up-alt2' : 'dashicons-arrow-down-alt2' ) . '"></span></a></th>';
 	}
 
 	private function pagination( array $page, array $filters ) {
@@ -283,14 +283,31 @@ class MAC_Tracker_Admin {
 	}
 
 	private function layout_label( $url ) {
-		$url = $this->first_url( $url );
-		if ( '' === $url ) { return '—'; }
-		$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
-		$path = trim( (string) wp_parse_url( $url, PHP_URL_PATH ), '/' );
-		if ( false !== strpos( $host, 'templates.macusaone.com' ) && preg_match( '#(demo-[a-z0-9]+)/(home-[a-z0-9-]+)#i', $path, $match ) ) {
-			return strtolower( $match[1] ) . ' - ' . str_replace( '-', ' ', strtolower( $match[2] ) );
+		$parts = $this->layout_parts( $url );
+		if ( $parts ) {
+			return $parts['demo'] . ' - home' . ( '' === $parts['home_number'] ? '' : ' ' . $parts['home_number'] );
 		}
-		return MAC_Tracker_Normalizer::host( $url ) ?: 'Open layout';
+		return '' === $this->first_url( $url ) ? '—' : 'Open layout';
+	}
+
+	/** Canonical public template destination; source links can be inconsistent. */
+	private function layout_url( $url ) {
+		$parts = $this->layout_parts( $url );
+		if ( $parts ) {
+			return 'https://templates.macusaone.com/' . $parts['demo'] . '/home' . ( '' === $parts['home_number'] ? '' : '-' . $parts['home_number'] ) . '/';
+		}
+		return $this->first_url( $url );
+	}
+
+	private function layout_parts( $value ) {
+		$value = $this->first_url( $value );
+		if ( '' === $value || ! preg_match( '#(?:^|/)(demo-[a-z0-9]+)/(home(?:-([0-9]+))?)(?:/|$)#i', $value, $match ) ) {
+			return null;
+		}
+		$home_number = isset( $match[3] ) ? str_pad( (string) (int) $match[3], 2, '0', STR_PAD_LEFT ) : '';
+		// "home" and "home-01" mean the default Home 01 in the template library.
+		if ( '01' === $home_number ) { $home_number = ''; }
+		return array( 'demo' => strtolower( $match[1] ), 'home_number' => $home_number );
 	}
 
 	private function url_link( $raw_url, $label ) {
