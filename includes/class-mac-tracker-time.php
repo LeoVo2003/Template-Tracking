@@ -19,6 +19,12 @@ class MAC_Tracker_Time {
 		return $parts ? $parts['time'] : '—';
 	}
 
+	public static function bangkok_input( $utc_value ) {
+		$utc_value = trim( (string) $utc_value );
+		if ( '' === $utc_value ) { return ''; }
+		try { $date = new DateTime( $utc_value, new DateTimeZone( 'UTC' ) ); $date->setTimezone( new DateTimeZone( 'Asia/Bangkok' ) ); return $date->format( 'Y-m-d\\TH:i' ); } catch ( Exception $exception ) { return ''; }
+	}
+
 	private static function bangkok_parts( $utc_value ) {
 		$utc_value = trim( (string) $utc_value );
 		if ( '' === $utc_value ) { return null; }

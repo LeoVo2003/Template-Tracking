@@ -38,6 +38,7 @@ class MAC_Tracker_Admin {
 		}
 		wp_enqueue_style( 'mac-tracker-fonts', 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap', array(), null );
 		wp_enqueue_style( 'mac-project-tracker-admin', MAC_TRACKER_URL . 'assets/admin.css', array( 'mac-tracker-fonts' ), MAC_TRACKER_VERSION );
+		wp_enqueue_script( 'mac-project-tracker-admin', MAC_TRACKER_URL . 'assets/admin.js', array(), MAC_TRACKER_VERSION, true );
 	}
 
 	public function render_dashboard() {
@@ -109,7 +110,7 @@ class MAC_Tracker_Admin {
 					<?php foreach ( $page['rows'] as $row ) : ?>
 						<tr>
 							<td class="mac-tracker-id"><strong>#<?php echo esc_html( $row['wpm_project_id'] ); ?></strong><span><?php echo esc_html( $this->record_hint( $row ) ); ?></span></td>
-			<td><strong class="mac-tracker-project-name"><?php echo esc_html( $this->project_label( $row ) ); ?></strong><?php $this->confidence_badge( $row ); ?><a class="mac-tracker-edit-link" href="<?php echo esc_url( add_query_arg( array( 'page' => 'mac-project-tracker-projects', 'edit_snapshot' => (int) $row['id'] ), admin_url( 'admin.php' ) ) ); ?>">Edit</a></td>
+			<td><strong class="mac-tracker-project-name"><?php echo esc_html( $this->project_label( $row ) ); ?></strong><?php $this->confidence_badge( $row ); ?><button class="mac-tracker-edit-link" type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Edit</button></td>
 							<td><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></td>
 							<td><?php $this->url_link( $this->layout_url( $row['layout_url'] ), $this->layout_label( $row['layout_url'] ) ); ?></td>
 							<td><?php echo esc_html( $this->person_name( $row['assignee_json'] ) ?: '—' ); ?></td>
@@ -117,7 +118,7 @@ class MAC_Tracker_Admin {
 							<td class="mac-tracker-date mac-tracker-date--time"><?php echo esc_html( MAC_Tracker_Time::bangkok_time( $row['task_completed_at'] ) ); ?></td>
 							<td><span class="mac-tracker-status mac-tracker-status--muted">Color later</span></td>
 						</tr>
-						<?php if ( isset( $_GET['edit_snapshot'] ) && (int) $_GET['edit_snapshot'] === (int) $row['id'] ) : ?><tr class="mac-tracker-edit-row"><td colspan="8"><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_edit_project' ); ?><input type="hidden" name="action" value="mac_tracker_edit_project"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><label>Project ID<input type="number" min="1" name="project_id" value="<?php echo (int) $row['wpm_project_id']; ?>" required></label><label>Project name<input type="text" name="project_name" value="<?php echo esc_attr( $row['name'] ); ?>" required></label><button class="button button-primary" type="submit">Save project</button><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-projects' ) ); ?>">Cancel</a></form></td></tr><?php endif; ?>
+						<tr id="edit-<?php echo (int) $row['id']; ?>" class="mac-tracker-edit-row" hidden><td colspan="8"><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_edit_project' ); ?><input type="hidden" name="action" value="mac_tracker_edit_project"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><label>Project ID<input type="number" min="1" name="project_id" value="<?php echo (int) $row['wpm_project_id']; ?>" required></label><label>Project name<input type="text" name="project_name" value="<?php echo esc_attr( $row['name'] ); ?>" required></label><label>Date & time<input type="datetime-local" name="date_time" value="<?php echo esc_attr( MAC_Tracker_Time::bangkok_input( $row['task_completed_at'] ) ); ?>"></label><button class="button button-primary" type="submit">Save project</button><button class="button" type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Cancel</button></form></td></tr>
 					<?php endforeach; ?>
 				</tbody></table></div>
 				<?php $this->pagination( $page, $filters ); ?>
@@ -198,7 +199,7 @@ class MAC_Tracker_Admin {
 
 	public function handle_edit_project() {
 		$this->require_request( 'mac_tracker_edit_project' );
-		$result = $this->repository->edit_project_identity( $_POST['snapshot_id'] ?? 0, $_POST['project_id'] ?? 0, wp_unslash( $_POST['project_name'] ?? '' ) );
+		$result = $this->repository->edit_project_identity( $_POST['snapshot_id'] ?? 0, $_POST['project_id'] ?? 0, wp_unslash( $_POST['project_name'] ?? '' ), wp_unslash( $_POST['date_time'] ?? '' ) );
 		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker-projects', $result->get_error_message(), 'error' ); }
 		$this->redirect( 'mac-project-tracker-projects', 'Project ID and name updated.', 'success' );
 	}
@@ -340,6 +341,8 @@ class MAC_Tracker_Admin {
 
 	private function layout_parts( $value ) {
 		$value = $this->first_url( $value );
+		$host = strtolower( (string) wp_parse_url( $value, PHP_URL_HOST ) );
+		if ( preg_match( '/^(demo-[a-z0-9]+)$/i', $host, $host_match ) ) { return array( 'demo' => strtolower( $host_match[1] ), 'home_number' => '' ); }
 		if ( '' === $value || ! preg_match( '#(?:^|/)(demo-[a-z0-9]+)/(home(?:-([0-9]+))?)(?:/|$)#i', $value, $match ) ) {
 			return null;
 		}

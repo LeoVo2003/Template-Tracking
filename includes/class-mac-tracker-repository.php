@@ -221,15 +221,18 @@ class MAC_Tracker_Repository {
 	public function set_roster_cutoff( $utc ) { update_option( 'mac_tracker_roster_cutoff_utc', $utc, false ); }
 	public function roster_cutoff() { return (string) get_option( 'mac_tracker_roster_cutoff_utc', '' ); }
 
-	public function edit_project_identity( $snapshot_id, $new_project_id, $new_name ) {
+	public function edit_project_identity( $snapshot_id, $new_project_id, $new_name, $date_time = '' ) {
 		$snapshot_id   = absint( $snapshot_id );
 		$new_project_id = absint( $new_project_id );
 		$new_name      = sanitize_text_field( $new_name );
 		$row = $this->wpdb->get_row( $this->wpdb->prepare( "SELECT wpm_project_id FROM {$this->projects} WHERE id = %d", $snapshot_id ), ARRAY_A );
 		if ( ! $row || $new_project_id <= 0 || '' === $new_name ) { return new WP_Error( 'mac_tracker_edit_invalid', 'Valid project ID and name are required.' ); }
 		$old_project_id = (int) $row['wpm_project_id'];
-		if ( false === $this->wpdb->update( $this->projects, array( 'wpm_project_id' => $new_project_id, 'name' => $new_name, 'updated_at' => MAC_Tracker_Time::now_utc() ), array( 'wpm_project_id' => $old_project_id ) ) ) { return new WP_Error( 'mac_tracker_edit_failed', $this->wpdb->last_error ?: 'Unable to update project snapshots.' ); }
-		$this->wpdb->update( $this->pins, array( 'wpm_project_id' => $new_project_id, 'projects_raw' => $new_name, 'updated_at' => MAC_Tracker_Time::now_utc() ), array( 'wpm_project_id' => $old_project_id ) );
+		$timestamp = MAC_Tracker_Time::csv_bangkok_to_utc( str_replace( 'T', ' ', (string) $date_time ), '' );
+		$data = array( 'wpm_project_id' => $new_project_id, 'name' => $new_name, 'updated_at' => MAC_Tracker_Time::now_utc() ); if ( $timestamp ) { $data['task_completed_at'] = $timestamp; }
+		if ( false === $this->wpdb->update( $this->projects, $data, array( 'wpm_project_id' => $old_project_id ) ) ) { return new WP_Error( 'mac_tracker_edit_failed', $this->wpdb->last_error ?: 'Unable to update project snapshots.' ); }
+		$pin_data = array( 'wpm_project_id' => $new_project_id, 'projects_raw' => $new_name, 'updated_at' => MAC_Tracker_Time::now_utc() ); if ( $timestamp ) { $pin_data['task_completed_at'] = $timestamp; }
+		$this->wpdb->update( $this->pins, $pin_data, array( 'wpm_project_id' => $old_project_id ) );
 		$roster = array_map( function ( $id ) use ( $old_project_id, $new_project_id ) { return (int) $id === $old_project_id ? $new_project_id : (int) $id; }, $this->roster_ids() );
 		$this->set_roster_ids( $roster );
 		return true;
