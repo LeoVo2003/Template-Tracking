@@ -109,7 +109,6 @@ class MAC_Tracker_Sync_Service {
 				return $error;
 			}
 			$roster = array_fill_keys( $roster_ids, true );
-			$baseline_compared_at = $this->repository->baseline_compared_at();
 			$client = $this->client_from_settings();
 			if ( is_wp_error( $client ) ) {
 				$this->repository->finish_sync_log( $log_id, 'failed', 0, $client->get_error_message() );
@@ -138,13 +137,13 @@ class MAC_Tracker_Sync_Service {
 				}
 				++$scanned;
 				// Baseline comparison only overlays projects explicitly present in the
-				// imported CSV. Ordinary sync later considers all WPM projects, but
-				// only Action Design tasks completed after that comparison timestamp.
+				// imported CSV. Ordinary sync then considers every WPM project so new
+				// projects that never existed in the CSV are added to the tracker.
 				if ( 'compare' === $mode && ! isset( $roster[ $project['id'] ] ) ) {
 					continue;
 				}
 				$seen[ $project['id'] ] = true;
-				$one = $this->sync_project( $project, $mode, $baseline_compared_at );
+				$one = $this->sync_project( $project, $mode );
 				if ( is_wp_error( $one ) ) {
 					++$errors;
 					if ( '' === $error_sample ) { $error_sample = $one->get_error_message(); }
@@ -154,7 +153,7 @@ class MAC_Tracker_Sync_Service {
 				$created += (int) $one['created'];
 			}
 
-			$backfill = $this->backfill_missing_pins( array_keys( $seen ), $client, $mode, $baseline_compared_at );
+			$backfill = $this->backfill_missing_pins( array_keys( $seen ), $client, $mode );
 			if ( 'compare' === $mode && 0 === $errors ) {
 				$this->repository->mark_baseline_compared( MAC_Tracker_Time::now_utc() );
 			}
@@ -163,7 +162,7 @@ class MAC_Tracker_Sync_Service {
 				(int) $result['pages'],
 				$scanned,
 				count( $roster_ids ),
-				'compare' === $mode ? 'baseline_compare' : 'new_since_baseline',
+				'compare' === $mode ? 'baseline_compare' : 'all_unseen_wpm_actions',
 				$processed,
 				$created,
 				(int) $backfill['found'],
@@ -192,7 +191,7 @@ class MAC_Tracker_Sync_Service {
 	}
 
 	/** Implements the current snapshot rules from hướng đi mới.md. */
-	public function sync_project( array $project, $mode = 'sync', $baseline_compared_at = '' ) {
+	public function sync_project( array $project, $mode = 'sync' ) {
 		$created  = 0;
 		$eligible = 0;
 		$this->repository->refresh_snapshot_labels( $project['id'], $project );
@@ -210,14 +209,14 @@ class MAC_Tracker_Sync_Service {
 			'raw'             => $project['raw'],
 		);
 
-		// Action Design overlays a matching CSV pin during comparison. After the
-		// one-time comparison, a task creates a snapshot only when it completed
-		// after the saved comparison timestamp. Never create Domain fallback rows.
+		// Action Design overlays a matching CSV pin during comparison. Subsequent
+		// sync scans every WPM project and upsert_snapshot prevents an existing
+		// task from duplicating; a new task ID creates the next snapshot.
 		foreach ( $project['tasks'] as $task ) {
 			if ( ! $task['is_action_design'] || ! $this->task_is_done( $task['status'] ) ) {
 				continue;
 			}
-			if ( 'compare' === $mode ? ! $this->task_is_in_scope( $task ) : ! $this->task_is_new_since_baseline( $task, $baseline_compared_at ) ) {
+			if ( 'compare' === $mode && ! $this->task_is_in_scope( $task ) ) {
 				continue;
 			}
 			++$eligible;
@@ -242,7 +241,7 @@ class MAC_Tracker_Sync_Service {
 		return array( 'created' => $created, 'eligible' => $eligible );
 	}
 
-	private function backfill_missing_pins( array $seen_wpm_ids, MAC_Tracker_WPM_Client $client, $mode = 'sync', $baseline_compared_at = '' ) {
+	private function backfill_missing_pins( array $seen_wpm_ids, MAC_Tracker_WPM_Client $client, $mode = 'sync' ) {
 		$missing = $this->repository->missing_pin_ids( $seen_wpm_ids );
 		if ( empty( $missing ) ) {
 			delete_option( 'mac_tracker_backfill_cursor' );
@@ -280,7 +279,7 @@ class MAC_Tracker_Sync_Service {
 				++$missed;
 				continue;
 			}
-			$this->sync_project( $project, $mode, $baseline_compared_at );
+			$this->sync_project( $project, $mode );
 			++$found;
 		}
 
@@ -328,11 +327,6 @@ class MAC_Tracker_Sync_Service {
 	private function task_is_in_scope( array $task ) {
 		$when = MAC_Tracker_Time::normalize_utc( $task['due_at'] ?: $task['completed_at'] );
 		return '' !== (string) $when && $when >= MAC_TRACKER_PROJECT_SYNC_START;
-	}
-	/** Sync detects new work by completion time, while the Projects UI shows Due Date. */
-	private function task_is_new_since_baseline( array $task, $baseline_compared_at ) {
-		$when = MAC_Tracker_Time::normalize_utc( $task['completed_at'] ?: $task['due_at'] );
-		return '' !== (string) $when && '' !== (string) $baseline_compared_at && $when > $baseline_compared_at;
 	}
 	private function task_sort_value( array $task ) {
 		$when = MAC_Tracker_Time::normalize_utc( $task['due_at'] ?: $task['completed_at'] );
