@@ -64,6 +64,7 @@ class MAC_Tracker_Admin {
 
 		<section class="mac-tracker-ledger">
 			<div class="mac-tracker-ledger__head"><div><p class="mac-tracker-eyebrow">Recent activity</p><h2>Sync log</h2></div><span>Newest first</span></div>
+			<?php $this->notices(); ?>
 			<?php if ( empty( $logs ) ) : ?>
 				<div class="mac-tracker-empty"><span class="dashicons dashicons-chart-line"></span><strong>No sync yet</strong><p>Save the WPM connection, then run the first background sync.</p></div>
 			<?php else : ?>
@@ -87,6 +88,7 @@ class MAC_Tracker_Admin {
 			<div><p class="mac-tracker-eyebrow">Local cache</p><h2><?php echo esc_html( number_format_i18n( $page['total'] ) ); ?> snapshot<?php echo 1 === (int) $page['total'] ? '' : 's'; ?></h2><p>Showing <?php echo 0 === (int) $page['per_page'] ? 'all cached rows' : 'one page of cached rows'; ?>. Syncing never adds rows one at a time in this screen.</p></div>
 			<?php $this->sync_buttons(); ?>
 		</section>
+		<?php $this->notices(); ?>
 
 		<form class="mac-tracker-filters" method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
 			<input type="hidden" name="page" value="mac-project-tracker-projects">
@@ -131,6 +133,7 @@ class MAC_Tracker_Admin {
 	public function render_pins() {
 		$this->require_capability();
 		$this->page_start( 'Pin baseline', 'Import the approved manual project list. Pins remain if WPM later removes a project.', 'pins' );
+		$this->notices();
 		?>
 		<section class="mac-tracker-panel mac-tracker-panel--narrow"><div class="mac-tracker-panel__head"><div><p class="mac-tracker-eyebrow">Master roster import</p><h2><?php echo esc_html( number_format_i18n( $this->repository->pin_count() ) ); ?> saved pins</h2><p>Import the full hybrid CSV (466 rows). CSV pin rows are displayed immediately; Action Design rows only register the approved WPM scope and appear after WPM confirms them.</p></div></div>
 		<form class="mac-tracker-upload" method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -144,6 +147,7 @@ class MAC_Tracker_Admin {
 		$this->require_capability();
 		$settings     = (array) get_option( 'mac_tracker_settings', array() );
 		$this->page_start( 'Connection settings', 'The API header value is encrypted in this WordPress database and is never displayed again.', 'settings' );
+		$this->notices();
 		?>
 		<section class="mac-tracker-panel mac-tracker-panel--narrow"><div class="mac-tracker-panel__head"><div><p class="mac-tracker-eyebrow">WPM REST API</p><h2>Connect the tracker</h2><p>Requests use the fixed <code>Tracking-Template-Header</code> header. Sync runs through WP-Cron after saving.</p></div></div>
 		<form class="mac-tracker-settings-form" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -240,7 +244,7 @@ class MAC_Tracker_Admin {
 		$latest = $this->repository->latest_log();
 		$state  = $this->sync->is_running() ? 'syncing' : ( $this->sync->is_queued() ? 'queued' : 'ready' );
 		?>
-		<div class="wrap mac-tracker-wrap mac-tracker-wrap--<?php echo esc_attr( sanitize_html_class( $screen ) ); ?>"><header class="mac-tracker-masthead"><div class="mac-tracker-masthead__mark" aria-hidden="true">M</div><div class="mac-tracker-masthead__title"><p class="mac-tracker-brand">MAC / PROJECT TRACKER</p><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><div class="mac-tracker-sync-strip mac-tracker-sync-strip--<?php echo esc_attr( $state ); ?>"><div class="mac-tracker-sync-route" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div><strong><?php echo esc_html( 'syncing' === $state ? 'Syncing cache' : ( 'queued' === $state ? 'Sync queued' : 'Cache ready' ) ); ?></strong><span><?php echo esc_html( $latest ? 'Last run ' . MAC_Tracker_Time::bangkok_label( $latest['started_at'] ) : 'No sync run yet' ); ?></span></div></div></header><div class="mac-tracker-notice-slot"><?php $this->notices(); ?></div>
+		<div class="wrap mac-tracker-wrap mac-tracker-wrap--<?php echo esc_attr( sanitize_html_class( $screen ) ); ?>"><header class="mac-tracker-masthead"><div class="mac-tracker-masthead__mark" aria-hidden="true">M</div><div class="mac-tracker-masthead__title"><p class="mac-tracker-brand">MAC / PROJECT TRACKER</p><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><div class="mac-tracker-sync-strip mac-tracker-sync-strip--<?php echo esc_attr( $state ); ?>"><div class="mac-tracker-sync-route" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div><strong><?php echo esc_html( 'syncing' === $state ? 'Syncing cache' : ( 'queued' === $state ? 'Sync queued' : 'Cache ready' ) ); ?></strong><span><?php echo esc_html( $latest ? 'Last run ' . MAC_Tracker_Time::bangkok_label( $latest['started_at'] ) : 'No sync run yet' ); ?></span></div></div></header>
 		<?php
 	}
 
@@ -349,7 +353,12 @@ class MAC_Tracker_Admin {
 	}
 
 	private function layout_parts( $value ) {
-		$value = $this->first_url( $value );
+		$raw = trim( (string) $value );
+		if ( preg_match( '#^(?:https?://)?(?:www\\.)?(demo-[a-z0-9]+)(?:/home(?:-([0-9]+))?)?/?$#i', $raw, $direct ) ) {
+			$home = isset( $direct[2] ) ? str_pad( (string) (int) $direct[2], 2, '0', STR_PAD_LEFT ) : '';
+			return array( 'demo' => strtolower( $direct[1] ), 'home_number' => '01' === $home ? '' : $home );
+		}
+		$value = $this->first_url( $raw );
 		$host = strtolower( (string) wp_parse_url( $value, PHP_URL_HOST ) );
 		$host = preg_replace( '/^www\./', '', $host );
 		if ( preg_match( '/^(demo-[a-z0-9]+)$/i', $host, $host_match ) ) { return array( 'demo' => strtolower( $host_match[1] ), 'home_number' => '' ); }
@@ -373,7 +382,7 @@ class MAC_Tracker_Admin {
 	private function first_url( $value ) {
 		$value = trim( (string) $value );
 		if ( preg_match( '#https?://[^\s<>"\']+#i', $value, $match ) ) { return rtrim( $match[0], '.,)' ); }
-		return $value;
+		return preg_match( '#^(?:www\.)?[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:/[^\s<>"\']*)?$#i', $value ) ? rtrim( $value, '.,)' ) : '';
 	}
 
 	private function status_class( $status ) {

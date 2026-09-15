@@ -112,7 +112,7 @@ class MAC_Tracker_Activator {
 		if ( $legacy_unique ) {
 			$wpdb->query( "ALTER TABLE {$projects} DROP INDEX wpm_project_id" );
 		}
-		if ( version_compare( $previous_version, '0.8.7', '<' ) ) {
+		if ( version_compare( $previous_version, '0.8.9', '<' ) ) {
 			( new MAC_Tracker_Repository() )->repair_csv_pin_datetimes();
 		}
 		// Domain was a retired pre-0.7.2 record kind, never a valid snapshot.

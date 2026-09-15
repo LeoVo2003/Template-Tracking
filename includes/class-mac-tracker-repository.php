@@ -243,13 +243,13 @@ class MAC_Tracker_Repository {
 
 	/** Repair legacy CSV timestamps after the date parser was made unambiguous. */
 	public function repair_csv_pin_datetimes() {
-		$rows = (array) $this->wpdb->get_results( "SELECT id, wpm_project_id, raw_payload FROM {$this->projects} WHERE record_kind = 'csv_pin' AND task_completed_at IS NULL", ARRAY_A );
+		$rows = (array) $this->wpdb->get_results( "SELECT id, wpm_project_id, task_completed_at, raw_payload FROM {$this->projects} WHERE record_kind = 'csv_pin'", ARRAY_A );
 		$fixed = 0;
 		foreach ( $rows as $row ) {
 			$raw = json_decode( (string) $row['raw_payload'], true );
 			if ( ! is_array( $raw ) ) { continue; }
 			$timestamp = MAC_Tracker_Time::csv_bangkok_to_utc( $raw['date'] ?? $raw['done_date'] ?? '', $raw['time'] ?? '' );
-			if ( ! $timestamp ) { continue; }
+			if ( ! $timestamp || $timestamp === (string) $row['task_completed_at'] ) { continue; }
 			$this->wpdb->update( $this->projects, array( 'task_completed_at' => $timestamp, 'updated_at' => MAC_Tracker_Time::now_utc() ), array( 'id' => (int) $row['id'] ) );
 			$this->wpdb->update( $this->pins, array( 'task_completed_at' => $timestamp, 'updated_at' => MAC_Tracker_Time::now_utc() ), array( 'wpm_project_id' => (int) $row['wpm_project_id'] ) );
 			++$fixed;
@@ -348,9 +348,8 @@ class MAC_Tracker_Repository {
 	}
 
 	public function dashboard_stats() {
-		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
 		return (array) $this->wpdb->get_row(
-			"SELECT COUNT(*) AS snapshots, COUNT(DISTINCT p.wpm_project_id) AS projects, SUM(p.record_kind = 'action_design') AS action_design, SUM(p.record_kind = 'csv_pin') AS csv_pins FROM {$this->projects} p WHERE {$visible}",
+			"SELECT COUNT(*) AS snapshots, COUNT(DISTINCT p.wpm_project_id) AS projects, SUM(p.record_kind = 'action_design') AS action_design, SUM(p.record_kind = 'csv_pin') AS csv_pins FROM {$this->projects} p",
 			ARRAY_A
 		);
 	}
