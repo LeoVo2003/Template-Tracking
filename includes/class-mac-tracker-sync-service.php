@@ -10,6 +10,7 @@ class MAC_Tracker_Sync_Service {
 	const LOCK_OPTION      = 'mac_tracker_sync_lock';
 	const LOCK_TTL         = 1800;
 	const BACKFILL_QUOTA   = 150;
+	const EXCLUDED_PROJECT_IDS = array( 3018, 3189 );
 
 	private $repository;
 
@@ -130,6 +131,9 @@ class MAC_Tracker_Sync_Service {
 			foreach ( $result['items'] as $raw_project ) {
 				$project = MAC_Tracker_Normalizer::project( $raw_project );
 				if ( ! $project ) {
+					continue;
+				}
+				if ( in_array( (int) $project['id'], self::EXCLUDED_PROJECT_IDS, true ) ) {
 					continue;
 				}
 				++$scanned;
@@ -269,6 +273,10 @@ class MAC_Tracker_Sync_Service {
 			}
 			$project = MAC_Tracker_Normalizer::project( $raw );
 			if ( ! $project ) {
+				++$missed;
+				continue;
+			}
+			if ( in_array( (int) $project['id'], self::EXCLUDED_PROJECT_IDS, true ) ) {
 				++$missed;
 				continue;
 			}
