@@ -8,7 +8,12 @@ defined( 'ABSPATH' ) || exit;
  */
 class MAC_Tracker_Elementor_Color_Service {
 
-	const MAX_COLORS = 6;
+	const GLOBAL_VARIABLES = array(
+		'--e-global-color-primary',
+		'--e-global-color-secondary',
+		'--e-global-color-text',
+		'--e-global-color-accent',
+	);
 	const MAX_STYLESHEETS = 12;
 	const CRON_HOOK = 'mac_tracker_extract_elementor_colors';
 	const STATE_OPTION = 'mac_tracker_color_extract_state';
@@ -121,8 +126,12 @@ class MAC_Tracker_Elementor_Color_Service {
 				$variables[ $name ] = $value;
 			}
 		}
-		$colors = array_values( array_unique( array_values( $variables ) ) );
-		$colors = array_slice( $colors, 0, self::MAX_COLORS );
+		$colors = array();
+		foreach ( self::GLOBAL_VARIABLES as $variable ) {
+			if ( isset( $variables[ $variable ] ) ) {
+				$colors[] = $variables[ $variable ];
+			}
+		}
 		if ( empty( $colors ) ) {
 			return new WP_Error( 'mac_tracker_color_not_found', 'No usable Elementor Global Color variables were found on this website.' );
 		}
@@ -191,9 +200,13 @@ class MAC_Tracker_Elementor_Color_Service {
 			return $found;
 		}
 		foreach ( $matches as $match ) {
+			$name = strtolower( $match[1] );
+			if ( ! in_array( $name, self::GLOBAL_VARIABLES, true ) ) {
+				continue;
+			}
 			$color = $this->normalize_color( $match[2] );
 			if ( '' !== $color ) {
-				$found[ strtolower( $match[1] ) ] = $color;
+				$found[ $name ] = $color;
 			}
 		}
 		return $found;

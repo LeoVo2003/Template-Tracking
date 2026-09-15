@@ -511,6 +511,11 @@ class MAC_Tracker_Repository {
 		return $this->upsert_color_record( $project_id, 'elementor_global', wp_json_encode( array( 'error' => (string) $message ) ), array(), 'failed' );
 	}
 
+	/** Reset only machine-generated candidates when the extractor rules change. */
+	public function purge_unapproved_color_records() {
+		return (int) $this->wpdb->query( "DELETE FROM {$this->colors} WHERE locked = 0" );
+	}
+
 	/** Approval locks a reviewed palette so later extraction cannot overwrite it. */
 	public function approve_color_record( $project_id, array $colors ) {
 		$project_id = absint( $project_id );

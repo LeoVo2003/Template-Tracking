@@ -127,6 +127,9 @@ class MAC_Tracker_Activator {
 		if ( version_compare( $previous_version, '0.10.5', '<' ) ) {
 			( new MAC_Tracker_Repository() )->purge_excluded_wpm_actions();
 		}
+		if ( version_compare( $previous_version, '0.11.2', '<' ) ) {
+			( new MAC_Tracker_Repository() )->purge_unapproved_color_records();
+		}
 		update_option( 'mac_tracker_db_version', MAC_TRACKER_VERSION, false );
 	}
 }
