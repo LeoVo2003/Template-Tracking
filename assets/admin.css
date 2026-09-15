@@ -272,7 +272,7 @@
 
 .mac-tracker-filters {
 	display: grid;
-	grid-template-columns: minmax(210px, 2fr) repeat(5, minmax(120px, 1fr)) auto;
+	grid-template-columns: minmax(230px, 1.7fr) repeat(7, minmax(112px, .8fr)) auto;
 	gap: var(--space-3);
 	align-items: end;
 	margin: var(--space-4) 0;
@@ -342,8 +342,8 @@
 .mac-tracker-table-shell { overflow: hidden; }
 .mac-tracker-table-scroll { overflow-x: auto; }
 .mac-tracker-table-scroll { overflow-x: auto; }
-.mac-tracker-project-table { min-width: 1430px; margin: 0; border: 0; border-collapse: separate; border-spacing: 0; table-layout: auto; box-shadow: none; }
-.mac-tracker-project-table th:nth-child(1) { width: 48px; }.mac-tracker-project-table th:nth-child(2) { width: 90px; }.mac-tracker-project-table th:nth-child(3) { min-width: 240px; }.mac-tracker-project-table th:nth-child(4) { min-width: 220px; }.mac-tracker-project-table th:nth-child(5) { min-width: 190px; }.mac-tracker-project-table th:nth-child(6) { min-width: 135px; }.mac-tracker-project-table th:nth-child(7) { width: 104px; }.mac-tracker-project-table th:nth-child(8) { width: 76px; }.mac-tracker-project-table th:nth-child(9) { min-width: 125px; }
+.mac-tracker-project-table { min-width: 1240px; margin: 0; border: 0; border-collapse: separate; border-spacing: 0; table-layout: fixed; box-shadow: none; }
+.mac-tracker-project-table th:nth-child(1) { width: 46px; }.mac-tracker-project-table th:nth-child(2) { width: 86px; }.mac-tracker-project-table th:nth-child(3) { width: 310px; }.mac-tracker-project-table th:nth-child(4) { width: 230px; }.mac-tracker-project-table th:nth-child(5) { width: 190px; }.mac-tracker-project-table th:nth-child(6) { width: 120px; }.mac-tracker-project-table th:nth-child(7) { width: 102px; }.mac-tracker-project-table th:nth-child(8) { width: 128px; }
 .mac-tracker-col--index,
 .mac-tracker-row-index { position: sticky; left: 0; z-index: 2; width: 48px; min-width: 48px; text-align: center; }
 .mac-tracker-project-table thead .mac-tracker-col--index { z-index: 4; padding: var(--space-3) var(--space-2); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; background: #F0E5D5; }
@@ -354,13 +354,19 @@
 .mac-tracker-project-table thead th a:hover,
 .mac-tracker-project-table .mac-tracker-sort.is-active a { color: var(--primary); background: #E3E9DA; }
 .mac-tracker-project-table thead .dashicons { width: 14px; height: 14px; font-size: 14px; }
-.mac-tracker-project-table tbody td { padding: var(--space-4); color: var(--text); vertical-align: middle; border-bottom: 1px solid var(--line); }
+.mac-tracker-project-table tbody td { padding: var(--space-3) var(--space-4); color: var(--text); vertical-align: middle; border-bottom: 1px solid var(--line); }
 .mac-tracker-project-table tbody tr { transition: background-color 120ms ease; }
+.mac-tracker-project-table tbody tr:nth-child(4n + 1) { background: rgba(246, 250, 247, .7); }
 .mac-tracker-project-table tbody tr:hover { background: #FBF5EA; }
 .mac-tracker-id strong,
 .mac-tracker-id span { display: block; }
-.mac-tracker-id strong { font-family: var(--font-mono); font-size: var(--text-xs); }
-.mac-tracker-id span { margin-top: var(--space-1); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); }
+.mac-tracker-id-link,
+.mac-tracker-task-id-link { display: block; width: fit-content; font-family: var(--font-mono); font-size: var(--text-xs); text-decoration: none; }
+.mac-tracker-id-link { color: var(--text); font-weight: 700; }
+.mac-tracker-task-id-link { margin-top: 3px; color: var(--primary); }
+.mac-tracker-id span { display: block; margin-top: 3px; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); }
+.mac-tracker-id-link:hover,
+.mac-tracker-task-id-link:hover { color: var(--primary); text-decoration: underline; }
 .mac-tracker-project-name { display: inline-flex; align-items: flex-start; gap: var(--space-1); color: var(--text); font-size: var(--text-xs); font-weight: 700; line-height: 1.5; text-decoration: none; }
 .mac-tracker-project-name:hover { color: var(--primary); text-decoration: underline; }
 .mac-tracker-project-name .dashicons { width: 13px; height: 13px; margin-top: 2px; font-size: 13px; flex: 0 0 auto; opacity: .65; }
@@ -374,11 +380,9 @@
 .mac-tracker-edit-row td { padding: var(--space-3) var(--space-4) !important; background: var(--warning-soft); }
 .mac-tracker-edit-row form { display: grid; grid-template-columns: 130px minmax(260px, 1fr) 180px auto auto; gap: var(--space-2); align-items: end; }
 .mac-tracker-edit-row label { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; }
-.mac-tracker-col--date { width: 92px; }
-.mac-tracker-col--time { width: 64px; }
+.mac-tracker-col--date { width: 102px; }
 .mac-tracker-date { padding-right: var(--space-2) !important; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: -.02em; white-space: nowrap; }
-.mac-tracker-date--day { width: 92px; }
-.mac-tracker-date--time { width: 64px; }
+.mac-tracker-date--day { width: 102px; }
 .mac-tracker-url { display: inline-flex; max-width: 220px; align-items: center; gap: var(--space-1); overflow: hidden; color: var(--primary); font-family: var(--font-mono); font-size: var(--text-xs); text-decoration: none; text-overflow: ellipsis; white-space: nowrap; }
 .mac-tracker-url:hover { color: var(--primary-hover); text-decoration: underline; }
 .mac-tracker-url .dashicons { width: 14px; height: 14px; font-size: 14px; flex: 0 0 auto; }

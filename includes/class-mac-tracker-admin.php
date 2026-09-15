@@ -26,8 +26,9 @@ class MAC_Tracker_Admin {
 	}
 
 	public function register_menu() {
-		add_menu_page( 'MAC Project Tracker', 'MAC Tracker', 'manage_options', 'mac-project-tracker', array( $this, 'render_dashboard' ), 'dashicons-chart-area', 30 );
-		add_submenu_page( 'mac-project-tracker', 'Projects', 'Projects', 'manage_options', 'mac-project-tracker-projects', array( $this, 'render_projects' ) );
+		add_menu_page( 'Projects', 'MAC Tracker', 'manage_options', 'mac-project-tracker', array( $this, 'render_projects' ), 'dashicons-chart-area', 30 );
+		add_submenu_page( 'mac-project-tracker', 'Projects', 'Projects', 'manage_options', 'mac-project-tracker', array( $this, 'render_projects' ) );
+		add_submenu_page( 'mac-project-tracker', 'Control room', 'Control room', 'manage_options', 'mac-project-tracker-dashboard', array( $this, 'render_dashboard' ) );
 		add_submenu_page( 'mac-project-tracker', 'Pin import', 'Pin import', 'manage_options', 'mac-project-tracker-pins', array( $this, 'render_pins' ) );
 		add_submenu_page( 'mac-project-tracker', 'Settings', 'Settings', 'manage_options', 'mac-project-tracker-settings', array( $this, 'render_settings' ) );
 	}
@@ -91,15 +92,17 @@ class MAC_Tracker_Admin {
 		<?php $this->notices(); ?>
 
 		<form class="mac-tracker-filters" method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
-			<input type="hidden" name="page" value="mac-project-tracker-projects">
+			<input type="hidden" name="page" value="mac-project-tracker">
 			<label><span>Search</span><input name="search" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="Project, website, ZIP or WPM ID"></label>
 			<label><span>Assignee</span><select name="assignee"><option value="">All assignees</option><?php foreach ( $this->repository->list_assignees() as $name ) : ?><option value="<?php echo esc_attr( $name ); ?>" <?php selected( $filters['assignee'], $name ); ?>><?php echo esc_html( $name ); ?></option><?php endforeach; ?></select></label>
 			<label><span>Snapshot type</span><select name="kind"><option value="">All types</option><option value="action_design" <?php selected( $filters['kind'], 'action_design' ); ?>>Action Design</option><option value="csv_pin" <?php selected( $filters['kind'], 'csv_pin' ); ?>>CSV pin</option></select></label>
 			<label><span>Website</span><select name="website"><option value="">Any</option><option value="yes" <?php selected( $filters['website'], 'yes' ); ?>>Has website</option><option value="no" <?php selected( $filters['website'], 'no' ); ?>>Missing</option></select></label>
 			<label><span>Layout</span><select name="layout"><option value="">Any</option><option value="yes" <?php selected( $filters['layout'], 'yes' ); ?>>Has layout</option><option value="no" <?php selected( $filters['layout'], 'no' ); ?>>Missing</option></select></label>
-			<label><span>Rows</span><select name="per_page"><option value="0" <?php selected( $filters['per_page'], 0 ); ?>>All</option><option value="50" <?php selected( $filters['per_page'], 50 ); ?>>50</option><option value="100" <?php selected( $filters['per_page'], 100 ); ?>>100</option><option value="200" <?php selected( $filters['per_page'], 200 ); ?>>200</option></select></label>
+			<label><span>From month</span><input type="month" name="month_from" value="<?php echo esc_attr( $filters['month_from'] ); ?>"></label>
+			<label><span>To month</span><input type="month" name="month_to" value="<?php echo esc_attr( $filters['month_to'] ); ?>"></label>
+			<label><span>Rows</span><select name="per_page"><option value="50" <?php selected( $filters['per_page'], 50 ); ?>>50</option><option value="100" <?php selected( $filters['per_page'], 100 ); ?>>100</option><option value="150" <?php selected( $filters['per_page'], 150 ); ?>>150</option><option value="200" <?php selected( $filters['per_page'], 200 ); ?>>200</option><option value="0" <?php selected( $filters['per_page'], 0 ); ?>>All</option></select></label>
 			<input type="hidden" name="orderby" value="<?php echo esc_attr( $filters['orderby'] ); ?>"><input type="hidden" name="order" value="<?php echo esc_attr( $filters['order'] ); ?>">
-			<div class="mac-tracker-filter-actions"><button type="submit" class="button button-primary">Apply filters</button><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-projects' ) ); ?>">Clear</a></div>
+			<div class="mac-tracker-filter-actions"><button type="submit" class="button button-primary">Apply filters</button><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker' ) ); ?>">Clear</a></div>
 		</form>
 
 		<section class="mac-tracker-table-shell">
@@ -107,21 +110,20 @@ class MAC_Tracker_Admin {
 				<div class="mac-tracker-empty"><span class="dashicons dashicons-archive"></span><strong>No project snapshots yet</strong><p>Import the pin baseline or save WPM Settings and run a background sync.</p></div>
 			<?php else : ?>
 				<div class="mac-tracker-table-scroll"><table class="widefat striped mac-tracker-project-table"><thead><tr>
-					<th scope="col" class="mac-tracker-col--index">#</th><?php $this->sort_header( 'id', 'ID', $filters ); ?><?php $this->sort_header( 'project', 'Project', $filters ); ?><?php $this->sort_header( 'website', 'Website', $filters ); ?><?php $this->sort_header( 'layout', 'Layout', $filters ); ?><?php $this->sort_header( 'assignee', 'Assignee', $filters ); ?><?php $this->sort_header( 'date', 'Date', $filters, 'mac-tracker-col--date' ); ?><?php $this->sort_header( 'time', 'Time', $filters, 'mac-tracker-col--time' ); ?><?php $this->sort_header( 'palette', 'Palette', $filters ); ?>
+					<th scope="col" class="mac-tracker-col--index">#</th><?php $this->sort_header( 'id', 'ID', $filters ); ?><?php $this->sort_header( 'project', 'Project', $filters ); ?><?php $this->sort_header( 'website', 'Website', $filters ); ?><?php $this->sort_header( 'layout', 'Layout', $filters ); ?><?php $this->sort_header( 'assignee', 'Assignee', $filters ); ?><?php $this->sort_header( 'date', 'Date', $filters, 'mac-tracker-col--date' ); ?><?php $this->sort_header( 'palette', 'Palette', $filters ); ?>
 				</tr></thead><tbody>
 					<?php $row_number = 1 + ( 0 === (int) $page['per_page'] ? 0 : ( (int) $page['paged'] - 1 ) * (int) $page['per_page'] ); foreach ( $page['rows'] as $row ) : ?>
 						<tr>
 							<td class="mac-tracker-row-index"><?php echo esc_html( $row_number++ ); ?></td>
-							<td class="mac-tracker-id"><strong>#<?php echo esc_html( $row['wpm_project_id'] ); ?></strong><span><?php echo esc_html( $this->record_hint( $row ) ); ?></span></td>
+							<td class="mac-tracker-id"><?php $this->project_id_link( $row ); ?><?php $this->task_id_link( $row ); ?></td>
 			<td><?php $this->project_link( $row ); ?><?php $this->confidence_badge( $row ); ?><?php $this->baseline_override_badge( $row ); ?><button class="mac-tracker-edit-link" type="button" title="Edit project" aria-label="Edit project" data-edit-target="edit-<?php echo (int) $row['id']; ?>"><span class="dashicons dashicons-edit" aria-hidden="true"></span></button></td>
 							<td><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></td>
 							<td><?php $this->url_link( $this->layout_url( $row['layout_url'] ), $this->layout_label( $row['layout_url'] ) ); ?></td>
 							<td><?php echo esc_html( $this->person_name( $row['assignee_json'] ) ?: '—' ); ?></td>
 							<td class="mac-tracker-date mac-tracker-date--day"><?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></td>
-							<td class="mac-tracker-date mac-tracker-date--time"><?php echo esc_html( MAC_Tracker_Time::bangkok_time( $row['task_completed_at'] ) ); ?></td>
 							<td><span class="mac-tracker-status mac-tracker-status--muted">Color later</span></td>
 						</tr>
-		<tr id="edit-<?php echo (int) $row['id']; ?>" class="mac-tracker-edit-row" hidden><td colspan="9"><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_edit_project' ); ?><input type="hidden" name="action" value="mac_tracker_edit_project"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><label>Project ID<input type="number" min="1" name="project_id" value="<?php echo (int) $row['wpm_project_id']; ?>" required></label><label>Project name<input type="text" name="project_name" value="<?php echo esc_attr( $row['name'] ); ?>" required></label><label>Date & time<input type="datetime-local" name="date_time" value="<?php echo esc_attr( MAC_Tracker_Time::bangkok_input( $row['task_completed_at'] ) ); ?>"></label><button class="button button-primary" type="submit">Save project</button><button class="button" type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Cancel</button></form></td></tr>
+		<tr id="edit-<?php echo (int) $row['id']; ?>" class="mac-tracker-edit-row" hidden><td colspan="8"><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_edit_project' ); ?><input type="hidden" name="action" value="mac_tracker_edit_project"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><label>Project ID<input type="number" min="1" name="project_id" value="<?php echo (int) $row['wpm_project_id']; ?>" required></label><label>Project name<input type="text" name="project_name" value="<?php echo esc_attr( $row['name'] ); ?>" required></label><label>Date & time<input type="datetime-local" name="date_time" value="<?php echo esc_attr( MAC_Tracker_Time::bangkok_input( $row['task_completed_at'] ) ); ?>"></label><button class="button button-primary" type="submit">Save project</button><button class="button" type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Cancel</button></form></td></tr>
 					<?php endforeach; ?>
 				</tbody></table></div>
 				<?php $this->pagination( $page, $filters ); ?>
@@ -207,8 +209,8 @@ class MAC_Tracker_Admin {
 	public function handle_edit_project() {
 		$this->require_request( 'mac_tracker_edit_project' );
 		$result = $this->repository->edit_project_identity( $_POST['snapshot_id'] ?? 0, $_POST['project_id'] ?? 0, wp_unslash( $_POST['project_name'] ?? '' ), wp_unslash( $_POST['date_time'] ?? '' ) );
-		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker-projects', $result->get_error_message(), 'error' ); }
-		$this->redirect( 'mac-project-tracker-projects', 'Project ID and name updated.', 'success' );
+		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker', $result->get_error_message(), 'error' ); }
+		$this->redirect( 'mac-project-tracker', 'Project ID and name updated.', 'success' );
 	}
 
 	public function handle_import_pins() {
@@ -286,7 +288,9 @@ class MAC_Tracker_Admin {
 			'kind'     => isset( $get['kind'] ) ? sanitize_key( $get['kind'] ) : '',
 			'website'  => isset( $get['website'] ) ? sanitize_key( $get['website'] ) : '',
 			'layout'   => isset( $get['layout'] ) ? sanitize_key( $get['layout'] ) : '',
-			'per_page' => isset( $get['per_page'] ) ? absint( $get['per_page'] ) : 0,
+			'month_from' => isset( $get['month_from'] ) && preg_match( '/^\d{4}-\d{2}$/', (string) $get['month_from'] ) ? (string) $get['month_from'] : '',
+			'month_to'   => isset( $get['month_to'] ) && preg_match( '/^\d{4}-\d{2}$/', (string) $get['month_to'] ) ? (string) $get['month_to'] : '',
+			'per_page' => isset( $get['per_page'] ) ? absint( $get['per_page'] ) : 150,
 			'orderby'  => isset( $get['orderby'] ) ? sanitize_key( $get['orderby'] ) : 'date',
 			'order'    => isset( $get['order'] ) ? sanitize_key( $get['order'] ) : 'desc',
 			'paged'    => isset( $get['paged'] ) ? absint( $get['paged'] ) : 1,
@@ -296,22 +300,28 @@ class MAC_Tracker_Admin {
 	private function sort_header( $field, $label, array $filters, $class = '' ) {
 		$current = $filters['orderby'] === $field;
 		$order   = $current && 'desc' === strtolower( $filters['order'] ) ? 'asc' : 'desc';
-		$args    = array_merge( $filters, array( 'orderby' => $field, 'order' => $order, 'paged' => 1, 'page' => 'mac-project-tracker-projects' ) );
+		$args    = array_merge( $filters, array( 'orderby' => $field, 'order' => $order, 'paged' => 1, 'page' => 'mac-project-tracker' ) );
 		$url = add_query_arg( $args, admin_url( 'admin.php' ) );
 		echo '<th scope="col" class="mac-tracker-sort ' . esc_attr( $class ) . ( $current ? ' is-active' : '' ) . '"><a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '<span aria-hidden="true" class="dashicons ' . ( $current && 'asc' === strtolower( $filters['order'] ) ? 'dashicons-arrow-up-alt2' : 'dashicons-arrow-down-alt2' ) . '"></span></a></th>';
 	}
 
 	private function pagination( array $page, array $filters ) {
 		if ( (int) $page['total_pages'] <= 1 ) { return; }
-		$base_args = array_merge( $filters, array( 'page' => 'mac-project-tracker-projects', 'paged' => '%#%' ) );
+		$base_args = array_merge( $filters, array( 'page' => 'mac-project-tracker', 'paged' => '%#%' ) );
 		$base      = str_replace( '%25%23%25', '%#%', add_query_arg( $base_args, admin_url( 'admin.php' ) ) );
 		$links = paginate_links( array( 'base' => $base, 'format' => '', 'current' => (int) $page['paged'], 'total' => (int) $page['total_pages'], 'type' => 'list', 'prev_text' => '‹', 'next_text' => '›' ) );
 		if ( $links ) { echo '<nav class="mac-tracker-pagination" aria-label="Project pages">' . wp_kses_post( $links ) . '</nav>'; }
 	}
 
-	private function record_hint( array $row ) {
-		if ( 'action_design' === $row['record_kind'] ) { return 'Task #' . (int) $row['wpm_action_task_id']; }
-		return 'CSV pin';
+	private function project_id_link( array $row ) {
+		$id = (int) $row['wpm_project_id'];
+		echo '<a class="mac-tracker-id-link" href="' . esc_url( 'https://wpm.macusaone.com/projects/' . $id . '/edit' ) . '" target="_blank" rel="noopener">#' . esc_html( $id ) . '</a>';
+	}
+
+	private function task_id_link( array $row ) {
+		if ( 'action_design' !== $row['record_kind'] ) { echo '<span>CSV pin</span>'; return; }
+		$id = (int) $row['wpm_action_task_id'];
+		echo '<a class="mac-tracker-task-id-link" href="' . esc_url( 'https://wpm.macusaone.com/tasks/' . $id . '/edit?' ) . '" target="_blank" rel="noopener">#' . esc_html( $id ) . '</a>';
 	}
 
 	private function confidence_badge( array $row ) {

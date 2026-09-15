@@ -203,6 +203,11 @@ class MAC_Tracker_Repository {
 		return array( 'snapshots' => (int) $deleted, 'colors' => (int) $colors );
 	}
 
+	/** Remove known WPM test rows and a title-only false positive from old syncs. */
+	public function purge_excluded_wpm_actions() {
+		return $this->wpdb->query( "DELETE FROM {$this->projects} WHERE wpm_project_id IN (3018, 3189) OR wpm_action_task_id = 8336" );
+	}
+
 	public function missing_pin_ids( array $seen_wpm_ids ) {
 		return array_values( array_diff( $this->pin_ids(), array_map( 'intval', $seen_wpm_ids ) ) );
 	}
@@ -314,8 +319,8 @@ class MAC_Tracker_Repository {
 
 	/** One bulk query for the Projects screen; no WPM/API call and no N+1. */
 	public function project_page( array $filters = array() ) {
-		$per_page = isset( $filters['per_page'] ) ? (int) $filters['per_page'] : 0;
-		$per_page = in_array( $per_page, array( 50, 100, 200 ), true ) ? $per_page : 0;
+		$per_page = isset( $filters['per_page'] ) ? (int) $filters['per_page'] : 150;
+		$per_page = in_array( $per_page, array( 50, 100, 150, 200 ), true ) ? $per_page : 0;
 		$page     = max( 1, absint( $filters['paged'] ?? 1 ) );
 		// A CSV pin is the verified historical fallback. Once WPM has an
 		// Action Design snapshot for the same project, show the task row(s)
@@ -348,6 +353,17 @@ class MAC_Tracker_Repository {
 			$args[]  = '%' . $this->wpdb->esc_like( $assignee ) . '%';
 		}
 
+		$month_from = trim( (string) ( $filters['month_from'] ?? '' ) );
+		$month_to   = trim( (string) ( $filters['month_to'] ?? '' ) );
+		if ( preg_match( '/^\d{4}-\d{2}$/', $month_from ) ) {
+			$where[] = 'p.task_completed_at >= %s';
+			$args[]  = MAC_Tracker_Time::bangkok_month_start_utc( $month_from );
+		}
+		if ( preg_match( '/^\d{4}-\d{2}$/', $month_to ) ) {
+			$where[] = 'p.task_completed_at < %s';
+			$args[]  = MAC_Tracker_Time::bangkok_next_month_start_utc( $month_to );
+		}
+
 		foreach ( array( 'website', 'layout' ) as $field ) {
 			$value  = sanitize_key( $filters[ $field ] ?? '' );
 			$column = 'website' === $field ? 'p.website_url' : 'p.layout_url';
@@ -358,7 +374,7 @@ class MAC_Tracker_Repository {
 		$where_sql = implode( ' AND ', $where );
 		$order_map = array(
 			'id' => 'p.wpm_project_id', 'project' => 'p.name', 'website' => 'p.website_url',
-			'layout' => 'p.layout_url', 'assignee' => 'p.assignee_json', 'date' => 'p.task_completed_at', 'time' => 'p.task_completed_at', 'palette' => 'c.status',
+			'layout' => 'p.layout_url', 'assignee' => 'p.assignee_json', 'date' => 'p.task_completed_at', 'palette' => 'c.status',
 		);
 		$sort     = sanitize_key( $filters['orderby'] ?? 'id' );
 		$order_by = $order_map[ $sort ] ?? $order_map['id'];

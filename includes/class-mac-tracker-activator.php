@@ -123,6 +123,9 @@ class MAC_Tracker_Activator {
 		if ( version_compare( $previous_version, '0.7.6', '<' ) ) {
 			( new MAC_Tracker_Repository() )->purge_domain_snapshots();
 		}
+		if ( version_compare( $previous_version, '0.10.5', '<' ) ) {
+			( new MAC_Tracker_Repository() )->purge_excluded_wpm_actions();
+		}
 		update_option( 'mac_tracker_db_version', MAC_TRACKER_VERSION, false );
 	}
 }

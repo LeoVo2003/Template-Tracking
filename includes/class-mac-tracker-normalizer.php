@@ -124,8 +124,11 @@ class MAC_Tracker_Normalizer {
 			return null;
 		}
 
-		$type = $task['task_type'] ?? $task['task_type_name'] ?? $task['type'] ?? $task['title'] ?? $task['name'] ?? null;
+		$type_source = $task['task_type'] ?? null;
+		$type = $type_source ?? $task['task_type_name'] ?? $task['type'] ?? $task['title'] ?? $task['name'] ?? null;
+		$type_id = self::int_value( $task['task_type_id'] ?? 0 );
 		if ( is_array( $type ) ) {
+			$type_id = self::int_value( $type['id'] ?? $type_id );
 			$type = $type['name'] ?? $type['title'] ?? '';
 		}
 
@@ -137,7 +140,9 @@ class MAC_Tracker_Normalizer {
 		return array(
 			'id'             => $id,
 			'type_name'      => self::text( $type ),
-			'is_action_design' => self::ACTION_TASK_NAME === self::text( $type ),
+			// WPM's task type is authoritative. Do not infer Action Design from a
+			// task title: e.g. task #8336 is actually an Update/Fix Website task.
+			'is_action_design' => 77 === $type_id || self::ACTION_TASK_NAME === self::text( $type ),
 			'status'         => self::text( $task['status'] ?? '' ),
 			'completed_at'   => self::text( $task['completed_at'] ?? $task['completedAt'] ?? $task['completed_date'] ?? $task['done_at'] ?? $task['done_date'] ?? $task['doneDate'] ?? '' ),
 			'due_at'         => self::text( $task['due_date'] ?? $task['due_at'] ?? $task['dueDate'] ?? $task['due_datetime'] ?? $task['due'] ?? $task['end_date'] ?? $task['end_at'] ?? '' ),

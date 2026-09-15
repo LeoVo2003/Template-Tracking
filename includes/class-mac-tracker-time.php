@@ -25,6 +25,21 @@ class MAC_Tracker_Time {
 		try { $date = new DateTime( $utc_value, new DateTimeZone( 'UTC' ) ); $date->setTimezone( new DateTimeZone( 'Asia/Bangkok' ) ); return $date->format( 'Y-m-d\\TH:i' ); } catch ( Exception $exception ) { return ''; }
 	}
 
+	public static function bangkok_month_start_utc( $month ) {
+		$local = DateTime::createFromFormat( '!Y-m', (string) $month, new DateTimeZone( 'Asia/Bangkok' ) );
+		if ( ! $local ) { return ''; }
+		$local->setTimezone( new DateTimeZone( 'UTC' ) );
+		return $local->format( 'Y-m-d H:i:s' );
+	}
+
+	public static function bangkok_next_month_start_utc( $month ) {
+		$local = DateTime::createFromFormat( '!Y-m', (string) $month, new DateTimeZone( 'Asia/Bangkok' ) );
+		if ( ! $local ) { return ''; }
+		$local->modify( '+1 month' );
+		$local->setTimezone( new DateTimeZone( 'UTC' ) );
+		return $local->format( 'Y-m-d H:i:s' );
+	}
+
 	private static function bangkok_parts( $utc_value ) {
 		$utc_value = trim( (string) $utc_value );
 		if ( '' === $utc_value ) { return null; }
