@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MAC Project Tracker
  * Description: Internal WPM project tracker.
- * Version: 0.8.9
+ * Version: 0.9.0
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Author: MAC Marketing
@@ -12,8 +12,10 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'MAC_TRACKER_VERSION', '0.8.9' );
+define( 'MAC_TRACKER_VERSION', '0.9.0' );
 define( 'MAC_TRACKER_AD_COMPLETED_CUTOFF', '2026-07-01' );
+// Projects outside the approved CSV roster join only from this WPM era onward.
+define( 'MAC_TRACKER_PROJECT_SYNC_START', '2026-04-01 00:00:00' );
 define( 'MAC_TRACKER_FILE', __FILE__ );
 define( 'MAC_TRACKER_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MAC_TRACKER_URL', plugin_dir_url( __FILE__ ) );

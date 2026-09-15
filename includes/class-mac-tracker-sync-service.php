@@ -103,7 +103,6 @@ class MAC_Tracker_Sync_Service {
 				return $error;
 			}
 			$roster = array_fill_keys( $roster_ids, true );
-			$roster_cutoff = $this->repository->roster_cutoff();
 			$client = $this->client_from_settings();
 			if ( is_wp_error( $client ) ) {
 				$this->repository->finish_sync_log( $log_id, 'failed', 0, $client->get_error_message() );
@@ -128,10 +127,11 @@ class MAC_Tracker_Sync_Service {
 					continue;
 				}
 				++$scanned;
-				// Keep the imported baseline fixed. A new project joins only when it
-				// was created after the latest CSV pin date and has a done action.
+				// CSV is the historical baseline. Outside it, include only projects
+				// created from 01 Apr 2026 onward; sync_project then creates rows only
+				// for their done Action Design task(s).
 				$created_at = MAC_Tracker_Time::normalize_utc( $project['created_at'] );
-				if ( ! isset( $roster[ $project['id'] ] ) && ( 'compare' === $mode || '' === $roster_cutoff || ! $created_at || $created_at <= $roster_cutoff ) ) {
+				if ( ! isset( $roster[ $project['id'] ] ) && ( 'compare' === $mode || ! $created_at || $created_at < MAC_TRACKER_PROJECT_SYNC_START ) ) {
 					continue;
 				}
 				$seen[ $project['id'] ] = true;
@@ -147,7 +147,7 @@ class MAC_Tracker_Sync_Service {
 
 			$backfill = $this->backfill_missing_pins( array_keys( $seen ), $client );
 			$message  = sprintf(
-				'pages=%d, scanned=%d, roster=%d, eligible_action_tasks=%d, created=%d, backfill=%d/%d, errors=%d, %s',
+				'pages=%d, scanned=%d, roster=%d, external_scope=from_2026-04-01, eligible_action_tasks=%d, created=%d, backfill=%d/%d, errors=%d, %s',
 				(int) $result['pages'],
 				$scanned,
 				count( $roster_ids ),
