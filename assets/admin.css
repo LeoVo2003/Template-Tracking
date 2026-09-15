@@ -365,6 +365,7 @@
 .mac-tracker-project-name:hover { color: var(--primary); text-decoration: underline; }
 .mac-tracker-project-name .dashicons { width: 13px; height: 13px; margin-top: 2px; font-size: 13px; flex: 0 0 auto; opacity: .65; }
 .mac-tracker-confidence { display: inline-flex; width: fit-content; margin: var(--space-2) 0 0; padding: 3px 6px; color: #76531F; font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; background: var(--warning-soft); border-radius: 3px; }
+.mac-tracker-baseline-override { display: inline-flex; width: fit-content; margin: var(--space-2) 0 0 var(--space-2); padding: 3px 6px; color: var(--willow-deep); font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; background: var(--mist-light); border: 1px solid var(--line); border-radius: 3px; }
 .mac-tracker-edit-link { display: block; margin-top: var(--space-2); padding: 0; color: var(--primary); font: inherit; font-size: var(--text-2xs); background: none; border: 0; cursor: pointer; }
 .mac-tracker-sync-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .mac-tracker-sync-actions form { margin: 0; }

@@ -220,6 +220,10 @@ class MAC_Tracker_Repository {
 	}
 	public function set_roster_cutoff( $utc ) { update_option( 'mac_tracker_roster_cutoff_utc', $utc, false ); }
 	public function roster_cutoff() { return (string) get_option( 'mac_tracker_roster_cutoff_utc', '' ); }
+	/** The one-time baseline comparison establishes when ordinary sync begins. */
+	public function mark_baseline_compared( $utc ) { update_option( 'mac_tracker_baseline_compared_at', (string) $utc, false ); }
+	public function baseline_compared_at() { return (string) get_option( 'mac_tracker_baseline_compared_at', '' ); }
+	public function baseline_is_compared() { return '' !== $this->baseline_compared_at(); }
 
 	public function edit_project_identity( $snapshot_id, $new_project_id, $new_name, $date_time = '' ) {
 		$snapshot_id   = absint( $snapshot_id );
@@ -304,6 +308,7 @@ class MAC_Tracker_Repository {
 		delete_option( 'mac_tracker_roster_ids' );
 		delete_option( 'mac_tracker_roster_cutoff_utc' );
 		delete_option( 'mac_tracker_roster_source_rows' );
+		delete_option( 'mac_tracker_baseline_compared_at' );
 		return true;
 	}
 

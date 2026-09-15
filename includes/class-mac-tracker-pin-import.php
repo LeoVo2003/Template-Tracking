@@ -34,8 +34,6 @@ class MAC_Tracker_Pin_Import {
 		$rows_read = 0;
 		$duplicate_ids = array();
 		$seen_pin_ids = array();
-		$registered = 0;
-		$action_imported = 0;
 		$roster_ids = array();
 		$latest_pin_time = '';
 		$errors   = array();
@@ -62,34 +60,8 @@ class MAC_Tracker_Pin_Import {
 			$seen_pin_ids[ $project_id ] = true;
 			$record_kind = sanitize_key( $row['record_kind'] ?? 'csv_pin' );
 			if ( 'action_design' === $record_kind ) {
-				$task_id = absint( $row['action_task_id'] ?? $row['wpm_action_task_id'] ?? 0 );
-				if ( $task_id <= 0 ) {
-					$errors[] = sprintf( 'Row %d: Action Design row is missing action_task_id.', $row_no );
-					continue;
-				}
-				$layout = $row['layout_web'] ?? $row['layout_url'] ?? $row['layout'] ?? '';
-				$done   = MAC_Tracker_Time::csv_bangkok_to_utc( $row['date'] ?? $row['due_date'] ?? '', $row['time'] ?? '' );
-				if ( $done && ( '' === $latest_pin_time || $done > $latest_pin_time ) ) { $latest_pin_time = $done; }
-				$snapshot = $this->repository->upsert_snapshot(
-					array(
-						'wpm_project_id'     => $project_id,
-						'wpm_action_task_id' => $task_id,
-						'record_kind'        => 'action_design',
-						'name'               => $row['projects'] ?? '',
-						'website_url'        => $row['website'] ?? '',
-						'layout_url'         => $layout,
-						'assignee'           => array( 'name' => $row['member'] ?? $row['assignee'] ?? '' ),
-						'task_completed_at'  => $done,
-						'sync_source'        => 'wpm_action_import',
-						'raw'                => $row,
-					)
-				);
-				if ( is_wp_error( $snapshot ) ) {
-					$errors[] = sprintf( 'Row %d: Action Design snapshot could not be saved.', $row_no );
-					continue;
-				}
-				++$action_imported;
-				++$registered;
+				// Compatibility for prior hybrid exports: keep their approved WPM
+				// IDs in the roster, but let Compare baseline create the snapshot.
 				continue;
 			}
 
@@ -131,8 +103,9 @@ class MAC_Tracker_Pin_Import {
 		fclose( $handle );
 		$this->repository->set_roster_ids( $roster_ids );
 		$this->repository->set_roster_cutoff( $latest_pin_time );
+		delete_option( 'mac_tracker_baseline_compared_at' );
 		update_option( 'mac_tracker_roster_source_rows', $rows_read, false );
-		return array( 'imported' => $imported, 'action_imported' => $action_imported, 'registered' => $registered, 'roster' => count( array_unique( $roster_ids ) ), 'rows_read' => $rows_read, 'duplicates' => count( $duplicate_ids ), 'errors' => $errors );
+		return array( 'imported' => $imported, 'roster' => count( array_unique( $roster_ids ) ), 'rows_read' => $rows_read, 'duplicates' => count( $duplicate_ids ), 'errors' => $errors );
 	}
 
 	private function normalize_header( $value ) {

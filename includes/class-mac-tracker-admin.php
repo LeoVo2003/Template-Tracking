@@ -66,7 +66,7 @@ class MAC_Tracker_Admin {
 			<div class="mac-tracker-ledger__head"><div><p class="mac-tracker-eyebrow">Recent activity</p><h2>Sync log</h2></div><span>Newest first</span></div>
 			<?php $this->notices(); ?>
 			<?php if ( empty( $logs ) ) : ?>
-				<div class="mac-tracker-empty"><span class="dashicons dashicons-chart-line"></span><strong>No sync yet</strong><p>Save the WPM connection, then run the first background sync.</p></div>
+				<div class="mac-tracker-empty"><span class="dashicons dashicons-chart-line"></span><strong>No comparison yet</strong><p>Save the WPM connection, then run Compare baseline once.</p></div>
 			<?php else : ?>
 				<div class="mac-tracker-log-list">
 					<?php foreach ( $logs as $log ) : ?>
@@ -113,7 +113,7 @@ class MAC_Tracker_Admin {
 						<tr>
 							<td class="mac-tracker-row-index"><?php echo esc_html( $row_number++ ); ?></td>
 							<td class="mac-tracker-id"><strong>#<?php echo esc_html( $row['wpm_project_id'] ); ?></strong><span><?php echo esc_html( $this->record_hint( $row ) ); ?></span></td>
-			<td><?php $this->project_link( $row ); ?><?php $this->confidence_badge( $row ); ?><button class="mac-tracker-edit-link" type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Edit</button></td>
+			<td><?php $this->project_link( $row ); ?><?php $this->confidence_badge( $row ); ?><?php $this->baseline_override_badge( $row ); ?><button class="mac-tracker-edit-link" type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Edit</button></td>
 							<td><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></td>
 							<td><?php $this->url_link( $this->layout_url( $row['layout_url'] ), $this->layout_label( $row['layout_url'] ) ); ?></td>
 							<td><?php echo esc_html( $this->person_name( $row['assignee_json'] ) ?: '—' ); ?></td>
@@ -135,7 +135,7 @@ class MAC_Tracker_Admin {
 		$this->page_start( 'Pin baseline', 'Import the approved manual project list. Pins remain if WPM later removes a project.', 'pins' );
 		$this->notices();
 		?>
-		<section class="mac-tracker-panel mac-tracker-panel--narrow"><div class="mac-tracker-panel__head"><div><p class="mac-tracker-eyebrow">Master roster import</p><h2><?php echo esc_html( number_format_i18n( $this->repository->pin_count() ) ); ?> saved CSV pins</h2><p>Import the authoritative hybrid CSV. CSV pin rows and WPM Action Design rows are both saved immediately; when the same project exists in both sources, its WPM Action Design snapshot wins.</p></div></div>
+		<section class="mac-tracker-panel mac-tracker-panel--narrow"><div class="mac-tracker-panel__head"><div><p class="mac-tracker-eyebrow">Master roster import</p><h2><?php echo esc_html( number_format_i18n( $this->repository->pin_count() ) ); ?> saved CSV pins</h2><p>Import the original CSV baseline. Run Compare baseline once to overlay matching WPM Action Design records; the source CSV rows stay preserved locally.</p></div></div>
 		<form class="mac-tracker-upload" method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<?php wp_nonce_field( 'mac_tracker_import_pins' ); ?><input type="hidden" name="action" value="mac_tracker_import_pins"><label><span>CSV file</span><input type="file" name="pin_csv" accept=".csv,text/csv" required></label><button class="button button-primary" type="submit">Import pins</button>
 		</form></section>
@@ -199,7 +199,9 @@ class MAC_Tracker_Admin {
 		$this->require_request( 'mac_tracker_compare_wpm' );
 		$result = $this->sync->run_sync( 'compare' );
 		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker', $result->get_error_message(), 'error' ); }
-		$this->redirect( 'mac-project-tracker', sprintf( 'Baseline comparison complete: %d Action Design task(s) processed.', (int) $result['processed'] ), 'success' );
+		$message = sprintf( 'Baseline comparison complete: %d Action Design task(s) checked; %d CSV rows now show their WPM Action Design overlay.', (int) $result['processed'], (int) $result['created'] );
+		if ( empty( $result['comparison_completed'] ) ) { $message .= ' Comparison remains available because some WPM records could not be processed.'; }
+		$this->redirect( 'mac-project-tracker', $message, 'success' );
 	}
 
 	public function handle_edit_project() {
@@ -219,7 +221,7 @@ class MAC_Tracker_Admin {
 		}
 		$result = ( new MAC_Tracker_Pin_Import( $this->repository ) )->import_file( $_FILES['pin_csv']['tmp_name'] );
 		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker-pins', $result->get_error_message(), 'error' ); }
-		$message = sprintf( 'Read %d CSV rows; saved %d CSV pins and %d WPM Action Design snapshots in a %d-project roster.', (int) ( $result['rows_read'] ?? $result['imported'] ), (int) $result['imported'], (int) ( $result['action_imported'] ?? $result['registered'] ?? 0 ), (int) ( $result['roster'] ?? 0 ) );
+		$message = sprintf( 'Read %d CSV rows; saved %d unique CSV pins in a %d-project baseline. Run Compare baseline once to apply matching WPM Action Design snapshots.', (int) ( $result['rows_read'] ?? $result['imported'] ), (int) $result['imported'], (int) ( $result['roster'] ?? 0 ) );
 		if ( ! empty( $result['duplicates'] ) ) {
 			$message .= sprintf( ' %d duplicate WPM project ID(s) were skipped.', (int) $result['duplicates'] );
 		}
@@ -251,8 +253,15 @@ class MAC_Tracker_Admin {
 	private function page_end() { echo '</div>'; }
 
 	private function sync_buttons() {
+		$compared = $this->repository->baseline_is_compared();
 		?>
-		<div class="mac-tracker-sync-actions"><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_compare_wpm' ); ?><input type="hidden" name="action" value="mac_tracker_compare_wpm"><button class="button" type="submit" <?php disabled( $this->sync->is_running() || $this->sync->is_queued() ); ?>>Compare baseline</button></form><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_queue_sync' ); ?><input type="hidden" name="action" value="mac_tracker_queue_sync"><button class="button button-primary" type="submit" <?php disabled( $this->sync->is_running() || $this->sync->is_queued() ); ?>><span class="dashicons dashicons-update"></span><?php echo esc_html( $this->sync->is_running() ? 'Syncing…' : ( $this->sync->is_queued() ? 'Queued' : 'Sync new changes' ) ); ?></button></form></div>
+		<div class="mac-tracker-sync-actions">
+			<?php if ( ! $compared ) : ?>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_compare_wpm' ); ?><input type="hidden" name="action" value="mac_tracker_compare_wpm"><button class="button button-primary" type="submit" <?php disabled( $this->sync->is_running() || $this->sync->is_queued() ); ?>>Compare baseline</button></form>
+			<?php else : ?>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_queue_sync' ); ?><input type="hidden" name="action" value="mac_tracker_queue_sync"><button class="button button-primary" type="submit" <?php disabled( $this->sync->is_running() || $this->sync->is_queued() ); ?>><span class="dashicons dashicons-update"></span><?php echo esc_html( $this->sync->is_running() ? 'Syncing…' : ( $this->sync->is_queued() ? 'Queued' : 'Sync new Action Design' ) ); ?></button></form>
+			<?php endif; ?>
+		</div>
 		<?php
 	}
 
@@ -310,6 +319,11 @@ class MAC_Tracker_Admin {
 		$confidence = is_array( $raw ) ? sanitize_key( $raw['match_confidence'] ?? 'exact' ) : 'exact';
 		if ( 'exact' === $confidence ) { return; }
 		echo '<span class="mac-tracker-confidence">' . esc_html( str_replace( '_', ' ', $confidence ) ) . '</span>';
+	}
+
+	private function baseline_override_badge( array $row ) {
+		if ( 'action_design' !== $row['record_kind'] || 'baseline_compare' !== (string) ( $row['sync_source'] ?? '' ) ) { return; }
+		echo '<span class="mac-tracker-baseline-override">WPM overlay</span>';
 	}
 
 	private function project_label( array $row ) {
