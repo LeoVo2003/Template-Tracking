@@ -7,10 +7,12 @@ class MAC_Tracker_Admin {
 
 	private $repository;
 	private $sync;
+	private $colors;
 
 	public function __construct( MAC_Tracker_Repository $repository, MAC_Tracker_Sync_Service $sync ) {
 		$this->repository = $repository;
 		$this->sync       = $sync;
+		$this->colors     = new MAC_Tracker_Elementor_Color_Service( $repository );
 	}
 
 	public function register() {
@@ -23,12 +25,15 @@ class MAC_Tracker_Admin {
 		add_action( 'admin_post_mac_tracker_edit_project', array( $this, 'handle_edit_project' ) );
 		add_action( 'admin_post_mac_tracker_import_pins', array( $this, 'handle_import_pins' ) );
 		add_action( 'admin_post_mac_tracker_clear_data', array( $this, 'handle_clear_data' ) );
+		add_action( 'admin_post_mac_tracker_extract_elementor_colors', array( $this, 'handle_extract_elementor_colors' ) );
+		add_action( 'admin_post_mac_tracker_approve_colors', array( $this, 'handle_approve_colors' ) );
 	}
 
 	public function register_menu() {
 		add_menu_page( 'Projects', 'MAC Tracker', 'manage_options', 'mac-project-tracker', array( $this, 'render_projects' ), 'dashicons-chart-area', 30 );
 		add_submenu_page( 'mac-project-tracker', 'Projects', 'Projects', 'manage_options', 'mac-project-tracker', array( $this, 'render_projects' ) );
 		add_submenu_page( 'mac-project-tracker', 'Control room', 'Control room', 'manage_options', 'mac-project-tracker-dashboard', array( $this, 'render_dashboard' ) );
+		add_submenu_page( 'mac-project-tracker', 'Color Review', 'Color Review', 'manage_options', 'mac-project-tracker-colors', array( $this, 'render_color_review' ) );
 		add_submenu_page( 'mac-project-tracker', 'Pin import', 'Pin import', 'manage_options', 'mac-project-tracker-pins', array( $this, 'render_pins' ) );
 		add_submenu_page( 'mac-project-tracker', 'Settings', 'Settings', 'manage_options', 'mac-project-tracker-settings', array( $this, 'render_settings' ) );
 	}
@@ -121,13 +126,44 @@ class MAC_Tracker_Admin {
 							<td><?php $this->url_link( $this->layout_url( $row['layout_url'] ), $this->layout_label( $row['layout_url'] ) ); ?></td>
 							<td><?php echo esc_html( $this->person_name( $row['assignee_json'] ) ?: '—' ); ?></td>
 							<td class="mac-tracker-date mac-tracker-date--day"><?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></td>
-							<td><span class="mac-tracker-status mac-tracker-status--muted">Color later</span></td>
+							<td><?php $this->palette_cell( $row ); ?></td>
 						</tr>
 		<tr id="edit-<?php echo (int) $row['id']; ?>" class="mac-tracker-edit-row" hidden><td colspan="8"><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_edit_project' ); ?><input type="hidden" name="action" value="mac_tracker_edit_project"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><label>Project ID<input type="number" min="1" name="project_id" value="<?php echo (int) $row['wpm_project_id']; ?>" required></label><label>Project name<input type="text" name="project_name" value="<?php echo esc_attr( $row['name'] ); ?>" required></label><label>Date & time<input type="datetime-local" name="date_time" value="<?php echo esc_attr( MAC_Tracker_Time::bangkok_input( $row['task_completed_at'] ) ); ?>"></label><button class="button button-primary" type="submit">Save project</button><button class="button" type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Cancel</button></form></td></tr>
 					<?php endforeach; ?>
 				</tbody></table></div>
 				<?php $this->pagination( $page, $filters ); ?>
 			<?php endif; ?>
+		</section>
+		<?php $this->page_end();
+	}
+
+	/** Review and approve only extracted Elementor Global Color variables. */
+	public function render_color_review() {
+		$this->require_capability();
+		$rows = $this->repository->color_review_rows();
+		$this->page_start( 'Color Review', 'Read Elementor Global Color variables from each website. Images, ordinary CSS, OCR and OneDrive are not used here.', 'colors' );
+		?>
+		<section class="mac-tracker-color-intro">
+			<div><p class="mac-tracker-eyebrow">Elementor only</p><h2>Global color variables, ready for review</h2><p>Extract reads <code>--e-global-color-*</code> from the website HTML and Elementor stylesheets. Approving locks the palette so a later extraction cannot replace it.</p></div>
+			<div class="mac-tracker-color-intro__count"><strong><?php echo esc_html( number_format_i18n( count( $rows ) ) ); ?></strong><span>websites available</span></div>
+		</section>
+		<?php $this->notices(); ?>
+		<section class="mac-tracker-color-review" aria-label="Color review queue">
+			<?php if ( empty( $rows ) ) : ?>
+				<div class="mac-tracker-empty"><span class="dashicons dashicons-art"></span><strong>No websites available</strong><p>Color Review only lists current project rows that have a website URL.</p></div>
+			<?php else : foreach ( $rows as $row ) : $colors = $this->row_colors( $row ); ?>
+				<article class="mac-tracker-color-card <?php echo ! empty( $row['color_locked'] ) ? 'is-approved' : ''; ?>">
+					<div class="mac-tracker-color-card__head"><div><p class="mac-tracker-eyebrow"><?php echo esc_html( ! empty( $row['color_locked'] ) ? 'Approved palette' : ( $colors ? 'Awaiting review' : 'Not extracted' ) ); ?></p><h2><?php $this->project_link( $row ); ?></h2><p><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></p></div><span class="mac-tracker-status mac-tracker-status--<?php echo esc_attr( ! empty( $row['color_locked'] ) ? 'success' : ( $colors ? 'waiting' : 'muted' ) ); ?>"><?php echo esc_html( ! empty( $row['color_locked'] ) ? 'Approved' : ( $colors ? 'Review' : 'New' ) ); ?></span></div>
+					<?php if ( $colors ) : ?><div class="mac-tracker-color-swatches" aria-label="Extracted colors"><?php foreach ( $colors as $color ) : ?><span title="<?php echo esc_attr( $color ); ?>" style="--mac-tracker-swatch: <?php echo esc_attr( $color ); ?>"><i></i><code><?php echo esc_html( $color ); ?></code></span><?php endforeach; ?></div><?php endif; ?>
+					<?php $this->color_variables( $row ); ?>
+					<div class="mac-tracker-color-card__actions">
+						<?php if ( empty( $row['color_locked'] ) ) : ?>
+							<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_extract_elementor_colors' ); ?><input type="hidden" name="action" value="mac_tracker_extract_elementor_colors"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><button class="button" type="submit"><span class="dashicons dashicons-art"></span><?php echo $colors ? 'Extract again' : 'Extract Elementor colors'; ?></button></form>
+							<?php if ( $colors ) : ?><form class="mac-tracker-color-approve" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_approve_colors' ); ?><input type="hidden" name="action" value="mac_tracker_approve_colors"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><label><span>Palette</span><input name="colors" value="<?php echo esc_attr( implode( ', ', $colors ) ); ?>"></label><button class="button button-primary" type="submit">Approve palette</button></form><?php endif; ?>
+						<?php endif; ?>
+					</div>
+				</article>
+			<?php endforeach; endif; ?>
 		</section>
 		<?php $this->page_end();
 	}
@@ -244,6 +280,25 @@ class MAC_Tracker_Admin {
 		$this->redirect( 'mac-project-tracker-pins', 'Local tracker data cleared. Import the CSV pin file, then queue a WPM sync.', 'success' );
 	}
 
+	public function handle_extract_elementor_colors() {
+		$this->require_request( 'mac_tracker_extract_elementor_colors' );
+		$result = $this->colors->extract_for_snapshot( $_POST['snapshot_id'] ?? 0 );
+		if ( is_wp_error( $result ) ) {
+			$this->redirect( 'mac-project-tracker-colors', $result->get_error_message(), 'error' );
+		}
+		$this->redirect( 'mac-project-tracker-colors', sprintf( 'Extracted %d Elementor Global Color value(s). Review and approve when ready.', count( $result['colors'] ) ), 'success' );
+	}
+
+	public function handle_approve_colors() {
+		$this->require_request( 'mac_tracker_approve_colors' );
+		$colors = $this->sanitize_palette( wp_unslash( $_POST['colors'] ?? '' ) );
+		$result = $this->repository->approve_color_record( $_POST['snapshot_id'] ?? 0, $colors );
+		if ( is_wp_error( $result ) ) {
+			$this->redirect( 'mac-project-tracker-colors', $result->get_error_message(), 'error' );
+		}
+		$this->redirect( 'mac-project-tracker-colors', 'Palette approved and locked.', 'success' );
+	}
+
 	private function page_start( $title, $description, $screen ) {
 		$latest = $this->repository->latest_log();
 		$state  = $this->sync->is_running() ? 'syncing' : ( $this->sync->is_queued() ? 'queued' : 'ready' );
@@ -336,6 +391,55 @@ class MAC_Tracker_Admin {
 		echo '<span class="mac-tracker-baseline-override" title="WPM Action Design replaces the CSV display values">WPM</span>';
 	}
 
+	private function palette_cell( array $row ) {
+		$colors = $this->row_colors( $row );
+		if ( ! empty( $colors ) ) {
+			echo '<a class="mac-tracker-palette-link" href="' . esc_url( admin_url( 'admin.php?page=mac-project-tracker-colors' ) ) . '" title="Open Color Review">';
+			foreach ( array_slice( $colors, 0, 4 ) as $color ) {
+				echo '<i style="--mac-tracker-swatch: ' . esc_attr( $color ) . '"></i>';
+			}
+			echo '<span>' . esc_html( ! empty( $row['color_locked'] ) ? 'Approved' : 'Review' ) . '</span></a>';
+			return;
+		}
+		echo '<a class="mac-tracker-palette-link mac-tracker-palette-link--empty" href="' . esc_url( admin_url( 'admin.php?page=mac-project-tracker-colors' ) ) . '">Color review</a>';
+	}
+
+	private function row_colors( array $row ) {
+		$colors = json_decode( (string) ( $row['colors_json'] ?? '' ), true );
+		if ( ! is_array( $colors ) ) {
+			return array();
+		}
+		return array_slice( $this->sanitize_palette( $colors ), 0, 6 );
+	}
+
+	private function color_variables( array $row ) {
+		$source = json_decode( (string) ( $row['color_source_raw'] ?? '' ), true );
+		$variables = is_array( $source ) && ! empty( $source['variables'] ) && is_array( $source['variables'] ) ? $source['variables'] : array();
+		if ( empty( $variables ) ) {
+			return;
+		}
+		echo '<p class="mac-tracker-color-variables">';
+		foreach ( $variables as $name => $value ) {
+			echo '<code>' . esc_html( $name ) . '</code>';
+		}
+		echo '</p>';
+	}
+
+	private function sanitize_palette( $value ) {
+		$values = is_array( $value ) ? $value : preg_split( '/[\s,]+/', (string) $value );
+		$colors = array();
+		foreach ( (array) $values as $color ) {
+			$color = strtoupper( trim( (string) $color ) );
+			if ( preg_match( '/^#([A-F0-9]{3}|[A-F0-9]{6})$/', $color ) ) {
+				if ( 4 === strlen( $color ) ) {
+					$color = '#' . $color[1] . $color[1] . $color[2] . $color[2] . $color[3] . $color[3];
+				}
+				$colors[] = $color;
+			}
+		}
+		return array_slice( array_values( array_unique( $colors ) ), 0, 6 );
+	}
+
 	private function project_label( array $row ) {
 		$package = json_decode( $row['package_json'], true );
 		$package = is_string( $package ) ? $package : '';
@@ -411,7 +515,7 @@ class MAC_Tracker_Admin {
 
 	private function status_class( $status ) {
 		$status = sanitize_key( $status );
-		return in_array( $status, array( 'success', 'running', 'failed' ), true ) ? $status : 'muted';
+		return in_array( $status, array( 'success', 'running', 'failed', 'waiting' ), true ) ? $status : 'muted';
 	}
 
 	private function require_capability() { if ( ! current_user_can( 'manage_options' ) ) { wp_die( esc_html__( 'You do not have permission to access MAC Tracker.' ) ); } }

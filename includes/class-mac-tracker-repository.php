@@ -383,7 +383,7 @@ class MAC_Tracker_Repository {
 
 		$count_sql = "SELECT COUNT(*) FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$where_sql}";
 		$total     = empty( $args ) ? (int) $this->wpdb->get_var( $count_sql ) : (int) $this->wpdb->get_var( $this->wpdb->prepare( $count_sql, $args ) );
-		$query     = "SELECT p.*, c.status AS color_status, c.colors_json, c.approved_at, c.locked AS color_locked FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$where_sql} ORDER BY {$order_sql}";
+		$query     = "SELECT p.*, c.status AS color_status, c.colors_json, c.source_type AS color_source_type, c.source_raw AS color_source_raw, c.approved_at, c.locked AS color_locked FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$where_sql} ORDER BY {$order_sql}";
 		$query_args = $args;
 		if ( $per_page > 0 ) {
 			$query       .= ' LIMIT %d OFFSET %d';
@@ -463,6 +463,61 @@ class MAC_Tracker_Repository {
 		$data['created_at'] = $now;
 		$this->wpdb->insert( $this->colors, $data );
 		return array( 'id' => (int) $this->wpdb->insert_id, 'locked' => false, 'changed' => true );
+	}
+
+	/** One local snapshot, used by the bounded Elementor color extractor. */
+	public function snapshot( $snapshot_id ) {
+		$snapshot_id = absint( $snapshot_id );
+		if ( $snapshot_id <= 0 ) {
+			return null;
+		}
+		return $this->wpdb->get_row(
+			$this->wpdb->prepare(
+				"SELECT p.*, c.status AS color_status, c.colors_json, c.source_type AS color_source_type, c.source_raw AS color_source_raw, c.approved_at, c.locked AS color_locked FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE p.id = %d LIMIT 1",
+				$snapshot_id
+			),
+			ARRAY_A
+		);
+	}
+
+	/** The review queue is entirely local and only includes currently visible project rows. */
+	public function color_review_rows() {
+		$page = $this->project_page(
+			array(
+				'website' => 'yes',
+				'per_page' => 0,
+				'orderby'  => 'date',
+				'order'    => 'desc',
+			)
+		);
+		return (array) $page['rows'];
+	}
+
+	/** Approval locks a reviewed palette so later extraction cannot overwrite it. */
+	public function approve_color_record( $project_id, array $colors ) {
+		$project_id = absint( $project_id );
+		if ( $project_id <= 0 || empty( $colors ) ) {
+			return new WP_Error( 'mac_tracker_color_approve_invalid', 'Add at least one valid color before approving.' );
+		}
+		$existing = $this->wpdb->get_row( $this->wpdb->prepare( "SELECT id FROM {$this->colors} WHERE project_id = %d", $project_id ), ARRAY_A );
+		if ( ! $existing ) {
+			return new WP_Error( 'mac_tracker_color_missing', 'Extract Elementor colors before approving this palette.' );
+		}
+		$updated = $this->wpdb->update(
+			$this->colors,
+			array(
+				'colors_json' => $this->encode_json( array_values( $colors ) ),
+				'status'      => 'approved',
+				'locked'      => 1,
+				'approved_at' => MAC_Tracker_Time::now_utc(),
+				'updated_at'  => MAC_Tracker_Time::now_utc(),
+			),
+			array( 'id' => (int) $existing['id'] )
+		);
+		if ( false === $updated ) {
+			return new WP_Error( 'mac_tracker_color_approve_failed', $this->wpdb->last_error ?: 'Unable to approve this palette.' );
+		}
+		return true;
 	}
 
 	private function encode_json( $value ) { return wp_json_encode( $value ); }
