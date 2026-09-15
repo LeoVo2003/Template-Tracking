@@ -145,7 +145,10 @@ const importPins = output.filter((row) => row.record_kind === 'csv_pin' && row.p
 fs.writeFileSync(pinOutputPath, `${pinColumns.join(',')}\n${importPins.map((row) => pinColumns.map((column) => escape(row[column])).join(',')).join('\n')}\n`, 'utf8');
 const actionOutputPath = outputPath.replace(/\.csv$/i, '-action-design.csv');
 const fallbackOutputPath = outputPath.replace(/\.csv$/i, '-no-action-design.csv');
+const masterOutputPath = outputPath.replace(/\.csv$/i, '-master-466.csv');
 const writeSubset = (filePath, kind) => fs.writeFileSync(filePath, `${columns.join(',')}\n${output.filter((row) => row.record_kind === kind).map((row) => columns.map((column) => escape(row[column])).join(',')).join('\n')}\n`, 'utf8');
 writeSubset(actionOutputPath, 'action_design');
 writeSubset(fallbackOutputPath, 'csv_pin');
-console.log(JSON.stringify({ source_rows: source.length, output_rows: output.length, exact_matches: exactCount, fuzzy_matches: fuzzyCount, unmapped: unmappedCount, action_design_rows: actionCount, csv_pin_rows: pinCount, importable_pin_rows: importPins.length, pin_import_path: pinOutputPath, action_design_path: actionOutputPath, no_action_design_path: fallbackOutputPath }, null, 2));
+const masterRows = output.map((row) => ({ ...row, record_kind: 'csv_pin', action_task_id: '' }));
+fs.writeFileSync(masterOutputPath, `${columns.join(',')}\n${masterRows.map((row) => columns.map((column) => escape(row[column])).join(',')).join('\n')}\n`, 'utf8');
+console.log(JSON.stringify({ source_rows: source.length, output_rows: output.length, exact_matches: exactCount, fuzzy_matches: fuzzyCount, unmapped: unmappedCount, action_design_rows: actionCount, csv_pin_rows: pinCount, importable_pin_rows: importPins.length, pin_import_path: pinOutputPath, action_design_path: actionOutputPath, no_action_design_path: fallbackOutputPath, master_roster_path: masterOutputPath }, null, 2));
