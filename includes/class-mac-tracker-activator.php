@@ -115,6 +115,9 @@ class MAC_Tracker_Activator {
 		if ( version_compare( $previous_version, '0.8.9', '<' ) ) {
 			( new MAC_Tracker_Repository() )->repair_csv_pin_datetimes();
 		}
+		if ( version_compare( $previous_version, '0.9.2', '<' ) ) {
+			( new MAC_Tracker_Repository() )->collapse_action_snapshots();
+		}
 		// Domain was a retired pre-0.7.2 record kind, never a valid snapshot.
 		// This one-time migration preserves CSV pins and Action Design rows.
 		if ( version_compare( $previous_version, '0.7.6', '<' ) ) {

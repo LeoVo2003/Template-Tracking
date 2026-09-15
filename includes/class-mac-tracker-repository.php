@@ -257,6 +257,39 @@ class MAC_Tracker_Repository {
 		return $fixed;
 	}
 
+	/** Keep only the newest Action Design snapshot per WPM project. */
+	public function collapse_action_snapshots() {
+		$rows = (array) $this->wpdb->get_results( "SELECT id, wpm_project_id, wpm_action_task_id, raw_payload FROM {$this->projects} WHERE record_kind = 'action_design' ORDER BY wpm_project_id ASC, id ASC", ARRAY_A );
+		$ids = array();
+		$keepers = array();
+		foreach ( $rows as $row ) {
+			$project_id = (int) $row['wpm_project_id'];
+			$rank = (int) $row['wpm_action_task_id'];
+			$raw = json_decode( (string) $row['raw_payload'], true );
+			if ( is_array( $raw ) && ! empty( $raw['tasks'] ) && is_array( $raw['tasks'] ) ) {
+				foreach ( $raw['tasks'] as $task_raw ) {
+					$task = MAC_Tracker_Normalizer::task( $task_raw );
+					if ( $task && (int) $task['id'] === (int) $row['wpm_action_task_id'] ) {
+						$when = MAC_Tracker_Time::normalize_utc( $task['due_at'] ?: $task['completed_at'] );
+						$rank = (int) strtotime( $when ?: '1970-01-01 00:00:00' ) * 1000000 + (int) $task['id'];
+						break;
+					}
+				}
+			}
+			if ( ! isset( $keepers[ $project_id ] ) || $rank > $keepers[ $project_id ]['rank'] ) {
+				if ( isset( $keepers[ $project_id ] ) ) { $ids[] = (int) $keepers[ $project_id ]['id']; }
+				$keepers[ $project_id ] = array( 'id' => (int) $row['id'], 'rank' => $rank );
+			} else {
+				$ids[] = (int) $row['id'];
+			}
+		}
+		if ( empty( $ids ) ) { return 0; }
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$this->wpdb->query( $this->wpdb->prepare( "DELETE FROM {$this->colors} WHERE project_id IN ({$placeholders})", $ids ) );
+		$this->wpdb->query( $this->wpdb->prepare( "DELETE FROM {$this->projects} WHERE id IN ({$placeholders})", $ids ) );
+		return count( $ids );
+	}
+
 	/** Remove only local tracker records. Connection settings are intentionally retained. */
 	public function clear_local_data() {
 		$tables = array( $this->colors, $this->projects, $this->pins, $this->logs );

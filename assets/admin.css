@@ -130,7 +130,7 @@
 .mac-tracker-sync-strip strong { color: #FFFFFF; font-size: var(--text-sm); font-weight: 700; }
 .mac-tracker-sync-strip span { margin-top: var(--space-1); color: #E8DCC8; font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.45; }
 
-.mac-tracker-wrap .notice {
+.mac-tracker-notice {
 	margin: 0;
 	border: 1px solid #D2C0A7;
 	border-left: 4px solid var(--primary);
@@ -138,9 +138,8 @@
 	box-shadow: none;
 	font-family: var(--font-ui);
 }
-.mac-tracker-notice-slot { position: relative; z-index: 1; margin-top: var(--space-3); }
-.mac-tracker-notice-slot:empty { display: none; }
-.mac-tracker-wrap .notice-error { border-color: #E4C3BD; border-left-color: var(--danger); }
+.mac-tracker-notice p { margin: var(--space-3); }
+.mac-tracker-notice--error { border-color: #E4C3BD; border-left-color: var(--danger); }
 
 .mac-tracker-overview {
 	display: grid;

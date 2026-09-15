@@ -127,9 +127,9 @@ class MAC_Tracker_Sync_Service {
 					continue;
 				}
 				++$scanned;
-				// CSV is the historical baseline. Outside it, include only projects
-				// created from 01 Apr 2026 onward; sync_project then creates rows only
-				// for their done Action Design task(s).
+				// CSV is the historical baseline. Outside it, include projects created
+				// from 01 Apr 2026 onward. sync_project applies the definitive task
+				// date scope before creating an Action Design snapshot.
 				$created_at = MAC_Tracker_Time::normalize_utc( $project['created_at'] );
 				if ( ! isset( $roster[ $project['id'] ] ) && ( 'compare' === $mode || ! $created_at || $created_at < MAC_TRACKER_PROJECT_SYNC_START ) ) {
 					continue;
@@ -197,11 +197,19 @@ class MAC_Tracker_Sync_Service {
 		);
 
 		// Action Design is the authoritative WPM source. CSV pins are the
-		// historical fallback; direct Domain rows are never created.
+		// historical fallback; direct Domain rows are never created. One project
+		// contributes one current Action Design snapshot: its newest done task.
+		$latest_task = null;
 		foreach ( $project['tasks'] as $task ) {
-			if ( ! $task['is_action_design'] || ! $this->task_is_done( $task['status'] ) ) {
+			if ( ! $task['is_action_design'] || ! $this->task_is_done( $task['status'] ) || ! $this->task_is_in_scope( $task ) ) {
 				continue;
 			}
+			if ( null === $latest_task || $this->task_sort_value( $task ) > $this->task_sort_value( $latest_task ) ) {
+				$latest_task = $task;
+			}
+		}
+		if ( $latest_task ) {
+			$task = $latest_task;
 			++$eligible;
 			$action_snapshot = $this->repository->upsert_snapshot(
 				array_merge( $base, array(
@@ -301,6 +309,15 @@ class MAC_Tracker_Sync_Service {
 	/** Existing snapshots remain after status changes; new ones require done now. */
 	private function task_is_done( $status ) {
 		return in_array( strtolower( trim( (string) $status ) ), array( 'done', 'complete', 'completed' ), true );
+	}
+	/** Action Design snapshots begin at 01 Apr 2026, by Due Date. */
+	private function task_is_in_scope( array $task ) {
+		$when = MAC_Tracker_Time::normalize_utc( $task['due_at'] ?: $task['completed_at'] );
+		return '' !== (string) $when && $when >= MAC_TRACKER_PROJECT_SYNC_START;
+	}
+	private function task_sort_value( array $task ) {
+		$when = MAC_Tracker_Time::normalize_utc( $task['due_at'] ?: $task['completed_at'] );
+		return (int) strtotime( $when ?: '1970-01-01 00:00:00' ) * 1000000 + (int) $task['id'];
 	}
 	private function duration( $started ) { return 'duration=' . number_format( microtime( true ) - $started, 1 ) . 's'; }
 	private function with_duration( $message, $started ) { return $message . ', ' . $this->duration( $started ); }

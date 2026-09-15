@@ -58,7 +58,7 @@ class MAC_Tracker_Admin {
 		</section>
 
 		<section class="mac-tracker-workbench">
-			<div class="mac-tracker-workbench__copy"><p class="mac-tracker-eyebrow">WPM → local cache</p><h2>Refresh without interrupting work</h2><p>Sync runs in the background. Existing projects remain available throughout the run.</p></div>
+			<div class="mac-tracker-workbench__copy"><p class="mac-tracker-eyebrow">WPM → local cache</p><h2>Refresh the cache</h2><p>Manual sync completes in this request; existing cached rows remain intact.</p></div>
 			<?php $this->sync_buttons(); ?>
 		</section>
 
@@ -190,16 +190,16 @@ class MAC_Tracker_Admin {
 
 	public function handle_queue_sync() {
 		$this->require_request( 'mac_tracker_queue_sync' );
-		$result = $this->sync->queue_background_sync( 'sync' );
+		$result = $this->sync->run_sync( 'sync' );
 		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker', $result->get_error_message(), 'error' ); }
-		$this->redirect( 'mac-project-tracker', 'Sync queued. Existing project rows stay available while it runs.', 'success' );
+		$this->redirect( 'mac-project-tracker', sprintf( 'Sync complete: %d Action Design task(s) processed; %d new snapshot(s) created.', (int) $result['processed'], (int) $result['created'] ), 'success' );
 	}
 
 	public function handle_compare_wpm() {
 		$this->require_request( 'mac_tracker_compare_wpm' );
-		$result = $this->sync->queue_background_sync( 'compare' );
+		$result = $this->sync->run_sync( 'compare' );
 		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker', $result->get_error_message(), 'error' ); }
-		$this->redirect( 'mac-project-tracker', 'Baseline comparison queued.', 'success' );
+		$this->redirect( 'mac-project-tracker', sprintf( 'Baseline comparison complete: %d Action Design task(s) processed.', (int) $result['processed'] ), 'success' );
 	}
 
 	public function handle_edit_project() {
@@ -266,7 +266,7 @@ class MAC_Tracker_Admin {
 		if ( empty( $_GET['mac_tracker_notice'] ) ) { return; }
 		$type = sanitize_key( $_GET['mac_tracker_notice_type'] ?? 'success' );
 		$type = in_array( $type, array( 'success', 'error' ), true ) ? $type : 'success';
-		echo '<div class="notice notice-' . esc_attr( $type ) . ' is-dismissible"><p>' . esc_html( wp_unslash( $_GET['mac_tracker_notice'] ) ) . '</p></div>';
+		echo '<div class="mac-tracker-notice mac-tracker-notice--' . esc_attr( $type ) . '" role="status"><p>' . esc_html( wp_unslash( $_GET['mac_tracker_notice'] ) ) . '</p></div>';
 	}
 
 	private function project_filters() {
