@@ -349,6 +349,11 @@
 .mac-tracker-table-shell { overflow: hidden; }
 .mac-tracker-table-scroll { overflow-x: auto; }
 .mac-tracker-project-table { min-width: 1010px; margin: 0; border: 0; border-collapse: separate; border-spacing: 0; box-shadow: none; }
+.mac-tracker-project-table th:nth-child(1) { width: 76px; }
+.mac-tracker-project-table th:nth-child(2) { width: 220px; }
+.mac-tracker-project-table th:nth-child(3) { width: 220px; }
+.mac-tracker-project-table th:nth-child(4) { width: 170px; }
+.mac-tracker-project-table th:nth-child(5) { width: 120px; }
 .mac-tracker-project-table thead th { padding: 0; background: #F0E5D5; border-bottom: 1px solid var(--line); }
 .mac-tracker-project-table thead th a { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-4); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; letter-spacing: .05em; text-decoration: none; text-transform: uppercase; }
 .mac-tracker-project-table thead th a:hover,
@@ -362,6 +367,13 @@
 .mac-tracker-id strong { font-family: var(--font-mono); font-size: var(--text-xs); }
 .mac-tracker-id span { margin-top: var(--space-1); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); }
 .mac-tracker-project-name { font-size: var(--text-xs); line-height: 1.5; }
+.mac-tracker-confidence { display: inline-flex; margin-top: var(--space-1); padding: 2px 5px; color: #76531F; font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; background: var(--warning-soft); border-radius: 3px; }
+.mac-tracker-edit-link { display: block; margin-top: var(--space-1); color: var(--primary); font-size: var(--text-2xs); }
+.mac-tracker-sync-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.mac-tracker-sync-actions form { margin: 0; }
+.mac-tracker-edit-row td { padding: var(--space-3) var(--space-4) !important; background: var(--warning-soft); }
+.mac-tracker-edit-row form { display: grid; grid-template-columns: 130px minmax(260px, 1fr) auto auto; gap: var(--space-2); align-items: end; }
+.mac-tracker-edit-row label { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; }
 .mac-tracker-col--date { width: 92px; }
 .mac-tracker-col--time { width: 64px; }
 .mac-tracker-date { padding-right: var(--space-2) !important; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); letter-spacing: -.02em; white-space: nowrap; }

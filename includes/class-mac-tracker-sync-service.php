@@ -31,7 +31,7 @@ class MAC_Tracker_Sync_Service {
 	}
 
 	/** Queue a manual run and return immediately to the admin page. */
-	public function queue_background_sync() {
+	public function queue_background_sync( $mode = 'sync' ) {
 		if ( ! $this->is_configured() ) {
 			return new WP_Error( 'mac_tracker_wpm_unconfigured', 'Save the HTTPS WPM endpoint and API header value before syncing.' );
 		}
@@ -47,6 +47,7 @@ class MAC_Tracker_Sync_Service {
 			}
 		}
 		update_option( 'mac_tracker_sync_queued_at', MAC_Tracker_Time::now_utc(), false );
+		update_option( 'mac_tracker_sync_mode', 'compare' === $mode ? 'compare' : 'sync', false );
 		if ( function_exists( 'spawn_cron' ) ) {
 			spawn_cron();
 		}
@@ -60,7 +61,9 @@ class MAC_Tracker_Sync_Service {
 	}
 
 	public function run_manual() {
-		$this->run_sync();
+		$mode = (string) get_option( 'mac_tracker_sync_mode', 'sync' );
+		delete_option( 'mac_tracker_sync_mode' );
+		$this->run_sync( $mode );
 	}
 
 	public function is_running() {
@@ -85,7 +88,7 @@ class MAC_Tracker_Sync_Service {
 	 * Full sync runs in cron, never in the Projects request. It preserves prior
 	 * snapshots and records a short audit log instead of exposing credentials.
 	 */
-	public function run_sync() {
+	public function run_sync( $mode = 'sync' ) {
 		if ( ! $this->acquire_lock() ) {
 			return new WP_Error( 'mac_tracker_sync_running', 'Another sync is already running.' );
 		}
@@ -127,7 +130,7 @@ class MAC_Tracker_Sync_Service {
 				// Keep the imported baseline fixed. A new project joins only when it
 				// was created after the latest CSV pin date and has a done action.
 				$created_at = MAC_Tracker_Time::normalize_utc( $project['created_at'] );
-				if ( ! isset( $roster[ $project['id'] ] ) && ( '' === $roster_cutoff || ! $created_at || $created_at <= $roster_cutoff ) ) {
+				if ( ! isset( $roster[ $project['id'] ] ) && ( 'compare' === $mode || '' === $roster_cutoff || ! $created_at || $created_at <= $roster_cutoff ) ) {
 					continue;
 				}
 				$seen[ $project['id'] ] = true;

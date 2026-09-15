@@ -19,6 +19,8 @@ class MAC_Tracker_Admin {
 		add_action( 'admin_post_mac_tracker_save_settings', array( $this, 'handle_save_settings' ) );
 		add_action( 'admin_post_mac_tracker_test_connection', array( $this, 'handle_test_connection' ) );
 		add_action( 'admin_post_mac_tracker_queue_sync', array( $this, 'handle_queue_sync' ) );
+		add_action( 'admin_post_mac_tracker_compare_wpm', array( $this, 'handle_compare_wpm' ) );
+		add_action( 'admin_post_mac_tracker_edit_project', array( $this, 'handle_edit_project' ) );
 		add_action( 'admin_post_mac_tracker_import_pins', array( $this, 'handle_import_pins' ) );
 		add_action( 'admin_post_mac_tracker_clear_data', array( $this, 'handle_clear_data' ) );
 	}
@@ -56,7 +58,7 @@ class MAC_Tracker_Admin {
 
 		<section class="mac-tracker-workbench">
 			<div class="mac-tracker-workbench__copy"><p class="mac-tracker-eyebrow">WPM → local cache</p><h2>Refresh without interrupting work</h2><p>Sync runs in the background. Existing projects remain available throughout the run.</p></div>
-			<?php $this->sync_button(); ?>
+			<?php $this->sync_buttons(); ?>
 		</section>
 
 		<section class="mac-tracker-ledger">
@@ -82,7 +84,7 @@ class MAC_Tracker_Admin {
 		?>
 		<section class="mac-tracker-project-intro">
 			<div><p class="mac-tracker-eyebrow">Local cache</p><h2><?php echo esc_html( number_format_i18n( $page['total'] ) ); ?> snapshot<?php echo 1 === (int) $page['total'] ? '' : 's'; ?></h2><p>Showing <?php echo 0 === (int) $page['per_page'] ? 'all cached rows' : 'one page of cached rows'; ?>. Syncing never adds rows one at a time in this screen.</p></div>
-			<?php $this->sync_button(); ?>
+			<?php $this->sync_buttons(); ?>
 		</section>
 
 		<form class="mac-tracker-filters" method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
@@ -107,7 +109,7 @@ class MAC_Tracker_Admin {
 					<?php foreach ( $page['rows'] as $row ) : ?>
 						<tr>
 							<td class="mac-tracker-id"><strong>#<?php echo esc_html( $row['wpm_project_id'] ); ?></strong><span><?php echo esc_html( $this->record_hint( $row ) ); ?></span></td>
-							<td><strong class="mac-tracker-project-name"><?php echo esc_html( $this->project_label( $row ) ); ?></strong></td>
+			<td><strong class="mac-tracker-project-name"><?php echo esc_html( $this->project_label( $row ) ); ?></strong><?php $this->confidence_badge( $row ); ?><a class="mac-tracker-edit-link" href="<?php echo esc_url( add_query_arg( array( 'page' => 'mac-project-tracker-projects', 'edit_snapshot' => (int) $row['id'] ), admin_url( 'admin.php' ) ) ); ?>">Edit</a></td>
 							<td><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></td>
 							<td><?php $this->url_link( $this->layout_url( $row['layout_url'] ), $this->layout_label( $row['layout_url'] ) ); ?></td>
 							<td><?php echo esc_html( $this->person_name( $row['assignee_json'] ) ?: '—' ); ?></td>
@@ -115,6 +117,7 @@ class MAC_Tracker_Admin {
 							<td class="mac-tracker-date mac-tracker-date--time"><?php echo esc_html( MAC_Tracker_Time::bangkok_time( $row['task_completed_at'] ) ); ?></td>
 							<td><span class="mac-tracker-status mac-tracker-status--muted">Color later</span></td>
 						</tr>
+						<?php if ( isset( $_GET['edit_snapshot'] ) && (int) $_GET['edit_snapshot'] === (int) $row['id'] ) : ?><tr class="mac-tracker-edit-row"><td colspan="8"><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_edit_project' ); ?><input type="hidden" name="action" value="mac_tracker_edit_project"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><label>Project ID<input type="number" min="1" name="project_id" value="<?php echo (int) $row['wpm_project_id']; ?>" required></label><label>Project name<input type="text" name="project_name" value="<?php echo esc_attr( $row['name'] ); ?>" required></label><button class="button button-primary" type="submit">Save project</button><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-projects' ) ); ?>">Cancel</a></form></td></tr><?php endif; ?>
 					<?php endforeach; ?>
 				</tbody></table></div>
 				<?php $this->pagination( $page, $filters ); ?>
@@ -181,9 +184,23 @@ class MAC_Tracker_Admin {
 
 	public function handle_queue_sync() {
 		$this->require_request( 'mac_tracker_queue_sync' );
-		$result = $this->sync->queue_background_sync();
+		$result = $this->sync->queue_background_sync( 'sync' );
 		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker', $result->get_error_message(), 'error' ); }
 		$this->redirect( 'mac-project-tracker', 'Sync queued. Existing project rows stay available while it runs.', 'success' );
+	}
+
+	public function handle_compare_wpm() {
+		$this->require_request( 'mac_tracker_compare_wpm' );
+		$result = $this->sync->queue_background_sync( 'compare' );
+		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker', $result->get_error_message(), 'error' ); }
+		$this->redirect( 'mac-project-tracker', 'Baseline comparison queued.', 'success' );
+	}
+
+	public function handle_edit_project() {
+		$this->require_request( 'mac_tracker_edit_project' );
+		$result = $this->repository->edit_project_identity( $_POST['snapshot_id'] ?? 0, $_POST['project_id'] ?? 0, wp_unslash( $_POST['project_name'] ?? '' ) );
+		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker-projects', $result->get_error_message(), 'error' ); }
+		$this->redirect( 'mac-project-tracker-projects', 'Project ID and name updated.', 'success' );
 	}
 
 	public function handle_import_pins() {
@@ -225,9 +242,9 @@ class MAC_Tracker_Admin {
 
 	private function page_end() { echo '</div>'; }
 
-	private function sync_button() {
+	private function sync_buttons() {
 		?>
-		<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="mac-tracker-sync-form"><?php wp_nonce_field( 'mac_tracker_queue_sync' ); ?><input type="hidden" name="action" value="mac_tracker_queue_sync"><button class="button button-primary" type="submit" <?php disabled( $this->sync->is_running() || $this->sync->is_queued() ); ?>><span class="dashicons dashicons-update"></span><?php echo esc_html( $this->sync->is_running() ? 'Comparing…' : ( $this->sync->is_queued() ? 'Queued' : 'Compare WPM & sync' ) ); ?></button></form>
+		<div class="mac-tracker-sync-actions"><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_compare_wpm' ); ?><input type="hidden" name="action" value="mac_tracker_compare_wpm"><button class="button" type="submit" <?php disabled( $this->sync->is_running() || $this->sync->is_queued() ); ?>>Compare baseline</button></form><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_queue_sync' ); ?><input type="hidden" name="action" value="mac_tracker_queue_sync"><button class="button button-primary" type="submit" <?php disabled( $this->sync->is_running() || $this->sync->is_queued() ); ?>><span class="dashicons dashicons-update"></span><?php echo esc_html( $this->sync->is_running() ? 'Syncing…' : ( $this->sync->is_queued() ? 'Queued' : 'Sync new changes' ) ); ?></button></form></div>
 		<?php
 	}
 
@@ -253,7 +270,7 @@ class MAC_Tracker_Admin {
 			'website'  => isset( $get['website'] ) ? sanitize_key( $get['website'] ) : '',
 			'layout'   => isset( $get['layout'] ) ? sanitize_key( $get['layout'] ) : '',
 			'per_page' => isset( $get['per_page'] ) ? absint( $get['per_page'] ) : 0,
-			'orderby'  => isset( $get['orderby'] ) ? sanitize_key( $get['orderby'] ) : 'id',
+			'orderby'  => isset( $get['orderby'] ) ? sanitize_key( $get['orderby'] ) : 'date',
 			'order'    => isset( $get['order'] ) ? sanitize_key( $get['order'] ) : 'desc',
 			'paged'    => isset( $get['paged'] ) ? absint( $get['paged'] ) : 1,
 		);
@@ -278,6 +295,13 @@ class MAC_Tracker_Admin {
 	private function record_hint( array $row ) {
 		if ( 'action_design' === $row['record_kind'] ) { return 'Task #' . (int) $row['wpm_action_task_id']; }
 		return 'CSV pin';
+	}
+
+	private function confidence_badge( array $row ) {
+		$raw = json_decode( (string) ( $row['raw_payload'] ?? '' ), true );
+		$confidence = is_array( $raw ) ? sanitize_key( $raw['match_confidence'] ?? 'exact' ) : 'exact';
+		if ( 'exact' === $confidence ) { return; }
+		echo '<span class="mac-tracker-confidence">' . esc_html( str_replace( '_', ' ', $confidence ) ) . '</span>';
 	}
 
 	private function project_label( array $row ) {
