@@ -241,6 +241,22 @@ class MAC_Tracker_Repository {
 		return true;
 	}
 
+	/** Repair legacy CSV timestamps after the date parser was made unambiguous. */
+	public function repair_csv_pin_datetimes() {
+		$rows = (array) $this->wpdb->get_results( "SELECT id, wpm_project_id, raw_payload FROM {$this->projects} WHERE record_kind = 'csv_pin' AND task_completed_at IS NULL", ARRAY_A );
+		$fixed = 0;
+		foreach ( $rows as $row ) {
+			$raw = json_decode( (string) $row['raw_payload'], true );
+			if ( ! is_array( $raw ) ) { continue; }
+			$timestamp = MAC_Tracker_Time::csv_bangkok_to_utc( $raw['date'] ?? $raw['done_date'] ?? '', $raw['time'] ?? '' );
+			if ( ! $timestamp ) { continue; }
+			$this->wpdb->update( $this->projects, array( 'task_completed_at' => $timestamp, 'updated_at' => MAC_Tracker_Time::now_utc() ), array( 'id' => (int) $row['id'] ) );
+			$this->wpdb->update( $this->pins, array( 'task_completed_at' => $timestamp, 'updated_at' => MAC_Tracker_Time::now_utc() ), array( 'wpm_project_id' => (int) $row['wpm_project_id'] ) );
+			++$fixed;
+		}
+		return $fixed;
+	}
+
 	/** Remove only local tracker records. Connection settings are intentionally retained. */
 	public function clear_local_data() {
 		$tables = array( $this->colors, $this->projects, $this->pins, $this->logs );

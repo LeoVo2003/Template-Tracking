@@ -105,6 +105,9 @@ class MAC_Tracker_Activator {
 		// Early releases used an ENUM here. dbDelta does not reliably widen an
 		// existing ENUM, which silently rejects the later action_design value.
 		$wpdb->query( "ALTER TABLE {$projects} MODIFY record_kind varchar(32) NOT NULL" );
+		if ( version_compare( $previous_version, '0.8.7', '<' ) ) {
+			( new MAC_Tracker_Repository() )->repair_csv_pin_datetimes();
+		}
 		// Domain was a retired pre-0.7.2 record kind, never a valid snapshot.
 		// This one-time migration preserves CSV pins and Action Design rows.
 		if ( version_compare( $previous_version, '0.7.6', '<' ) ) {

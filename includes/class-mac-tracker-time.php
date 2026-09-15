@@ -54,12 +54,23 @@ class MAC_Tracker_Time {
 
 	public static function csv_bangkok_to_utc( $date, $time ) {
 		$date = trim( (string) $date );
+		$time = trim( (string) $time );
+		if ( '' === $date ) { return null; }
+		// The cleaned master roster uses dd/mm/yyyy while the original legacy
+		// rows use m/d without a year. Parse each shape explicitly; DateTime's
+		// locale guessing was turning many valid July/August dates into blanks.
+		if ( preg_match( '/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/', $date ) ) {
+			$local = DateTime::createFromFormat( '!d/m/Y H:i', $date . ' ' . ( '' === $time ? '00:00' : $time ), new DateTimeZone( 'Asia/Bangkok' ) );
+			if ( $local instanceof DateTime ) { $local->setTimezone( new DateTimeZone( 'UTC' ) ); return $local->format( 'Y-m-d H:i:s' ); }
+		}
 		// The legacy pin CSV stores dates like 4/1. Resolve those against the
 		// current Bangkok year instead of allowing PHP to guess a timezone/year.
 		if ( preg_match( '/^\d{1,2}[\/-]\d{1,2}$/', $date ) ) {
 			$date .= '/' . gmdate( 'Y' );
+			$local = DateTime::createFromFormat( '!m/d/Y H:i', $date . ' ' . ( '' === $time ? '00:00' : $time ), new DateTimeZone( 'Asia/Bangkok' ) );
+			if ( $local instanceof DateTime ) { $local->setTimezone( new DateTimeZone( 'UTC' ) ); return $local->format( 'Y-m-d H:i:s' ); }
 		}
-		$value = trim( $date . ' ' . (string) $time );
+		$value = trim( $date . ' ' . $time );
 		if ( '' === trim( $value ) ) { return null; }
 		try {
 			$local = new DateTime( $value, new DateTimeZone( 'Asia/Bangkok' ) );

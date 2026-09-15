@@ -343,8 +343,13 @@
 .mac-tracker-table-shell { overflow: hidden; }
 .mac-tracker-table-scroll { overflow-x: auto; }
 .mac-tracker-table-scroll { overflow-x: auto; }
-.mac-tracker-project-table { min-width: 1380px; margin: 0; border: 0; border-collapse: separate; border-spacing: 0; table-layout: auto; box-shadow: none; }
-.mac-tracker-project-table th:nth-child(1) { width: 90px; }.mac-tracker-project-table th:nth-child(2) { min-width: 240px; }.mac-tracker-project-table th:nth-child(3) { min-width: 220px; }.mac-tracker-project-table th:nth-child(4) { min-width: 190px; }.mac-tracker-project-table th:nth-child(5) { min-width: 135px; }.mac-tracker-project-table th:nth-child(6) { width: 104px; }.mac-tracker-project-table th:nth-child(7) { width: 76px; }.mac-tracker-project-table th:nth-child(8) { min-width: 125px; }
+.mac-tracker-project-table { min-width: 1430px; margin: 0; border: 0; border-collapse: separate; border-spacing: 0; table-layout: auto; box-shadow: none; }
+.mac-tracker-project-table th:nth-child(1) { width: 48px; }.mac-tracker-project-table th:nth-child(2) { width: 90px; }.mac-tracker-project-table th:nth-child(3) { min-width: 240px; }.mac-tracker-project-table th:nth-child(4) { min-width: 220px; }.mac-tracker-project-table th:nth-child(5) { min-width: 190px; }.mac-tracker-project-table th:nth-child(6) { min-width: 135px; }.mac-tracker-project-table th:nth-child(7) { width: 104px; }.mac-tracker-project-table th:nth-child(8) { width: 76px; }.mac-tracker-project-table th:nth-child(9) { min-width: 125px; }
+.mac-tracker-col--index,
+.mac-tracker-row-index { position: sticky; left: 0; z-index: 2; width: 48px; min-width: 48px; text-align: center; }
+.mac-tracker-project-table thead .mac-tracker-col--index { z-index: 4; padding: var(--space-3) var(--space-2); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; background: #F0E5D5; }
+.mac-tracker-row-index { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); background: var(--surface); border-right: 1px solid var(--line); }
+.mac-tracker-project-table tbody tr:hover .mac-tracker-row-index { background: #FBF5EA; }
 .mac-tracker-project-table thead th { padding: 0; background: #F0E5D5; border-bottom: 1px solid var(--line); }
 .mac-tracker-project-table thead th a { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-3) var(--space-4); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; letter-spacing: .05em; text-decoration: none; text-transform: uppercase; }
 .mac-tracker-project-table thead th a:hover,
