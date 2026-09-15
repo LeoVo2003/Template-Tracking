@@ -218,6 +218,8 @@ class MAC_Tracker_Repository {
 	public function roster_ids() {
 		return array_values( array_unique( array_filter( array_map( 'absint', (array) get_option( 'mac_tracker_roster_ids', array() ) ) ) ) );
 	}
+	public function set_roster_cutoff( $utc ) { update_option( 'mac_tracker_roster_cutoff_utc', $utc, false ); }
+	public function roster_cutoff() { return (string) get_option( 'mac_tracker_roster_cutoff_utc', '' ); }
 
 	/** Remove only local tracker records. Connection settings are intentionally retained. */
 	public function clear_local_data() {
@@ -230,6 +232,7 @@ class MAC_Tracker_Repository {
 		delete_option( 'mac_tracker_backfill_cursor' );
 		delete_option( 'mac_tracker_sync_queued_at' );
 		delete_option( 'mac_tracker_roster_ids' );
+		delete_option( 'mac_tracker_roster_cutoff_utc' );
 		return true;
 	}
 

@@ -101,6 +101,7 @@ class MAC_Tracker_Normalizer {
 			'layout'          => self::url( $project['web_layout'] ?? $project['layout_url'] ?? '' ),
 			'status'          => self::text( $project['status'] ?? '' ),
 			'updated_at'      => self::text( $project['updated_at'] ?? '' ),
+			'created_at'      => self::text( $project['created_at'] ?? '' ),
 			'is_archived'     => ! empty( $project['is_archived'] ),
 			'tasks'           => $tasks,
 			'raw'             => $project,

@@ -100,7 +100,7 @@ class MAC_Tracker_Sync_Service {
 				return $error;
 			}
 			$roster = array_fill_keys( $roster_ids, true );
-			$roster_max_id = max( $roster_ids );
+			$roster_cutoff = $this->repository->roster_cutoff();
 			$client = $this->client_from_settings();
 			if ( is_wp_error( $client ) ) {
 				$this->repository->finish_sync_log( $log_id, 'failed', 0, $client->get_error_message() );
@@ -124,9 +124,10 @@ class MAC_Tracker_Sync_Service {
 					continue;
 				}
 				++$scanned;
-				// Keep the imported baseline fixed. New WPM projects may join only
-				// after the baseline's highest ID, and only through a done action.
-				if ( ! isset( $roster[ $project['id'] ] ) && $project['id'] <= $roster_max_id ) {
+				// Keep the imported baseline fixed. A new project joins only when it
+				// was created after the latest CSV pin date and has a done action.
+				$created_at = MAC_Tracker_Time::normalize_utc( $project['created_at'] );
+				if ( ! isset( $roster[ $project['id'] ] ) && ( '' === $roster_cutoff || ! $created_at || $created_at <= $roster_cutoff ) ) {
 					continue;
 				}
 				$seen[ $project['id'] ] = true;
