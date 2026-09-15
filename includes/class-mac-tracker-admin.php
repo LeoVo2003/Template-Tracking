@@ -135,7 +135,7 @@ class MAC_Tracker_Admin {
 		$this->page_start( 'Pin baseline', 'Import the approved manual project list. Pins remain if WPM later removes a project.', 'pins' );
 		$this->notices();
 		?>
-		<section class="mac-tracker-panel mac-tracker-panel--narrow"><div class="mac-tracker-panel__head"><div><p class="mac-tracker-eyebrow">Master roster import</p><h2><?php echo esc_html( number_format_i18n( $this->repository->pin_count() ) ); ?> saved pins</h2><p>Import the full hybrid CSV (466 rows). CSV pin rows are displayed immediately; Action Design rows only register the approved WPM scope and appear after WPM confirms them.</p></div></div>
+		<section class="mac-tracker-panel mac-tracker-panel--narrow"><div class="mac-tracker-panel__head"><div><p class="mac-tracker-eyebrow">Master roster import</p><h2><?php echo esc_html( number_format_i18n( $this->repository->pin_count() ) ); ?> saved CSV pins</h2><p>Import the authoritative hybrid CSV. CSV pin rows and WPM Action Design rows are both saved immediately; when the same project exists in both sources, its WPM Action Design snapshot wins.</p></div></div>
 		<form class="mac-tracker-upload" method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<?php wp_nonce_field( 'mac_tracker_import_pins' ); ?><input type="hidden" name="action" value="mac_tracker_import_pins"><label><span>CSV file</span><input type="file" name="pin_csv" accept=".csv,text/csv" required></label><button class="button button-primary" type="submit">Import pins</button>
 		</form></section>
@@ -219,7 +219,7 @@ class MAC_Tracker_Admin {
 		}
 		$result = ( new MAC_Tracker_Pin_Import( $this->repository ) )->import_file( $_FILES['pin_csv']['tmp_name'] );
 		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker-pins', $result->get_error_message(), 'error' ); }
-		$message = sprintf( 'Read %d CSV rows; saved %d unique pins and registered %d Action Design projects in a %d-project WPM scope.', (int) ( $result['rows_read'] ?? $result['imported'] ), (int) $result['imported'], (int) ( $result['registered'] ?? 0 ), (int) ( $result['roster'] ?? 0 ) );
+		$message = sprintf( 'Read %d CSV rows; saved %d CSV pins and %d WPM Action Design snapshots in a %d-project roster.', (int) ( $result['rows_read'] ?? $result['imported'] ), (int) $result['imported'], (int) ( $result['action_imported'] ?? $result['registered'] ?? 0 ), (int) ( $result['roster'] ?? 0 ) );
 		if ( ! empty( $result['duplicates'] ) ) {
 			$message .= sprintf( ' %d duplicate WPM project ID(s) were skipped.', (int) $result['duplicates'] );
 		}
