@@ -124,7 +124,7 @@ class MAC_Tracker_Normalizer {
 			return null;
 		}
 
-		$type = $task['task_type'] ?? $task['task_type_name'] ?? $task['type'] ?? null;
+		$type = $task['task_type'] ?? $task['task_type_name'] ?? $task['type'] ?? $task['title'] ?? $task['name'] ?? null;
 		if ( is_array( $type ) ) {
 			$type = $type['name'] ?? $type['title'] ?? '';
 		}
@@ -140,7 +140,7 @@ class MAC_Tracker_Normalizer {
 			'is_action_design' => self::ACTION_TASK_NAME === self::text( $type ),
 			'status'         => self::text( $task['status'] ?? '' ),
 			'completed_at'   => self::text( $task['completed_at'] ?? $task['completedAt'] ?? $task['completed_date'] ?? $task['done_at'] ?? $task['done_date'] ?? $task['doneDate'] ?? '' ),
-			'due_at'         => self::text( $task['due_date'] ?? $task['due_at'] ?? $task['dueDate'] ?? $task['due_datetime'] ?? $task['due'] ?? '' ),
+			'due_at'         => self::text( $task['due_date'] ?? $task['due_at'] ?? $task['dueDate'] ?? $task['due_datetime'] ?? $task['due'] ?? $task['end_date'] ?? $task['end_at'] ?? '' ),
 			'demo_url'       => self::url( $extra['web_demo_url'] ?? $task['web_demo_url'] ?? '' ),
 			'layout_url'     => self::url( $extra['web_layout'] ?? $task['web_layout'] ?? '' ),
 			'color_template' => self::text( $extra['color_template'] ?? $task['color_template'] ?? '' ),

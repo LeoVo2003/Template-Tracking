@@ -72,6 +72,7 @@ class MAC_Tracker_WPM_Client {
 
 		$page      = 1;
 		$items     = array();
+		$seen_ids  = array();
 		$raw_pages = array();
 		$total     = null;
 
@@ -86,7 +87,13 @@ class MAC_Tracker_WPM_Client {
 
 			$raw_pages[] = $response;
 			$page_items  = MAC_Tracker_Normalizer::response_items( $response );
-			$items       = array_merge( $items, $page_items );
+			foreach ( $page_items as $page_item ) {
+				$id = isset( $page_item['id'] ) ? (int) $page_item['id'] : 0;
+				// Some hosting proxies ignore a GET body and replay page one.
+				if ( $id > 0 && isset( $seen_ids[ $id ] ) ) { continue; }
+				if ( $id > 0 ) { $seen_ids[ $id ] = true; }
+				$items[] = $page_item;
+			}
 			$pagination  = MAC_Tracker_Normalizer::pagination( $response );
 			$total       = null !== $pagination['total'] ? $pagination['total'] : $total;
 
@@ -154,7 +161,10 @@ class MAC_Tracker_WPM_Client {
 
 	/** @return array|WP_Error */
 	private function request_page( array $payload ) {
-		return $this->request_url( $this->endpoint, $payload );
+		// WPM documents a JSON GET body. Repeat paging keys in the query string
+		// so WordPress hosting proxies cannot silently collapse every request to page 1.
+		$url = add_query_arg( array( 'page' => (int) ( $payload['page'] ?? 1 ), 'per_page' => (int) ( $payload['per_page'] ?? $this->per_page ) ), $this->endpoint );
+		return $this->request_url( $url, $payload );
 	}
 
 	/**

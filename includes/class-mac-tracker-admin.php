@@ -53,7 +53,7 @@ class MAC_Tracker_Admin {
 				<?php $this->stat_card( 'Snapshots', (int) ( $stats['snapshots'] ?? 0 ), 'dashicons-media-spreadsheet' ); ?>
 				<?php $this->stat_card( 'WPM projects', (int) ( $stats['projects'] ?? 0 ), 'dashicons-networking' ); ?>
 				<?php $this->stat_card( 'Action Design', (int) ( $stats['action_design'] ?? 0 ), 'dashicons-admin-tools' ); ?>
-				<?php $this->stat_card( 'Pinned baseline', $this->repository->pin_count(), 'dashicons-admin-links' ); ?>
+				<?php $this->stat_card( 'CSV rows read', (int) get_option( 'mac_tracker_roster_source_rows', $this->repository->pin_count() ), 'dashicons-admin-links' ); ?>
 			</div>
 		</section>
 
@@ -104,7 +104,7 @@ class MAC_Tracker_Admin {
 			<?php if ( empty( $page['rows'] ) ) : ?>
 				<div class="mac-tracker-empty"><span class="dashicons dashicons-archive"></span><strong>No project snapshots yet</strong><p>Import the pin baseline or save WPM Settings and run a background sync.</p></div>
 			<?php else : ?>
-				<div class="mac-tracker-table-scroll"><table class="widefat fixed striped mac-tracker-project-table"><thead><tr>
+				<div class="mac-tracker-table-scroll"><table class="widefat striped mac-tracker-project-table"><thead><tr>
 					<?php $this->sort_header( 'id', 'ID', $filters ); ?><?php $this->sort_header( 'project', 'Project', $filters ); ?><?php $this->sort_header( 'website', 'Website', $filters ); ?><?php $this->sort_header( 'layout', 'Layout', $filters ); ?><?php $this->sort_header( 'assignee', 'Assignee', $filters ); ?><?php $this->sort_header( 'date', 'Date', $filters, 'mac-tracker-col--date' ); ?><?php $this->sort_header( 'time', 'Time', $filters, 'mac-tracker-col--time' ); ?><?php $this->sort_header( 'palette', 'Palette', $filters ); ?>
 				</tr></thead><tbody>
 					<?php foreach ( $page['rows'] as $row ) : ?>
@@ -214,7 +214,10 @@ class MAC_Tracker_Admin {
 		}
 		$result = ( new MAC_Tracker_Pin_Import( $this->repository ) )->import_file( $_FILES['pin_csv']['tmp_name'] );
 		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker-pins', $result->get_error_message(), 'error' ); }
-		$message = sprintf( 'Imported %d CSV pins and registered %d Action Design projects in a %d-project WPM scope.', (int) $result['imported'], (int) ( $result['registered'] ?? 0 ), (int) ( $result['roster'] ?? 0 ) );
+		$message = sprintf( 'Read %d CSV rows; saved %d unique pins and registered %d Action Design projects in a %d-project WPM scope.', (int) ( $result['rows_read'] ?? $result['imported'] ), (int) $result['imported'], (int) ( $result['registered'] ?? 0 ), (int) ( $result['roster'] ?? 0 ) );
+		if ( ! empty( $result['duplicates'] ) ) {
+			$message .= sprintf( ' %d duplicate WPM project ID(s) were skipped.', (int) $result['duplicates'] );
+		}
 		if ( ! empty( $result['errors'] ) ) { $message .= ' ' . count( $result['errors'] ) . ' row(s) were skipped.'; }
 		$this->redirect( 'mac-project-tracker-pins', $message, 'success' );
 	}
@@ -236,8 +239,7 @@ class MAC_Tracker_Admin {
 		$latest = $this->repository->latest_log();
 		$state  = $this->sync->is_running() ? 'syncing' : ( $this->sync->is_queued() ? 'queued' : 'ready' );
 		?>
-		<div class="wrap mac-tracker-wrap mac-tracker-wrap--<?php echo esc_attr( sanitize_html_class( $screen ) ); ?>"><header class="mac-tracker-masthead"><div class="mac-tracker-masthead__mark" aria-hidden="true">M</div><div class="mac-tracker-masthead__title"><p class="mac-tracker-brand">MAC / PROJECT TRACKER</p><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><div class="mac-tracker-sync-strip mac-tracker-sync-strip--<?php echo esc_attr( $state ); ?>"><div class="mac-tracker-sync-route" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div><strong><?php echo esc_html( 'syncing' === $state ? 'Syncing cache' : ( 'queued' === $state ? 'Sync queued' : 'Cache ready' ) ); ?></strong><span><?php echo esc_html( $latest ? 'Last run ' . MAC_Tracker_Time::bangkok_label( $latest['started_at'] ) : 'No sync run yet' ); ?></span></div></div></header>
-		<?php $this->notices(); ?>
+		<div class="wrap mac-tracker-wrap mac-tracker-wrap--<?php echo esc_attr( sanitize_html_class( $screen ) ); ?>"><header class="mac-tracker-masthead"><div class="mac-tracker-masthead__mark" aria-hidden="true">M</div><div class="mac-tracker-masthead__title"><p class="mac-tracker-brand">MAC / PROJECT TRACKER</p><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><div class="mac-tracker-sync-strip mac-tracker-sync-strip--<?php echo esc_attr( $state ); ?>"><div><strong><?php echo esc_html( 'syncing' === $state ? 'Syncing cache' : ( 'queued' === $state ? 'Sync queued' : 'Cache ready' ) ); ?></strong><span><?php echo esc_html( $latest ? 'Last run ' . MAC_Tracker_Time::bangkok_label( $latest['started_at'] ) : 'No sync run yet' ); ?></span></div></div></header><div class="mac-tracker-notice-slot"><?php $this->notices(); ?></div>
 		<?php
 	}
 
@@ -314,7 +316,7 @@ class MAC_Tracker_Admin {
 
 	private function person_name( $json ) {
 		$person = json_decode( (string) $json, true );
-		return is_array( $person ) ? trim( (string) ( $person['name'] ?? '' ) ) : '';
+		return is_array( $person ) ? $this->repository->canonical_person_name( $person['name'] ?? '' ) : '';
 	}
 
 	private function website_label( $url ) {

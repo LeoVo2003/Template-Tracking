@@ -358,11 +358,19 @@ class MAC_Tracker_Repository {
 		$names = array();
 		foreach ( $raw as $value ) {
 			$person = json_decode( $value, true );
-			$name   = is_array( $person ) ? trim( (string) ( $person['name'] ?? '' ) ) : '';
+			$name   = is_array( $person ) ? $this->canonical_person_name( $person['name'] ?? '' ) : '';
 			if ( '' !== $name ) { $names[ strtolower( $name ) ] = $name; }
 		}
 		natcasesort( $names );
 		return array_values( $names );
+	}
+
+	/** Strip decorative emoji so one person has one filter option. */
+	public function canonical_person_name( $name ) {
+		$name = trim( (string) $name );
+		if ( '' === $name ) { return ''; }
+		$name = preg_replace( '/[\p{So}\p{Sk}\x{FE0F}\x{200D}]+/u', '', $name );
+		return trim( preg_replace( '/\s+/u', ' ', (string) $name ) );
 	}
 
 	/** Reserved for color phase; locked records ignore later sync changes. */

@@ -31,6 +31,9 @@ class MAC_Tracker_Pin_Import {
 		$headers = array_map( array( $this, 'normalize_header' ), $headers );
 
 		$imported = 0;
+		$rows_read = 0;
+		$duplicate_ids = array();
+		$seen_pin_ids = array();
 		$registered = 0;
 		$roster_ids = array();
 		$latest_pin_time = '';
@@ -38,6 +41,7 @@ class MAC_Tracker_Pin_Import {
 		$row_no   = 1;
 		while ( false !== ( $values = fgetcsv( $handle ) ) ) {
 			++$row_no;
+			++$rows_read;
 			$row = array();
 			foreach ( $headers as $index => $header ) {
 				if ( '' !== $header ) {
@@ -50,6 +54,11 @@ class MAC_Tracker_Pin_Import {
 				continue;
 			}
 			$roster_ids[] = $project_id;
+			if ( isset( $seen_pin_ids[ $project_id ] ) ) {
+				$duplicate_ids[ $project_id ] = true;
+				continue;
+			}
+			$seen_pin_ids[ $project_id ] = true;
 			$record_kind = sanitize_key( $row['record_kind'] ?? 'csv_pin' );
 			if ( 'action_design' === $record_kind ) {
 				// The row reserves this WPM project in the approved scope. Its real
@@ -96,7 +105,8 @@ class MAC_Tracker_Pin_Import {
 		fclose( $handle );
 		$this->repository->set_roster_ids( $roster_ids );
 		$this->repository->set_roster_cutoff( $latest_pin_time );
-		return array( 'imported' => $imported, 'registered' => $registered, 'roster' => count( array_unique( $roster_ids ) ), 'errors' => $errors );
+		update_option( 'mac_tracker_roster_source_rows', $rows_read, false );
+		return array( 'imported' => $imported, 'registered' => $registered, 'roster' => count( array_unique( $roster_ids ) ), 'rows_read' => $rows_read, 'duplicates' => count( $duplicate_ids ), 'errors' => $errors );
 	}
 
 	private function normalize_header( $value ) {
