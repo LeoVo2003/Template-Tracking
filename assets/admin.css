@@ -107,7 +107,9 @@
 
 /* Signal bars make the real cache state visible at a glance. */
 .mac-tracker-sync-strip {
-	display: flex;
+	display: grid;
+	grid-template-columns: 48px minmax(0, 1fr);
+	gap: var(--space-3);
 	align-items: center;
 	min-height: 58px;
 	padding: var(--space-3) var(--space-4);
@@ -115,6 +117,14 @@
 	border: 1px solid rgba(255, 255, 255, .14);
 	border-radius: 8px;
 }
+.mac-tracker-sync-route { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; align-items: end; height: 24px; }
+.mac-tracker-sync-route i { display: block; height: 7px; background: #7B876F; border-radius: 3px; }
+.mac-tracker-sync-route i:nth-child(2) { height: 12px; }
+.mac-tracker-sync-route i:nth-child(3) { height: 18px; }
+.mac-tracker-sync-route i:nth-child(4) { height: 24px; }
+.mac-tracker-sync-strip--ready .mac-tracker-sync-route i { background: #D8E0CB; }
+.mac-tracker-sync-strip--queued .mac-tracker-sync-route i:nth-child(-n+2) { background: #E2B16D; }
+.mac-tracker-sync-strip--syncing .mac-tracker-sync-route i { background: #BFCB9D; animation: mac-tracker-signal 900ms ease-in-out infinite alternate; }
 .mac-tracker-sync-strip strong,
 .mac-tracker-sync-strip span { display: block; }
 .mac-tracker-sync-strip strong { color: #FFFFFF; font-size: var(--text-sm); font-weight: 700; }
@@ -347,7 +357,9 @@
 .mac-tracker-id span { display: block; }
 .mac-tracker-id strong { font-family: var(--font-mono); font-size: var(--text-xs); }
 .mac-tracker-id span { margin-top: var(--space-1); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); }
-.mac-tracker-project-name { display: block; font-size: var(--text-xs); line-height: 1.5; }
+.mac-tracker-project-name { display: flex; align-items: flex-start; gap: var(--space-1); color: var(--text); font-size: var(--text-xs); font-weight: 700; line-height: 1.5; text-decoration: none; }
+.mac-tracker-project-name:hover { color: var(--primary); text-decoration: underline; }
+.mac-tracker-project-name .dashicons { width: 13px; height: 13px; margin-top: 2px; font-size: 13px; flex: 0 0 auto; opacity: .65; }
 .mac-tracker-confidence { display: inline-flex; width: fit-content; margin: var(--space-2) 0 0; padding: 3px 6px; color: #76531F; font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; background: var(--warning-soft); border-radius: 3px; }
 .mac-tracker-edit-link { display: block; margin-top: var(--space-2); padding: 0; color: var(--primary); font: inherit; font-size: var(--text-2xs); background: none; border: 0; cursor: pointer; }
 .mac-tracker-sync-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }

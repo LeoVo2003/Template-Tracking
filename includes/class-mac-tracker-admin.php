@@ -110,7 +110,7 @@ class MAC_Tracker_Admin {
 					<?php foreach ( $page['rows'] as $row ) : ?>
 						<tr>
 							<td class="mac-tracker-id"><strong>#<?php echo esc_html( $row['wpm_project_id'] ); ?></strong><span><?php echo esc_html( $this->record_hint( $row ) ); ?></span></td>
-			<td><strong class="mac-tracker-project-name"><?php echo esc_html( $this->project_label( $row ) ); ?></strong><?php $this->confidence_badge( $row ); ?><button class="mac-tracker-edit-link" type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Edit</button></td>
+			<td><?php $this->project_link( $row ); ?><?php $this->confidence_badge( $row ); ?><button class="mac-tracker-edit-link" type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Edit</button></td>
 							<td><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></td>
 							<td><?php $this->url_link( $this->layout_url( $row['layout_url'] ), $this->layout_label( $row['layout_url'] ) ); ?></td>
 							<td><?php echo esc_html( $this->person_name( $row['assignee_json'] ) ?: '—' ); ?></td>
@@ -239,7 +239,7 @@ class MAC_Tracker_Admin {
 		$latest = $this->repository->latest_log();
 		$state  = $this->sync->is_running() ? 'syncing' : ( $this->sync->is_queued() ? 'queued' : 'ready' );
 		?>
-		<div class="wrap mac-tracker-wrap mac-tracker-wrap--<?php echo esc_attr( sanitize_html_class( $screen ) ); ?>"><header class="mac-tracker-masthead"><div class="mac-tracker-masthead__mark" aria-hidden="true">M</div><div class="mac-tracker-masthead__title"><p class="mac-tracker-brand">MAC / PROJECT TRACKER</p><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><div class="mac-tracker-sync-strip mac-tracker-sync-strip--<?php echo esc_attr( $state ); ?>"><div><strong><?php echo esc_html( 'syncing' === $state ? 'Syncing cache' : ( 'queued' === $state ? 'Sync queued' : 'Cache ready' ) ); ?></strong><span><?php echo esc_html( $latest ? 'Last run ' . MAC_Tracker_Time::bangkok_label( $latest['started_at'] ) : 'No sync run yet' ); ?></span></div></div></header><div class="mac-tracker-notice-slot"><?php $this->notices(); ?></div>
+		<div class="wrap mac-tracker-wrap mac-tracker-wrap--<?php echo esc_attr( sanitize_html_class( $screen ) ); ?>"><header class="mac-tracker-masthead"><div class="mac-tracker-masthead__mark" aria-hidden="true">M</div><div class="mac-tracker-masthead__title"><p class="mac-tracker-brand">MAC / PROJECT TRACKER</p><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><div class="mac-tracker-sync-strip mac-tracker-sync-strip--<?php echo esc_attr( $state ); ?>"><div class="mac-tracker-sync-route" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div><strong><?php echo esc_html( 'syncing' === $state ? 'Syncing cache' : ( 'queued' === $state ? 'Sync queued' : 'Cache ready' ) ); ?></strong><span><?php echo esc_html( $latest ? 'Last run ' . MAC_Tracker_Time::bangkok_label( $latest['started_at'] ) : 'No sync run yet' ); ?></span></div></div></header><div class="mac-tracker-notice-slot"><?php $this->notices(); ?></div>
 		<?php
 	}
 
@@ -314,6 +314,12 @@ class MAC_Tracker_Admin {
 		return implode( ' ', $parts ) ?: 'Unnamed project';
 	}
 
+	private function project_link( array $row ) {
+		$id  = (int) $row['wpm_project_id'];
+		$url = 'https://wpm.macusaone.com/projects/' . $id . '/edit';
+		echo '<a class="mac-tracker-project-name" href="' . esc_url( $url ) . '" target="_blank" rel="noopener noreferrer" title="Open project in WPM">' . esc_html( $this->project_label( $row ) ) . '<span class="dashicons dashicons-external"></span></a>';
+	}
+
 	private function person_name( $json ) {
 		$person = json_decode( (string) $json, true );
 		return is_array( $person ) ? $this->repository->canonical_person_name( $person['name'] ?? '' ) : '';
@@ -344,9 +350,11 @@ class MAC_Tracker_Admin {
 	private function layout_parts( $value ) {
 		$value = $this->first_url( $value );
 		$host = strtolower( (string) wp_parse_url( $value, PHP_URL_HOST ) );
+		$host = preg_replace( '/^www\./', '', $host );
 		if ( preg_match( '/^(demo-[a-z0-9]+)$/i', $host, $host_match ) ) { return array( 'demo' => strtolower( $host_match[1] ), 'home_number' => '' ); }
-		if ( '' === $value || ! preg_match( '#(?:^|/)(demo-[a-z0-9]+)/(home(?:-([0-9]+))?)(?:/|$)#i', $value, $match ) ) {
-			return null;
+		if ( '' === $value ) { return null; }
+		if ( ! preg_match( '#(?:^|/)(demo-[a-z0-9]+)/(home(?:-([0-9]+))?)(?:/|$)#i', $value, $match ) ) {
+			return preg_match( '/\b(demo-[a-z0-9]+)\b/i', $value, $host_match ) ? array( 'demo' => strtolower( $host_match[1] ), 'home_number' => '' ) : null;
 		}
 		$home_number = isset( $match[3] ) ? str_pad( (string) (int) $match[3], 2, '0', STR_PAD_LEFT ) : '';
 		// "home" and "home-01" mean the default Home 01 in the template library.

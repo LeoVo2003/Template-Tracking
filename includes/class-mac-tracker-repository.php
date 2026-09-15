@@ -229,7 +229,10 @@ class MAC_Tracker_Repository {
 		if ( ! $row || $new_project_id <= 0 || '' === $new_name ) { return new WP_Error( 'mac_tracker_edit_invalid', 'Valid project ID and name are required.' ); }
 		$old_project_id = (int) $row['wpm_project_id'];
 		$timestamp = MAC_Tracker_Time::csv_bangkok_to_utc( str_replace( 'T', ' ', (string) $date_time ), '' );
-		$data = array( 'wpm_project_id' => $new_project_id, 'name' => $new_name, 'updated_at' => MAC_Tracker_Time::now_utc() ); if ( $timestamp ) { $data['task_completed_at'] = $timestamp; }
+		$raw = $this->wpdb->get_var( $this->wpdb->prepare( "SELECT raw_payload FROM {$this->projects} WHERE id = %d", $snapshot_id ) );
+		$raw = json_decode( (string) $raw, true );
+		if ( is_array( $raw ) ) { unset( $raw['match_confidence'] ); }
+		$data = array( 'wpm_project_id' => $new_project_id, 'name' => $new_name, 'raw_payload' => $this->encode_json( is_array( $raw ) ? $raw : array() ), 'updated_at' => MAC_Tracker_Time::now_utc() ); if ( $timestamp ) { $data['task_completed_at'] = $timestamp; }
 		if ( false === $this->wpdb->update( $this->projects, $data, array( 'wpm_project_id' => $old_project_id ) ) ) { return new WP_Error( 'mac_tracker_edit_failed', $this->wpdb->last_error ?: 'Unable to update project snapshots.' ); }
 		$pin_data = array( 'wpm_project_id' => $new_project_id, 'projects_raw' => $new_name, 'updated_at' => MAC_Tracker_Time::now_utc() ); if ( $timestamp ) { $pin_data['task_completed_at'] = $timestamp; }
 		$this->wpdb->update( $this->pins, $pin_data, array( 'wpm_project_id' => $old_project_id ) );
@@ -251,6 +254,7 @@ class MAC_Tracker_Repository {
 		delete_option( 'mac_tracker_sync_mode' );
 		delete_option( 'mac_tracker_roster_ids' );
 		delete_option( 'mac_tracker_roster_cutoff_utc' );
+		delete_option( 'mac_tracker_roster_source_rows' );
 		return true;
 	}
 

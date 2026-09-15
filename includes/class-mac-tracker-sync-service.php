@@ -121,6 +121,7 @@ class MAC_Tracker_Sync_Service {
 			$processed = 0;
 			$created   = 0;
 			$errors    = 0;
+			$error_sample = '';
 			foreach ( $result['items'] as $raw_project ) {
 				$project = MAC_Tracker_Normalizer::project( $raw_project );
 				if ( ! $project ) {
@@ -137,6 +138,7 @@ class MAC_Tracker_Sync_Service {
 				$one = $this->sync_project( $project );
 				if ( is_wp_error( $one ) ) {
 					++$errors;
+					if ( '' === $error_sample ) { $error_sample = $one->get_error_message(); }
 					continue;
 				}
 				$processed += (int) $one['eligible'];
@@ -156,6 +158,7 @@ class MAC_Tracker_Sync_Service {
 				$errors,
 				$this->duration( $started )
 			);
+			if ( '' !== $error_sample ) { $message .= ', error_sample=' . $error_sample; }
 			$this->repository->finish_sync_log( $log_id, 'success', $processed, $message );
 
 			return array(
