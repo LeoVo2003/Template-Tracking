@@ -361,12 +361,14 @@
 .mac-tracker-id span { display: block; }
 .mac-tracker-id strong { font-family: var(--font-mono); font-size: var(--text-xs); }
 .mac-tracker-id span { margin-top: var(--space-1); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); }
-.mac-tracker-project-name { display: flex; align-items: flex-start; gap: var(--space-1); color: var(--text); font-size: var(--text-xs); font-weight: 700; line-height: 1.5; text-decoration: none; }
+.mac-tracker-project-name { display: inline-flex; align-items: flex-start; gap: var(--space-1); color: var(--text); font-size: var(--text-xs); font-weight: 700; line-height: 1.5; text-decoration: none; }
 .mac-tracker-project-name:hover { color: var(--primary); text-decoration: underline; }
 .mac-tracker-project-name .dashicons { width: 13px; height: 13px; margin-top: 2px; font-size: 13px; flex: 0 0 auto; opacity: .65; }
-.mac-tracker-confidence { display: inline-flex; width: fit-content; margin: var(--space-2) 0 0; padding: 3px 6px; color: #76531F; font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; background: var(--warning-soft); border-radius: 3px; }
-.mac-tracker-baseline-override { display: inline-flex; width: fit-content; margin: var(--space-2) 0 0 var(--space-2); padding: 3px 6px; color: var(--willow-deep); font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; background: var(--mist-light); border: 1px solid var(--line); border-radius: 3px; }
-.mac-tracker-edit-link { display: block; margin-top: var(--space-2); padding: 0; color: var(--primary); font: inherit; font-size: var(--text-2xs); background: none; border: 0; cursor: pointer; }
+.mac-tracker-confidence { display: inline-flex; width: fit-content; margin: 0 0 0 var(--space-1); padding: 2px 5px; color: #76531F; font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; background: var(--warning-soft); border-radius: 3px; vertical-align: middle; }
+.mac-tracker-baseline-override { display: inline-flex; width: fit-content; margin: 0 0 0 var(--space-1); padding: 2px 4px; color: var(--willow-deep); font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 1.2; letter-spacing: .02em; text-transform: uppercase; background: var(--mist-light); border: 1px solid var(--line); border-radius: 3px; vertical-align: middle; }
+.mac-tracker-edit-link { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin: 0 0 0 var(--space-1); padding: 0; color: var(--text-muted); background: none; border: 0; border-radius: 3px; cursor: pointer; opacity: .42; vertical-align: middle; }
+.mac-tracker-edit-link .dashicons { width: 14px; height: 14px; font-size: 14px; }
+.mac-tracker-project-table tbody tr:hover .mac-tracker-edit-link, .mac-tracker-edit-link:focus-visible { color: var(--primary); background: var(--mist); opacity: 1; }
 .mac-tracker-sync-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .mac-tracker-sync-actions form { margin: 0; }
 .mac-tracker-edit-row td { padding: var(--space-3) var(--space-4) !important; background: var(--warning-soft); }

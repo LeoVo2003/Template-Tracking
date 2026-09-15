@@ -113,7 +113,7 @@ class MAC_Tracker_Admin {
 						<tr>
 							<td class="mac-tracker-row-index"><?php echo esc_html( $row_number++ ); ?></td>
 							<td class="mac-tracker-id"><strong>#<?php echo esc_html( $row['wpm_project_id'] ); ?></strong><span><?php echo esc_html( $this->record_hint( $row ) ); ?></span></td>
-			<td><?php $this->project_link( $row ); ?><?php $this->confidence_badge( $row ); ?><?php $this->baseline_override_badge( $row ); ?><button class="mac-tracker-edit-link" type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Edit</button></td>
+			<td><?php $this->project_link( $row ); ?><?php $this->confidence_badge( $row ); ?><?php $this->baseline_override_badge( $row ); ?><button class="mac-tracker-edit-link" type="button" title="Edit project" aria-label="Edit project" data-edit-target="edit-<?php echo (int) $row['id']; ?>"><span class="dashicons dashicons-edit" aria-hidden="true"></span></button></td>
 							<td><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></td>
 							<td><?php $this->url_link( $this->layout_url( $row['layout_url'] ), $this->layout_label( $row['layout_url'] ) ); ?></td>
 							<td><?php echo esc_html( $this->person_name( $row['assignee_json'] ) ?: '—' ); ?></td>
@@ -323,7 +323,7 @@ class MAC_Tracker_Admin {
 
 	private function baseline_override_badge( array $row ) {
 		if ( 'action_design' !== $row['record_kind'] || 'baseline_compare' !== (string) ( $row['sync_source'] ?? '' ) ) { return; }
-		echo '<span class="mac-tracker-baseline-override">WPM overlay</span>';
+		echo '<span class="mac-tracker-baseline-override" title="WPM Action Design replaces the CSV display values">WPM</span>';
 	}
 
 	private function project_label( array $row ) {
