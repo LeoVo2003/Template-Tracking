@@ -105,6 +105,13 @@ class MAC_Tracker_Activator {
 		// Early releases used an ENUM here. dbDelta does not reliably widen an
 		// existing ENUM, which silently rejects the later action_design value.
 		$wpdb->query( "ALTER TABLE {$projects} MODIFY record_kind varchar(32) NOT NULL" );
+		// The pre-snapshot table also enforced one row per WPM project. The
+		// tracker now deliberately keeps a CSV baseline plus Action Design task
+		// snapshots, so remove only that obsolete unique index when present.
+		$legacy_unique = $wpdb->get_var( $wpdb->prepare( "SHOW INDEX FROM {$projects} WHERE Key_name = %s", 'wpm_project_id' ) );
+		if ( $legacy_unique ) {
+			$wpdb->query( "ALTER TABLE {$projects} DROP INDEX wpm_project_id" );
+		}
 		if ( version_compare( $previous_version, '0.8.7', '<' ) ) {
 			( new MAC_Tracker_Repository() )->repair_csv_pin_datetimes();
 		}
