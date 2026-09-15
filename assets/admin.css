@@ -233,6 +233,7 @@
 .mac-tracker-ledger__head { padding-bottom: var(--space-4); border-bottom: 1px solid var(--line); }
 .mac-tracker-ledger__head > span { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); }
 .mac-tracker-panel { max-width: 760px; margin-top: var(--space-5); padding: var(--space-5); }
+.mac-tracker-panel--wide { max-width: 980px; }
 .mac-tracker-panel__head { align-items: flex-start; margin-bottom: var(--space-5); }
 
 .mac-tracker-log-list { border-bottom: 1px solid var(--line); }
@@ -450,6 +451,8 @@
 .mac-tracker-settings-note { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-4); color: #394738; background: var(--primary-soft); border: 1px solid #D2C0A7; border-radius: 4px; font-size: var(--text-sm); }
 .mac-tracker-settings-note .dashicons { color: var(--primary); }
 .mac-tracker-settings-note p { margin: 0; line-height: 1.6; }
+.mac-tracker-setup-list { display: grid; gap: var(--space-2); margin: var(--space-4) 0; padding-left: 22px; color: var(--text); font-size: var(--text-sm); line-height: 1.6; }
+.mac-tracker-setup-list code { color: var(--willow-deep); font-family: var(--font-mono); font-size: var(--text-xs); }
 .mac-tracker-connection-check,
 .mac-tracker-cleanup-zone { max-width: 760px; margin-top: var(--space-5); padding: var(--space-5); }
 .mac-tracker-connection-check { background: var(--secondary-soft); border-color: #D5D8C5; }

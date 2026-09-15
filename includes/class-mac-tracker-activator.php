@@ -28,6 +28,7 @@ class MAC_Tracker_Activator {
 		$charset  = $wpdb->get_charset_collate();
 		$projects = $wpdb->prefix . 'mac_tracker_projects';
 		$colors   = $wpdb->prefix . 'mac_tracker_color_records';
+		$visuals  = $wpdb->prefix . 'mac_tracker_visual_reviews';
 		$pins     = $wpdb->prefix . 'mac_tracker_pinned_projects';
 		$logs     = $wpdb->prefix . 'mac_tracker_sync_logs';
 
@@ -72,6 +73,25 @@ class MAC_Tracker_Activator {
 				updated_at datetime NOT NULL,
 				PRIMARY KEY  (id),
 				UNIQUE KEY project_id (project_id)
+			) {$charset};",
+			"CREATE TABLE {$visuals} (
+				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+				project_id bigint(20) unsigned NOT NULL,
+				capture_status varchar(32) NOT NULL DEFAULT 'pending',
+				attachment_id bigint(20) unsigned NOT NULL DEFAULT 0,
+				screenshot_url varchar(2048) NOT NULL DEFAULT '',
+				tone varchar(64) NOT NULL DEFAULT '',
+				confidence varchar(16) NOT NULL DEFAULT '',
+				tone_reason text NULL,
+				tone_status varchar(32) NOT NULL DEFAULT 'pending',
+				ai_raw longtext NULL,
+				captured_at datetime NULL,
+				created_at datetime NOT NULL,
+				updated_at datetime NOT NULL,
+				PRIMARY KEY  (id),
+				UNIQUE KEY project_id (project_id),
+				KEY capture_status (capture_status),
+				KEY tone_status (tone_status)
 			) {$charset};",
 			"CREATE TABLE {$pins} (
 				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,

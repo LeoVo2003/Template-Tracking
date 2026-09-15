@@ -34,6 +34,19 @@ The public source repository is `https://github.com/LeoVo2003/Template-Tracking`
 
 Installations on `0.2.0` have no updater; installations on older `0.7.x` may not run the original Update URI hook. Both must be upgraded manually once to `0.7.5`. After that bootstrap, future releases show the normal WordPress **Update now** button.
 
+## Visual Tone automation
+
+The repository workflow **Capture visual tone** runs in GitHub Actions, not on the WordPress host or a local computer. It captures a homepage as a full-page JPEG, uploads the image directly to the site's Media Library, then asks Cloudflare Workers AI Llama Vision to classify one controlled tone label.
+
+Before the first run, save an **Automation shared secret** in MAC Tracker → Settings and add these GitHub repository Secrets:
+
+- `MAC_TRACKER_SITE_URL` — the site root, for example `https://quan.macmarketing.us`
+- `MAC_TRACKER_AUTOMATION_SECRET` — exactly the same shared secret saved in the plugin
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_API_TOKEN` — a token permitted to call Workers AI; accept the Meta Llama 3.2 Vision license in Cloudflare once before use
+
+The scheduled workflow works in bounded batches. If Workers AI reaches its daily quota, captured screenshots remain stored and tone classification resumes on a later run.
+
 ## Expected WPM response
 
 The plugin accepts a response with a `data` or `projects` array, or a raw JSON list. The preferred shape is:

@@ -8,6 +8,7 @@ class MAC_Tracker_Repository {
 	private $wpdb;
 	private $projects;
 	private $colors;
+	private $visuals;
 	private $pins;
 	private $logs;
 
@@ -16,6 +17,7 @@ class MAC_Tracker_Repository {
 		$this->wpdb     = $wpdb;
 		$this->projects = $wpdb->prefix . 'mac_tracker_projects';
 		$this->colors   = $wpdb->prefix . 'mac_tracker_color_records';
+		$this->visuals  = $wpdb->prefix . 'mac_tracker_visual_reviews';
 		$this->pins     = $wpdb->prefix . 'mac_tracker_pinned_projects';
 		$this->logs     = $wpdb->prefix . 'mac_tracker_sync_logs';
 	}
@@ -301,12 +303,14 @@ class MAC_Tracker_Repository {
 
 	/** Remove only local tracker records. Connection settings are intentionally retained. */
 	public function clear_local_data() {
-		$tables = array( $this->colors, $this->projects, $this->pins, $this->logs );
+		$attachments = array_map( 'intval', (array) $this->wpdb->get_col( "SELECT attachment_id FROM {$this->visuals} WHERE attachment_id > 0" ) );
+		$tables = array( $this->colors, $this->visuals, $this->projects, $this->pins, $this->logs );
 		foreach ( $tables as $table ) {
 			if ( false === $this->wpdb->query( "DELETE FROM {$table}" ) ) {
 				return new WP_Error( 'mac_tracker_clear_failed', $this->wpdb->last_error ?: 'Unable to clear local tracker data.' );
 			}
 		}
+		foreach ( $attachments as $attachment_id ) { wp_delete_attachment( $attachment_id, true ); }
 		delete_option( 'mac_tracker_backfill_cursor' );
 		delete_option( 'mac_tracker_sync_queued_at' );
 		delete_option( 'mac_tracker_sync_mode' );
@@ -514,6 +518,54 @@ class MAC_Tracker_Repository {
 	/** Reset only machine-generated candidates when the extractor rules change. */
 	public function purge_unapproved_color_records() {
 		return (int) $this->wpdb->query( "DELETE FROM {$this->colors} WHERE locked = 0" );
+	}
+
+	public function visual_stats() {
+		return (array) $this->wpdb->get_row( "SELECT COUNT(*) AS total, SUM(capture_status = 'captured') AS captured, SUM(tone_status = 'classified') AS classified, SUM(capture_status = 'failed' OR tone_status = 'failed') AS failed FROM {$this->visuals}", ARRAY_A );
+	}
+
+	/** Return only safe local queue data for the authenticated GitHub workflow. */
+	public function visual_queue( $stage, $limit = 10 ) {
+		$limit = max( 1, min( 25, absint( $limit ) ) );
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
+		if ( 'tone' === $stage ) {
+			$sql = "SELECT p.id, p.website_url, v.screenshot_url FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND v.capture_status = 'captured' AND v.tone_status = 'pending' AND v.screenshot_url <> '' ORDER BY v.updated_at ASC LIMIT %d";
+		} else {
+			$sql = "SELECT p.id, p.website_url, '' AS screenshot_url FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR v.capture_status = 'pending') ORDER BY p.task_completed_at DESC, p.id DESC LIMIT %d";
+		}
+		return (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
+	}
+
+	public function save_visual_capture( $snapshot_id, $attachment_id, $url ) {
+		return $this->save_visual( $snapshot_id, array( 'capture_status' => 'captured', 'attachment_id' => absint( $attachment_id ), 'screenshot_url' => esc_url_raw( $url ), 'tone_status' => 'pending', 'captured_at' => MAC_Tracker_Time::now_utc() ) );
+	}
+
+	public function save_visual_failure( $snapshot_id, $stage, $message ) {
+		$stage = 'tone' === $stage ? 'tone' : 'capture';
+		$data = 'tone' === $stage ? array( 'tone_status' => 'failed' ) : array( 'capture_status' => 'failed' );
+		$data['ai_raw'] = wp_json_encode( array( 'stage' => $stage, 'error' => sanitize_text_field( $message ) ) );
+		return $this->save_visual( $snapshot_id, $data );
+	}
+
+	public function save_visual_tone( $snapshot_id, $tone, $confidence, $reason, $raw = '' ) {
+		$allowed = array( 'Vàng đen', 'Đỏ hồng', 'Hồng trắng', 'Nâu kem', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Tím hồng', 'Cần duyệt' );
+		$tone = in_array( $tone, $allowed, true ) ? $tone : 'Cần duyệt';
+		$confidence = in_array( $confidence, array( 'high', 'medium', 'low' ), true ) ? $confidence : 'low';
+		return $this->save_visual( $snapshot_id, array( 'tone' => $tone, 'confidence' => $confidence, 'tone_reason' => sanitize_text_field( $reason ), 'tone_status' => 'classified', 'ai_raw' => (string) $raw ) );
+	}
+
+	private function save_visual( $snapshot_id, array $data ) {
+		$snapshot_id = absint( $snapshot_id );
+		if ( $snapshot_id <= 0 ) { return new WP_Error( 'mac_tracker_visual_invalid', 'Invalid snapshot.' ); }
+		if ( ! $this->snapshot( $snapshot_id ) ) { return new WP_Error( 'mac_tracker_visual_missing', 'Snapshot not found.' ); }
+		$existing = (int) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT id FROM {$this->visuals} WHERE project_id = %d", $snapshot_id ) );
+		$data['updated_at'] = MAC_Tracker_Time::now_utc();
+		if ( $existing ) {
+			return false === $this->wpdb->update( $this->visuals, $data, array( 'id' => $existing ) ) ? new WP_Error( 'mac_tracker_visual_save', $this->wpdb->last_error ?: 'Unable to save visual review.' ) : true;
+		}
+		$data['project_id'] = $snapshot_id;
+		$data['created_at'] = MAC_Tracker_Time::now_utc();
+		return false === $this->wpdb->insert( $this->visuals, $data ) ? new WP_Error( 'mac_tracker_visual_insert', $this->wpdb->last_error ?: 'Unable to save visual review.' ) : true;
 	}
 
 	/** Approval locks a reviewed palette so later extraction cannot overwrite it. */

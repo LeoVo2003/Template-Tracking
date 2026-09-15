@@ -35,6 +35,7 @@ class MAC_Tracker_Admin {
 		add_submenu_page( 'mac-project-tracker', 'Projects', 'Projects', 'manage_options', 'mac-project-tracker', array( $this, 'render_projects' ) );
 		add_submenu_page( 'mac-project-tracker', 'Control room', 'Control room', 'manage_options', 'mac-project-tracker-dashboard', array( $this, 'render_dashboard' ) );
 		add_submenu_page( 'mac-project-tracker', 'Color Review', 'Color Review', 'manage_options', 'mac-project-tracker-colors', array( $this, 'render_color_review' ) );
+		add_submenu_page( 'mac-project-tracker', 'Visual Tone', 'Visual Tone', 'manage_options', 'mac-project-tracker-visuals', array( $this, 'render_visuals' ) );
 		add_submenu_page( 'mac-project-tracker', 'Pin import', 'Pin import', 'manage_options', 'mac-project-tracker-pins', array( $this, 'render_pins' ) );
 		add_submenu_page( 'mac-project-tracker', 'Settings', 'Settings', 'manage_options', 'mac-project-tracker-settings', array( $this, 'render_settings' ) );
 	}
@@ -185,6 +186,16 @@ class MAC_Tracker_Admin {
 		<?php $this->page_end();
 	}
 
+	public function render_visuals() {
+		$this->require_capability();
+		$stats = $this->repository->visual_stats();
+		$this->page_start( 'Visual Tone', 'GitHub Actions captures each homepage in the cloud; Llama Vision classifies the stored screenshot, not the live website.', 'visuals' );
+		?>
+		<section class="mac-tracker-overview mac-tracker-visual-overview"><div class="mac-tracker-overview__lead"><p class="mac-tracker-eyebrow">Screenshot → AI tone</p><h2>Running without your computer</h2><p>The workflow takes a full-page JPEG, saves it to WordPress Media Library, then sends a smaller copy to Llama Vision for tone classification.</p></div><div class="mac-tracker-summary-grid"><?php $this->stat_card( 'Captured', (int) ( $stats['captured'] ?? 0 ), 'dashicons-format-image' ); ?><?php $this->stat_card( 'Tone classified', (int) ( $stats['classified'] ?? 0 ), 'dashicons-admin-appearance' ); ?><?php $this->stat_card( 'Needs retry', (int) ( $stats['failed'] ?? 0 ), 'dashicons-warning' ); ?></div></section>
+		<section class="mac-tracker-panel mac-tracker-panel--wide"><p class="mac-tracker-eyebrow">One-time setup</p><h2>Connect the GitHub workflow</h2><ol class="mac-tracker-setup-list"><li>Save an Automation shared secret in Settings.</li><li>Add the same value to GitHub Secret <code>MAC_TRACKER_AUTOMATION_SECRET</code>.</li><li>Add <code>MAC_TRACKER_SITE_URL</code>, <code>CLOUDFLARE_ACCOUNT_ID</code> and <code>CLOUDFLARE_API_TOKEN</code> as GitHub Secrets.</li><li>Run the <strong>Capture visual tone</strong> workflow. It repeats on schedule while there is work.</li></ol><p>The Llama Vision API token needs Cloudflare Workers AI permission. The screenshot and AI queues continue safely on the next scheduled run if a quota is reached.</p></section>
+		<?php $this->page_end();
+	}
+
 	public function render_settings() {
 		$this->require_capability();
 		$settings     = (array) get_option( 'mac_tracker_settings', array() );
@@ -196,6 +207,7 @@ class MAC_Tracker_Admin {
 			<?php wp_nonce_field( 'mac_tracker_save_settings' ); ?><input type="hidden" name="action" value="mac_tracker_save_settings">
 			<label><span>WPM endpoint</span><input type="url" name="wpm_endpoint" required placeholder="https://wpm.macusaone.com/api/v1/tracking-template/projects" value="<?php echo esc_attr( $settings['wpm_endpoint'] ?? '' ); ?>"><small>Use exactly <code>https://wpm.macusaone.com/api/v1/tracking-template/projects</code>. The list endpoint returns projects with tasks.</small></label>
 			<label><span>Tracking-Template-Header value</span><input type="password" name="wpm_secret" autocomplete="new-password" placeholder="<?php echo get_option( 'mac_tracker_wpm_secret', '' ) ? 'Saved — leave blank to keep it' : 'Paste API value'; ?>"><small>Leave blank when editing other settings to keep the saved value.</small></label>
+			<label><span>Automation shared secret</span><input type="password" name="visual_secret" autocomplete="new-password" placeholder="<?php echo get_option( 'mac_tracker_visual_secret', '' ) ? 'Saved — leave blank to keep it' : 'Paste a long random value'; ?>"><small>Use the exact same value for GitHub Secret <code>MAC_TRACKER_AUTOMATION_SECRET</code>. It protects the private screenshot queue and upload endpoint.</small></label>
 			<div class="mac-tracker-settings-note"><span class="dashicons dashicons-shield"></span><p>Credentials are encrypted at rest with this WordPress site's authentication salt. They are not rendered in this page or written to sync logs.</p></div>
 			<div class="mac-tracker-settings-actions"><button class="button button-primary" type="submit">Save connection</button></div>
 		</form></section>
@@ -216,6 +228,12 @@ class MAC_Tracker_Admin {
 			$encrypted = MAC_Tracker_Crypto::encrypt( $secret );
 			if ( is_wp_error( $encrypted ) ) { $this->redirect( 'mac-project-tracker-settings', $encrypted->get_error_message(), 'error' ); }
 			update_option( 'mac_tracker_wpm_secret', $encrypted, false );
+		}
+		$visual_secret = isset( $_POST['visual_secret'] ) ? trim( (string) wp_unslash( $_POST['visual_secret'] ) ) : '';
+		if ( '' !== $visual_secret ) {
+			$encrypted = MAC_Tracker_Crypto::encrypt( $visual_secret );
+			if ( is_wp_error( $encrypted ) ) { $this->redirect( 'mac-project-tracker-settings', $encrypted->get_error_message(), 'error' ); }
+			update_option( 'mac_tracker_visual_secret', $encrypted, false );
 		}
 		$this->sync->ensure_hourly_schedule();
 		$this->redirect( 'mac-project-tracker-settings', 'Connection saved. Background sync can now be queued.', 'success' );
