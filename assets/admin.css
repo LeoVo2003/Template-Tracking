@@ -136,7 +136,7 @@
 .mac-tracker-sync-strip span { margin-top: var(--space-1); color: #E8DCC8; font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.45; }
 
 .mac-tracker-notice {
-	margin: 0;
+	margin: var(--space-4) 0 0;
 	border: 1px solid #D2C0A7;
 	border-left: 4px solid var(--primary);
 	border-radius: 4px;
@@ -398,13 +398,16 @@
 .mac-tracker-palette-link span { margin-left: var(--space-1); }
 .mac-tracker-palette-link--empty { color: var(--text-muted); }
 
-.mac-tracker-color-intro { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); margin-top: var(--space-5); padding: var(--space-5); background: var(--mist-light); border: 1px solid var(--line); border-radius: 8px; }
+.mac-tracker-color-intro { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-5); margin-top: var(--space-5); padding: var(--space-5); background: var(--mist-light); border: 1px solid var(--line); border-radius: 8px; }
 .mac-tracker-color-intro h2 { margin: var(--space-2) 0 0; color: var(--text); font-size: var(--text-xl); letter-spacing: -.035em; }
 .mac-tracker-color-intro p:not(.mac-tracker-eyebrow) { max-width: 760px; margin: var(--space-2) 0 0; color: var(--text-muted); font-size: var(--text-sm); line-height: 1.65; }
 .mac-tracker-color-intro code { color: var(--willow-deep); font-family: var(--font-mono); font-size: var(--text-xs); }
 .mac-tracker-color-intro__count { display: grid; min-width: 136px; padding: var(--space-4); color: var(--willow-deep); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; text-align: right; }
 .mac-tracker-color-intro__count strong { font-size: var(--text-2xl); line-height: 1; letter-spacing: -.05em; }
 .mac-tracker-color-intro__count span { margin-top: var(--space-1); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); text-transform: uppercase; }
+.mac-tracker-color-extract-all { display: grid; gap: var(--space-2); justify-items: start; margin-left: auto; }
+.mac-tracker-color-extract-all small { max-width: 180px; color: var(--text-muted); font-size: var(--text-2xs); line-height: 1.45; }
+.mac-tracker-color-progress { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0 0; padding: var(--space-3) var(--space-4); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-xs); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
 .mac-tracker-color-review { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: var(--space-4); margin-top: var(--space-4); }
 .mac-tracker-color-card { display: grid; gap: var(--space-4); min-width: 0; padding: var(--space-4); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(71, 55, 37, .05); }
 .mac-tracker-color-card.is-approved { border-color: #B9D4C5; }

@@ -493,6 +493,24 @@ class MAC_Tracker_Repository {
 		return (array) $page['rows'];
 	}
 
+	/** IDs without a prior extraction; one batch is deliberately bounded. */
+	public function pending_color_snapshot_ids( $limit = 6 ) {
+		$limit = max( 1, min( 12, absint( $limit ) ) );
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
+		$sql = "SELECT p.id FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND c.id IS NULL ORDER BY p.task_completed_at DESC, p.id DESC LIMIT %d";
+		return array_map( 'intval', (array) $this->wpdb->get_col( $this->wpdb->prepare( $sql, $limit ) ) );
+	}
+
+	public function pending_color_snapshot_count() {
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
+		return (int) $this->wpdb->get_var( "SELECT COUNT(*) FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND c.id IS NULL" );
+	}
+
+	/** Retain an actionable failure rather than retrying a bad site forever in the queue. */
+	public function record_color_failure( $project_id, $message ) {
+		return $this->upsert_color_record( $project_id, 'elementor_global', wp_json_encode( array( 'error' => (string) $message ) ), array(), 'failed' );
+	}
+
 	/** Approval locks a reviewed palette so later extraction cannot overwrite it. */
 	public function approve_color_record( $project_id, array $colors ) {
 		$project_id = absint( $project_id );

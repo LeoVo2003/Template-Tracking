@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MAC Project Tracker
  * Description: Internal WPM project tracker.
- * Version: 0.11.0
+ * Version: 0.11.1
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Author: MAC Marketing
@@ -12,7 +12,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'MAC_TRACKER_VERSION', '0.11.0' );
+define( 'MAC_TRACKER_VERSION', '0.11.1' );
 define( 'MAC_TRACKER_AD_COMPLETED_CUTOFF', '2026-07-01' );
 // Projects outside the approved CSV roster join only from this WPM era onward.
 define( 'MAC_TRACKER_PROJECT_SYNC_START', '2026-04-01 00:00:00' );
@@ -41,10 +41,12 @@ function mac_tracker_boot() {
 	MAC_Tracker_Activator::maybe_upgrade();
 	$repository = new MAC_Tracker_Repository();
 	$sync       = new MAC_Tracker_Sync_Service( $repository );
+	$colors     = new MAC_Tracker_Elementor_Color_Service( $repository );
 	$sync->register();
+	$colors->register();
 	( new MAC_Tracker_GitHub_Updater() )->register();
 	if ( is_admin() ) {
-		( new MAC_Tracker_Admin( $repository, $sync ) )->register();
+		( new MAC_Tracker_Admin( $repository, $sync, $colors ) )->register();
 	}
 }
 

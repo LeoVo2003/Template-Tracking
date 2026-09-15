@@ -10,11 +10,80 @@ class MAC_Tracker_Elementor_Color_Service {
 
 	const MAX_COLORS = 6;
 	const MAX_STYLESHEETS = 12;
+	const CRON_HOOK = 'mac_tracker_extract_elementor_colors';
+	const STATE_OPTION = 'mac_tracker_color_extract_state';
+	const BATCH_SIZE = 6;
 
 	private $repository;
 
 	public function __construct( MAC_Tracker_Repository $repository ) {
 		$this->repository = $repository;
+	}
+
+	public function register() {
+		add_action( self::CRON_HOOK, array( $this, 'run_queued_batch' ) );
+	}
+
+	/** Queue every currently unextracted website and return without blocking wp-admin. */
+	public function queue_all() {
+		if ( wp_next_scheduled( self::CRON_HOOK ) ) {
+			return array( 'queued' => true, 'remaining' => $this->repository->pending_color_snapshot_count() );
+		}
+		$remaining = $this->repository->pending_color_snapshot_count();
+		if ( 0 === $remaining ) {
+			return array( 'queued' => false, 'remaining' => 0 );
+		}
+		update_option( self::STATE_OPTION, array( 'status' => 'queued', 'processed' => 0, 'found' => 0, 'failed' => 0, 'remaining' => $remaining, 'updated_at' => MAC_Tracker_Time::now_utc() ), false );
+		$scheduled = wp_schedule_single_event( time(), self::CRON_HOOK, array(), true );
+		if ( is_wp_error( $scheduled ) ) {
+			return $scheduled;
+		}
+		if ( function_exists( 'spawn_cron' ) ) {
+			spawn_cron();
+		}
+		return array( 'queued' => true, 'remaining' => $remaining );
+	}
+
+	/** Process a small batch and schedule the next one until the queue is empty. */
+	public function run_queued_batch() {
+		$state = (array) get_option( self::STATE_OPTION, array() );
+		$ids   = $this->repository->pending_color_snapshot_ids( self::BATCH_SIZE );
+		if ( empty( $ids ) ) {
+			$state['status'] = 'complete';
+			$state['remaining'] = 0;
+			$state['updated_at'] = MAC_Tracker_Time::now_utc();
+			update_option( self::STATE_OPTION, $state, false );
+			return;
+		}
+
+		$state['status'] = 'running';
+		foreach ( $ids as $snapshot_id ) {
+			$result = $this->extract_for_snapshot( $snapshot_id );
+			$state['processed'] = absint( $state['processed'] ?? 0 ) + 1;
+			if ( is_wp_error( $result ) ) {
+				$state['failed'] = absint( $state['failed'] ?? 0 ) + 1;
+				$this->repository->record_color_failure( $snapshot_id, $result->get_error_message() );
+			} else {
+				$state['found'] = absint( $state['found'] ?? 0 ) + 1;
+			}
+		}
+		$state['remaining'] = $this->repository->pending_color_snapshot_count();
+		$state['updated_at'] = MAC_Tracker_Time::now_utc();
+		if ( $state['remaining'] > 0 ) {
+			$state['status'] = 'queued';
+			update_option( self::STATE_OPTION, $state, false );
+			wp_schedule_single_event( time() + 2, self::CRON_HOOK );
+			if ( function_exists( 'spawn_cron' ) ) {
+				spawn_cron();
+			}
+			return;
+		}
+		$state['status'] = 'complete';
+		update_option( self::STATE_OPTION, $state, false );
+	}
+
+	public function extraction_state() {
+		return (array) get_option( self::STATE_OPTION, array() );
 	}
 
 	/** @return array|WP_Error */

@@ -9,10 +9,10 @@ class MAC_Tracker_Admin {
 	private $sync;
 	private $colors;
 
-	public function __construct( MAC_Tracker_Repository $repository, MAC_Tracker_Sync_Service $sync ) {
+	public function __construct( MAC_Tracker_Repository $repository, MAC_Tracker_Sync_Service $sync, MAC_Tracker_Elementor_Color_Service $colors ) {
 		$this->repository = $repository;
 		$this->sync       = $sync;
-		$this->colors     = new MAC_Tracker_Elementor_Color_Service( $repository );
+		$this->colors     = $colors;
 	}
 
 	public function register() {
@@ -26,6 +26,7 @@ class MAC_Tracker_Admin {
 		add_action( 'admin_post_mac_tracker_import_pins', array( $this, 'handle_import_pins' ) );
 		add_action( 'admin_post_mac_tracker_clear_data', array( $this, 'handle_clear_data' ) );
 		add_action( 'admin_post_mac_tracker_extract_elementor_colors', array( $this, 'handle_extract_elementor_colors' ) );
+		add_action( 'admin_post_mac_tracker_extract_all_elementor_colors', array( $this, 'handle_extract_all_elementor_colors' ) );
 		add_action( 'admin_post_mac_tracker_approve_colors', array( $this, 'handle_approve_colors' ) );
 	}
 
@@ -141,12 +142,15 @@ class MAC_Tracker_Admin {
 	public function render_color_review() {
 		$this->require_capability();
 		$rows = $this->repository->color_review_rows();
+		$extract_state = $this->colors->extraction_state();
 		$this->page_start( 'Color Review', 'Read Elementor Global Color variables from each website. Images, ordinary CSS, OCR and OneDrive are not used here.', 'colors' );
 		?>
 		<section class="mac-tracker-color-intro">
 			<div><p class="mac-tracker-eyebrow">Elementor only</p><h2>Global color variables, ready for review</h2><p>Extract reads <code>--e-global-color-*</code> from the website HTML and Elementor stylesheets. Approving locks the palette so a later extraction cannot replace it.</p></div>
 			<div class="mac-tracker-color-intro__count"><strong><?php echo esc_html( number_format_i18n( count( $rows ) ) ); ?></strong><span>websites available</span></div>
+			<form class="mac-tracker-color-extract-all" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_extract_all_elementor_colors' ); ?><input type="hidden" name="action" value="mac_tracker_extract_all_elementor_colors"><button class="button button-primary" type="submit"><span class="dashicons dashicons-art"></span>Extract all</button><small>Only websites with no prior extraction. Runs in background batches.</small></form>
 		</section>
+		<?php if ( ! empty( $extract_state ) ) : ?><p class="mac-tracker-color-progress"><span class="mac-tracker-status mac-tracker-status--<?php echo esc_attr( 'complete' === ( $extract_state['status'] ?? '' ) ? 'success' : 'waiting' ); ?>"><?php echo esc_html( $extract_state['status'] ?? 'queued' ); ?></span><?php echo esc_html( sprintf( '%d processed · %d palettes found · %d failed · %d remaining', (int) ( $extract_state['processed'] ?? 0 ), (int) ( $extract_state['found'] ?? 0 ), (int) ( $extract_state['failed'] ?? 0 ), (int) ( $extract_state['remaining'] ?? 0 ) ) ); ?></p><?php endif; ?>
 		<?php $this->notices(); ?>
 		<section class="mac-tracker-color-review" aria-label="Color review queue">
 			<?php if ( empty( $rows ) ) : ?>
@@ -287,6 +291,16 @@ class MAC_Tracker_Admin {
 			$this->redirect( 'mac-project-tracker-colors', $result->get_error_message(), 'error' );
 		}
 		$this->redirect( 'mac-project-tracker-colors', sprintf( 'Extracted %d Elementor Global Color value(s). Review and approve when ready.', count( $result['colors'] ) ), 'success' );
+	}
+
+	public function handle_extract_all_elementor_colors() {
+		$this->require_request( 'mac_tracker_extract_all_elementor_colors' );
+		$result = $this->colors->queue_all();
+		if ( is_wp_error( $result ) ) {
+			$this->redirect( 'mac-project-tracker-colors', $result->get_error_message(), 'error' );
+		}
+		$message = empty( $result['remaining'] ) ? 'No unextracted websites remain in the queue.' : sprintf( 'Elementor color extraction queued for %d website(s). It runs in background batches.', (int) $result['remaining'] );
+		$this->redirect( 'mac-project-tracker-colors', $message, 'success' );
 	}
 
 	public function handle_approve_colors() {

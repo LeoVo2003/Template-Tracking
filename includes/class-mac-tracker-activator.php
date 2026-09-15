@@ -17,6 +17,7 @@ class MAC_Tracker_Activator {
 	public static function deactivate() {
 		wp_clear_scheduled_hook( MAC_Tracker_Sync_Service::CRON_HOOK );
 		wp_clear_scheduled_hook( MAC_Tracker_Sync_Service::MANUAL_CRON_HOOK );
+		wp_clear_scheduled_hook( MAC_Tracker_Elementor_Color_Service::CRON_HOOK );
 		delete_option( MAC_Tracker_Sync_Service::LOCK_OPTION );
 	}
 
