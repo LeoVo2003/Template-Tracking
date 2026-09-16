@@ -60,8 +60,17 @@ function parseTone(response) {
   if (match) {
     try { parsed = JSON.parse(match[0]); } catch { parsed = {}; }
   }
-  const explicitTone = tones.find((tone) => text.toLocaleLowerCase('vi-VN').includes(tone.toLocaleLowerCase('vi-VN')));
-  const tone = tones.includes(parsed.tone) ? parsed.tone : (explicitTone || '');
+  const normalized = text.toLocaleLowerCase('vi-VN');
+  const explicitTone = tones.find((tone) => normalized.includes(tone.toLocaleLowerCase('vi-VN')));
+  // Vision occasionally describes the palette in English even when asked for
+  // a Vietnamese fixed label. Only map clear two-colour combinations.
+  const englishTone = [
+    [/\b(pink|hồng)\b[\s\S]{0,180}\b(white|trắng)\b|\b(white|trắng)\b[\s\S]{0,180}\b(pink|hồng)\b/, 'Hồng trắng'],
+    [/\b(red|đỏ)\b[\s\S]{0,180}\b(pink|hồng)\b|\b(pink|hồng)\b[\s\S]{0,180}\b(red|đỏ)\b/, 'Đỏ hồng'],
+    [/\b(purple|tím)\b[\s\S]{0,180}\b(pink|hồng)\b|\b(pink|hồng)\b[\s\S]{0,180}\b(purple|tím)\b/, 'Tím hồng'],
+    [/\b(brown|nâu)\b[\s\S]{0,180}\b(cream|kem)\b|\b(cream|kem)\b[\s\S]{0,180}\b(brown|nâu)\b/, 'Nâu kem'],
+  ].find(([pattern]) => pattern.test(normalized))?.[1];
+  const tone = tones.includes(parsed.tone) ? parsed.tone : (explicitTone || englishTone || '');
   if (!tone) throw new Error(`Llama Vision returned no supported tone: ${text.replace(/\s+/g, ' ').slice(0, 500)}`);
   const confidenceMatch = text.match(/\b(high|medium|low)\b/i);
   return {
