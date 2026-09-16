@@ -436,6 +436,9 @@
 .mac-tracker-wrap .mac-tracker-visual-card__select input[type="checkbox"] { width: 16px; min-width: 16px; height: 16px; min-height: 16px; margin: 0; padding: 0; accent-color: var(--primary); border-radius: 3px; }
 .mac-tracker-visual-card__image { position: relative; display: block; height: 188px; overflow: hidden; background: var(--mist); text-decoration: none; }
 .mac-tracker-visual-card__image img { width: 100%; height: 100%; object-fit: cover; object-position: top; transition: transform 180ms ease; }
+.mac-tracker-visual-card__image:has(img[src=""]) { display: grid; place-items: center; min-height: 188px; color: var(--willow-deep); background: var(--mist-light); }
+.mac-tracker-visual-card__image:has(img[src=""])::before { content: "Fresh capture queued"; padding: var(--space-2) var(--space-3); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; border: 1px dashed var(--willow-soft); border-radius: 4px; }
+.mac-tracker-visual-card__image:has(img[src=""]) img { display: none; }
 .mac-tracker-visual-card__image:hover img { transform: scale(1.025); }
 .mac-tracker-visual-card__image > span { position: absolute; right: var(--space-2); bottom: var(--space-2); display: inline-flex; align-items: center; gap: 3px; padding: 4px 6px; color: #fff; font-family: var(--font-mono); font-size: var(--text-2xs); background: rgba(47, 59, 52, .82); border-radius: 4px; opacity: 0; transition: opacity 150ms ease; }
 .mac-tracker-visual-card__image:hover > span, .mac-tracker-visual-card__image:focus > span { opacity: 1; }

@@ -292,7 +292,11 @@ class MAC_Tracker_Admin {
 			$message = sprintf( '%d failed visual job(s) queued again.', (int) $result );
 		} else {
 			$mode = in_array( $action, array( 'reanalyze_selected', 'reanalyze_one' ), true ) ? 'reanalyze' : ( in_array( $action, array( 'recapture_selected', 'recapture_one' ), true ) ? 'recapture' : '' );
+			$attachments = 'recapture' === $mode ? $this->repository->visual_attachment_ids( $ids ) : array();
 			$result = $this->repository->requeue_visual_items( $ids, $mode );
+			if ( ! is_wp_error( $result ) && 'recapture' === $mode ) {
+				foreach ( $attachments as $attachment_id ) { wp_delete_attachment( $attachment_id, true ); }
+			}
 			$message = sprintf( '%d selected screenshot(s) queued to %s.', is_wp_error( $result ) ? 0 : (int) $result, 'recapture' === $mode ? 'capture again' : 'analyze again' );
 		}
 		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker-visuals', $result->get_error_message(), 'error' ); }

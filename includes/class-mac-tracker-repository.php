@@ -537,7 +537,7 @@ class MAC_Tracker_Repository {
 	public function visual_review_rows( $limit = 120 ) {
 		$limit = max( 1, min( 300, absint( $limit ) ) );
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
-		$sql = "SELECT p.*, v.screenshot_url, v.tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND v.screenshot_url <> '' ORDER BY CASE WHEN v.tone_status = 'classified' THEN 0 ELSE 1 END, v.updated_at DESC LIMIT %d";
+		$sql = "SELECT p.*, v.screenshot_url, v.tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND (v.screenshot_url <> '' OR v.capture_status IN ('pending', 'capturing', 'failed')) ORDER BY CASE WHEN v.capture_status IN ('pending', 'capturing') THEN 0 WHEN v.tone_status = 'classified' THEN 1 ELSE 2 END, v.updated_at DESC LIMIT %d";
 		return (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
 	}
 
@@ -594,7 +594,8 @@ class MAC_Tracker_Repository {
 			$sql = "UPDATE {$this->visuals} SET tone = '', confidence = '', tone_reason = '', tone_status = 'pending', ai_raw = '', updated_at = %s WHERE capture_status = 'captured' AND screenshot_url <> '' AND project_id IN ({$placeholders})";
 			$args = array_merge( array( $now ), $ids );
 		} elseif ( 'recapture' === $mode ) {
-			$sql = "UPDATE {$this->visuals} SET capture_status = 'pending', tone = '', confidence = '', tone_reason = '', tone_status = 'pending', ai_raw = '', updated_at = %s WHERE project_id IN ({$placeholders})";
+			// A fresh capture must not keep showing the previous image or AI result.
+			$sql = "UPDATE {$this->visuals} SET capture_status = 'pending', attachment_id = 0, screenshot_url = '', captured_at = NULL, tone = '', confidence = '', tone_reason = '', tone_status = 'pending', ai_raw = '', updated_at = %s WHERE project_id IN ({$placeholders})";
 			$args = array_merge( array( $now ), $ids );
 		} else {
 			$sql = "UPDATE {$this->visuals} SET capture_status = IF(capture_status = 'failed', 'pending', capture_status), tone_status = IF(tone_status = 'failed', 'pending', tone_status), ai_raw = '', updated_at = %s WHERE (capture_status = 'failed' OR tone_status = 'failed') AND project_id IN ({$placeholders})";
@@ -602,6 +603,15 @@ class MAC_Tracker_Repository {
 		}
 		$result = $this->wpdb->query( $this->wpdb->prepare( $sql, $args ) );
 		return false === $result ? new WP_Error( 'mac_tracker_visual_requeue', $this->wpdb->last_error ?: 'Unable to queue visual work.' ) : (int) $result;
+	}
+
+	/** Attachment IDs are returned before a recapture clears their local references. */
+	public function visual_attachment_ids( array $snapshot_ids ) {
+		$ids = array_values( array_unique( array_filter( array_map( 'absint', $snapshot_ids ) ) ) );
+		if ( empty( $ids ) ) { return array(); }
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$sql = "SELECT attachment_id FROM {$this->visuals} WHERE project_id IN ({$placeholders}) AND attachment_id > 0";
+		return array_values( array_unique( array_filter( array_map( 'absint', (array) $this->wpdb->get_col( $this->wpdb->prepare( $sql, $ids ) ) ) ) ) );
 	}
 
 	public function requeue_failed_visual_items() {
