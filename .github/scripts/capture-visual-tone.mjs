@@ -67,7 +67,54 @@ function tonePrompt(colors) {
   return `Classify a rendered nail salon website screenshot into one fixed visual tone. Use TWO sources together: (1) visible design: large backgrounds, hero, header, buttons, primary/secondary accents, and whether the page is mainly light or dark; (2) Elementor global variables below, which are the declared primary/secondary/text/accent colors. Do not decide from a single photo, nail colour, or a small text colour. Global color evidence: ${evidence}. Choose exactly one label: ${tones.join(', ')}. Key meanings: Vàng kem sáng = pale yellow/cream dominant and light page; Đen vàng = dark or black dominant with gold/yellow accent; Hồng xanh trắng = pink and green accents on a mainly white/light page; Hồng trắng = pink dominant on a mainly white/light page. Return JSON only: {"tone":"one allowed label","confidence":"high|medium|low","reason":"one short Vietnamese sentence mentioning dominant colors and light/dark"}.`;
 }
 
-function parseTone(response) {
+async function renderedColorEvidence(imageBuffer) {
+  const { data, info } = await sharp(imageBuffer).resize({ width: 160, withoutEnlargement: true }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const buckets = { blue: 0, green: 0, pink: 0, yellow: 0 };
+  let lightness = 0;
+  let colourful = 0;
+  for (let index = 0; index < data.length; index += info.channels) {
+    const r = data[index] / 255;
+    const g = data[index + 1] / 255;
+    const b = data[index + 2] / 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    const value = max;
+    lightness += (max + min) / 2;
+    if (delta < 0.12 || value < 0.12) continue;
+    let hue = 0;
+    if (max === r) hue = 60 * (((g - b) / delta + 6) % 6);
+    if (max === g) hue = 60 * ((b - r) / delta + 2);
+    if (max === b) hue = 60 * ((r - g) / delta + 4);
+    const weight = delta * (0.35 + value);
+    colourful += weight;
+    if (hue >= 180 && hue < 275) buckets.blue += weight;
+    else if (hue >= 75 && hue < 180) buckets.green += weight;
+    else if (hue >= 300 || hue < 18) buckets.pink += weight;
+    else if (hue >= 35 && hue < 75) buckets.yellow += weight;
+  }
+  const count = data.length / info.channels;
+  const share = (name) => colourful ? buckets[name] / colourful : 0;
+  const brightness = lightness / count;
+  return {
+    brightness,
+    blue: share('blue'),
+    green: share('green'),
+    pink: share('pink'),
+    yellow: share('yellow'),
+    text: `Rendered-pixel measurement: ${brightness >= 0.62 ? 'mainly light' : brightness <= 0.42 ? 'mainly dark' : 'mixed brightness'}; blue/cyan ${Math.round(share('blue') * 100)}%, green ${Math.round(share('green') * 100)}%, pink/red ${Math.round(share('pink') * 100)}%, yellow/gold ${Math.round(share('yellow') * 100)}% of saturated visible pixels. This measurement overrides a conflicting declared CSS variable.`,
+  };
+}
+
+function reconcileTone(tone, evidence) {
+  const light = evidence.brightness >= 0.62;
+  if (light && evidence.blue >= 0.22 && evidence.blue > evidence.pink * 1.3 && ['Hồng trắng', 'Đỏ hồng', 'Hồng xanh trắng'].includes(tone)) return 'Xanh trắng';
+  if (light && evidence.yellow >= 0.24 && evidence.yellow > evidence.pink * 1.25 && ['Hồng trắng', 'Đỏ hồng'].includes(tone)) return 'Vàng kem sáng';
+  if (evidence.brightness <= 0.42 && evidence.yellow >= 0.16 && tone !== 'Đen vàng') return 'Đen vàng';
+  return tone;
+}
+
+function parseTone(response, evidence) {
   // Workers AI usually places text at result.response, but the model is not
   // guaranteed to obey JSON-only output. Preserve the fixed label list as a
   // safe fallback instead of throwing away an otherwise useful answer.
@@ -89,26 +136,28 @@ function parseTone(response) {
     [/\b(purple|tím)\b[\s\S]{0,180}\b(pink|hồng)\b|\b(pink|hồng)\b[\s\S]{0,180}\b(purple|tím)\b/, 'Tím hồng'],
     [/\b(brown|nâu)\b[\s\S]{0,180}\b(cream|kem)\b|\b(cream|kem)\b[\s\S]{0,180}\b(brown|nâu)\b/, 'Nâu kem'],
   ].find(([pattern]) => pattern.test(normalized))?.[1];
-  const tone = tones.includes(parsed.tone) ? parsed.tone : (explicitTone || englishTone || '');
+  const candidateTone = tones.includes(parsed.tone) ? parsed.tone : (explicitTone || englishTone || '');
+  const tone = reconcileTone(candidateTone, evidence);
   if (!tone) throw new Error(`Llama Vision returned no supported tone: ${text.replace(/\s+/g, ' ').slice(0, 500)}`);
   const confidenceMatch = text.match(/\b(high|medium|low)\b/i);
   return {
     tone,
     confidence: ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : (confidenceMatch ? confidenceMatch[1].toLowerCase() : 'low'),
-    reason: String(parsed.reason || text.replace(/\s+/g, ' ').slice(0, 500)).slice(0, 500),
+    reason: tone !== candidateTone ? `Screenshot pixel check corrected the AI response: ${evidence.text}` : String(parsed.reason || text.replace(/\s+/g, ' ').slice(0, 500)).slice(0, 500),
   };
 }
 
 async function classify(snapshotId, imageBuffer, colors = []) {
   if (!cloudflareAccount || !cloudflareToken) return { skipped: true };
+  const evidence = await renderedColorEvidence(imageBuffer);
   const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cloudflareAccount}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${cloudflareToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: tonePrompt(colors), image: `data:image/jpeg;base64,${imageBuffer.toString('base64')}`, max_tokens: 160, temperature: 0.1 }),
+    body: JSON.stringify({ prompt: `${tonePrompt(colors)}\n${evidence.text}`, image: `data:image/jpeg;base64,${imageBuffer.toString('base64')}`, max_tokens: 160, temperature: 0.1 }),
   });
   if (response.status === 429) return { skipped: true, quota: true };
   if (!response.ok) throw new Error(`Llama Vision failed: HTTP ${response.status} ${await response.text()}`);
-  const tone = parseTone(await response.json());
+  const tone = parseTone(await response.json(), evidence);
   await postJson({ mode: 'tone', snapshot_id: snapshotId, ...tone });
   return tone;
 }
