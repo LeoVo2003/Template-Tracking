@@ -28,6 +28,8 @@ class MAC_Tracker_Admin {
 		add_action( 'admin_post_mac_tracker_extract_elementor_colors', array( $this, 'handle_extract_elementor_colors' ) );
 		add_action( 'admin_post_mac_tracker_extract_all_elementor_colors', array( $this, 'handle_extract_all_elementor_colors' ) );
 		add_action( 'admin_post_mac_tracker_approve_colors', array( $this, 'handle_approve_colors' ) );
+		add_action( 'wp_ajax_mac_tracker_extract_colors', array( $this, 'handle_extract_colors_ajax' ) );
+		add_action( 'wp_ajax_mac_tracker_approve_colors', array( $this, 'handle_approve_colors_ajax' ) );
 		add_action( 'admin_post_mac_tracker_run_visual_workflow', array( $this, 'handle_run_visual_workflow' ) );
 		add_action( 'admin_post_mac_tracker_requeue_visuals', array( $this, 'handle_requeue_visuals' ) );
 		add_action( 'wp_ajax_mac_tracker_visual_action', array( $this, 'handle_visual_action_ajax' ) );
@@ -55,6 +57,11 @@ class MAC_Tracker_Admin {
 			'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
 			'actionNonce' => wp_create_nonce( 'mac_tracker_requeue_visuals' ),
 			'statusNonce' => wp_create_nonce( 'mac_tracker_visual_status' ),
+		) );
+		wp_localize_script( 'mac-project-tracker-admin', 'macTrackerColors', array(
+			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+			'extractNonce' => wp_create_nonce( 'mac_tracker_extract_elementor_colors' ),
+			'approveNonce' => wp_create_nonce( 'mac_tracker_approve_colors' ),
 		) );
 	}
 
@@ -164,19 +171,20 @@ class MAC_Tracker_Admin {
 		</section>
 		<?php if ( ! empty( $extract_state ) ) : ?><p class="mac-tracker-color-progress"><span class="mac-tracker-status mac-tracker-status--<?php echo esc_attr( 'complete' === ( $extract_state['status'] ?? '' ) ? 'success' : 'waiting' ); ?>"><?php echo esc_html( $extract_state['status'] ?? 'queued' ); ?></span><?php echo esc_html( sprintf( '%d processed · %d palettes found · %d failed · %d remaining', (int) ( $extract_state['processed'] ?? 0 ), (int) ( $extract_state['found'] ?? 0 ), (int) ( $extract_state['failed'] ?? 0 ), (int) ( $extract_state['remaining'] ?? 0 ) ) ); ?></p><?php endif; ?>
 		<?php $this->notices(); ?>
+		<nav class="mac-tracker-color-tabs" aria-label="Color review status"><button type="button" class="is-active" data-color-tab="pending">Chưa duyệt <span><?php echo esc_html( count( array_filter( $rows, function ( $row ) { return empty( $row['color_locked'] ); } ) ) ); ?></span></button><button type="button" data-color-tab="approved">Đã duyệt <span><?php echo esc_html( count( array_filter( $rows, function ( $row ) { return ! empty( $row['color_locked'] ); } ) ) ); ?></span></button></nav>
 		<section class="mac-tracker-color-review" aria-label="Color review queue">
 			<?php if ( empty( $rows ) ) : ?>
 				<div class="mac-tracker-empty"><span class="dashicons dashicons-art"></span><strong>No websites available</strong><p>Color Review only lists current project rows that have a website URL.</p></div>
 			<?php else : foreach ( $rows as $row ) : $colors = $this->row_colors( $row ); ?>
-				<article class="mac-tracker-color-card <?php echo ! empty( $row['color_locked'] ) ? 'is-approved' : ''; ?>">
+				<article class="mac-tracker-color-card <?php echo ! empty( $row['color_locked'] ) ? 'is-approved' : ''; ?>" data-color-card="<?php echo (int) $row['id']; ?>" data-color-status="<?php echo ! empty( $row['color_locked'] ) ? 'approved' : 'pending'; ?>">
 					<div class="mac-tracker-color-card__head"><div><p class="mac-tracker-eyebrow"><?php echo esc_html( ! empty( $row['color_locked'] ) ? 'Approved palette' : ( $colors ? 'Awaiting review' : 'Not extracted' ) ); ?></p><h2><?php $this->project_link( $row ); ?></h2><p><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></p></div><span class="mac-tracker-status mac-tracker-status--<?php echo esc_attr( ! empty( $row['color_locked'] ) ? 'success' : ( $colors ? 'waiting' : 'muted' ) ); ?>"><?php echo esc_html( ! empty( $row['color_locked'] ) ? 'Approved' : ( $colors ? 'Review' : 'New' ) ); ?></span></div>
 					<?php if ( $colors ) : ?><div class="mac-tracker-color-swatches" aria-label="Extracted colors"><?php foreach ( $colors as $color ) : ?><span title="<?php echo esc_attr( $color ); ?>" style="--mac-tracker-swatch: <?php echo esc_attr( $color ); ?>"><i></i><code><?php echo esc_html( $color ); ?></code></span><?php endforeach; ?></div><?php endif; ?>
 					<?php $this->color_variables( $row ); ?>
 					<div class="mac-tracker-color-card__actions">
 						<?php if ( empty( $row['color_locked'] ) ) : ?>
-							<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_extract_elementor_colors' ); ?><input type="hidden" name="action" value="mac_tracker_extract_elementor_colors"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><button class="button" type="submit"><span class="dashicons dashicons-art"></span><?php echo $colors ? 'Extract again' : 'Extract Elementor colors'; ?></button></form>
+							<form class="mac-tracker-color-extract" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_extract_elementor_colors' ); ?><input type="hidden" name="action" value="mac_tracker_extract_elementor_colors"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><button class="button" type="submit"><span class="dashicons dashicons-art"></span><?php echo $colors ? 'Extract again' : 'Extract Elementor colors'; ?></button></form>
 							<?php if ( $colors ) : ?><form class="mac-tracker-color-approve" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_approve_colors' ); ?><input type="hidden" name="action" value="mac_tracker_approve_colors"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><label><span>Palette</span><input name="colors" value="<?php echo esc_attr( implode( ', ', $colors ) ); ?>"></label><button class="button button-primary" type="submit">Approve palette</button></form><?php endif; ?>
-						<?php endif; ?>
+						<?php else : ?><span class="mac-tracker-color-lock"><span class="dashicons dashicons-lock"></span>Đã khóa sau khi duyệt</span><?php endif; ?>
 					</div>
 				</article>
 			<?php endforeach; endif; ?>
@@ -474,6 +482,23 @@ class MAC_Tracker_Admin {
 			$this->redirect( 'mac-project-tracker-colors', $result->get_error_message(), 'error' );
 		}
 		$this->redirect( 'mac-project-tracker-colors', 'Palette approved and locked.', 'success' );
+	}
+
+	public function handle_extract_colors_ajax() {
+		check_ajax_referer( 'mac_tracker_extract_elementor_colors', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( array( 'message' => 'You are not allowed to extract colors.' ), 403 ); }
+		$result = $this->colors->extract_for_snapshot( absint( $_POST['snapshot_id'] ?? 0 ) );
+		if ( is_wp_error( $result ) ) { wp_send_json_error( array( 'message' => $result->get_error_message() ) ); }
+		wp_send_json_success( array( 'message' => sprintf( 'Extracted %d Elementor Global Color value(s).', count( $result['colors'] ) ), 'colors' => array_values( $result['colors'] ) ) );
+	}
+
+	public function handle_approve_colors_ajax() {
+		check_ajax_referer( 'mac_tracker_approve_colors', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( array( 'message' => 'You are not allowed to approve colors.' ), 403 ); }
+		$colors = $this->sanitize_palette( wp_unslash( $_POST['colors'] ?? '' ) );
+		$result = $this->repository->approve_color_record( absint( $_POST['snapshot_id'] ?? 0 ), $colors );
+		if ( is_wp_error( $result ) ) { wp_send_json_error( array( 'message' => $result->get_error_message() ) ); }
+		wp_send_json_success( array( 'message' => 'Palette approved and locked.' ) );
 	}
 
 	private function page_start( $title, $description, $screen ) {
