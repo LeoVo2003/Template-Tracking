@@ -254,9 +254,18 @@ class MAC_Tracker_Admin {
 
 	public function handle_run_visual_workflow() {
 		$this->require_request( 'mac_tracker_run_visual_workflow' );
+		$result = $this->dispatch_visual_workflow();
+		if ( is_wp_error( $result ) ) {
+			$this->redirect( 'mac-project-tracker-visuals', $result->get_error_message(), 'error' );
+		}
+		$this->redirect( 'mac-project-tracker-visuals', 'Visual Tone workflow started. The gallery will update after GitHub finishes the batch.', 'success' );
+	}
+
+	/** Start one cloud batch for a manual visual action, without holding the browser open. */
+	private function dispatch_visual_workflow() {
 		$token = MAC_Tracker_Crypto::decrypt( get_option( 'mac_tracker_github_dispatch_token', '' ) );
 		if ( '' === $token ) {
-			$this->redirect( 'mac-project-tracker-visuals', 'Add a GitHub Run now token in Settings first.', 'error' );
+			return new WP_Error( 'mac_tracker_github_token', 'Queued, but GitHub could not start now because the Run now token is missing. Automation will pick it up.' );
 		}
 		$response = wp_remote_post(
 			'https://api.github.com/repos/LeoVo2003/Template-Tracking/actions/workflows/capture-visual-tone.yml/dispatches',
@@ -267,13 +276,13 @@ class MAC_Tracker_Admin {
 			)
 		);
 		if ( is_wp_error( $response ) ) {
-			$this->redirect( 'mac-project-tracker-visuals', 'GitHub could not start the workflow: ' . $response->get_error_message(), 'error' );
+			return new WP_Error( 'mac_tracker_github_request', 'Queued, but GitHub could not start now: ' . $response->get_error_message() );
 		}
 		$status = (int) wp_remote_retrieve_response_code( $response );
 		if ( $status < 200 || $status >= 300 ) {
-			$this->redirect( 'mac-project-tracker-visuals', 'GitHub rejected Run now (HTTP ' . $status . '). Check that the token has Actions: Write for Template-Tracking.', 'error' );
+			return new WP_Error( 'mac_tracker_github_response', 'Queued, but GitHub rejected the immediate run (HTTP ' . $status . '). Check Actions: Write.' );
 		}
-		$this->redirect( 'mac-project-tracker-visuals', 'Visual Tone workflow started. The gallery will update after GitHub finishes the batch.', 'success' );
+		return true;
 	}
 
 	public function handle_requeue_visuals() {
@@ -300,7 +309,9 @@ class MAC_Tracker_Admin {
 			$message = sprintf( '%d selected screenshot(s) queued to %s.', is_wp_error( $result ) ? 0 : (int) $result, 'recapture' === $mode ? 'capture again' : 'analyze again' );
 		}
 		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker-visuals', $result->get_error_message(), 'error' ); }
-		$this->redirect( 'mac-project-tracker-visuals', $message . ' Use Run now for an immediate GitHub batch, or let automation pick it up.', 'success' );
+		$dispatch = $this->dispatch_visual_workflow();
+		$message .= is_wp_error( $dispatch ) ? ' ' . $dispatch->get_error_message() : ' GitHub batch started now.';
+		$this->redirect( 'mac-project-tracker-visuals', $message, is_wp_error( $dispatch ) ? 'warning' : 'success' );
 	}
 
 	public function handle_test_connection() {
