@@ -150,6 +150,9 @@ class MAC_Tracker_Activator {
 		if ( version_compare( $previous_version, '0.11.2', '<' ) ) {
 			( new MAC_Tracker_Repository() )->purge_unapproved_color_records();
 		}
+		if ( version_compare( $previous_version, '0.12.5', '<' ) ) {
+			( new MAC_Tracker_Repository() )->requeue_visual_tones();
+		}
 		update_option( 'mac_tracker_db_version', MAC_TRACKER_VERSION, false );
 	}
 }

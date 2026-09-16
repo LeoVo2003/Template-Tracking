@@ -376,7 +376,7 @@ class MAC_Tracker_Repository {
 		}
 
 		$tone = sanitize_text_field( (string) ( $filters['tone'] ?? '' ) );
-		$allowed_tones = array( 'Vàng đen', 'Đỏ hồng', 'Hồng trắng', 'Nâu kem', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Tím hồng', 'Cần duyệt' );
+		$allowed_tones = $this->visual_tones();
 		if ( in_array( $tone, $allowed_tones, true ) ) {
 			$where[] = 'v.tone = %s';
 			$args[]  = $tone;
@@ -546,9 +546,9 @@ class MAC_Tracker_Repository {
 		$limit = max( 1, min( 25, absint( $limit ) ) );
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
 		if ( 'tone' === $stage ) {
-			$sql = "SELECT p.id, p.website_url, v.screenshot_url FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND v.capture_status = 'captured' AND v.tone_status IN ('pending', 'failed') AND v.screenshot_url <> '' ORDER BY v.updated_at ASC LIMIT %d";
+			$sql = "SELECT p.id, p.website_url, v.screenshot_url, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.capture_status = 'captured' AND v.tone_status IN ('pending', 'failed') AND v.screenshot_url <> '' ORDER BY v.updated_at ASC LIMIT %d";
 		} else {
-			$sql = "SELECT p.id, p.website_url, '' AS screenshot_url FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR v.capture_status = 'pending') ORDER BY p.task_completed_at DESC, p.id DESC LIMIT %d";
+			$sql = "SELECT p.id, p.website_url, '' AS screenshot_url, c.source_raw AS color_source_raw FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR v.capture_status = 'pending') ORDER BY p.task_completed_at DESC, p.id DESC LIMIT %d";
 		}
 		return (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
 	}
@@ -565,10 +565,19 @@ class MAC_Tracker_Repository {
 	}
 
 	public function save_visual_tone( $snapshot_id, $tone, $confidence, $reason, $raw = '' ) {
-		$allowed = array( 'Vàng đen', 'Đỏ hồng', 'Hồng trắng', 'Nâu kem', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Tím hồng', 'Cần duyệt' );
+		$allowed = $this->visual_tones();
 		$tone = in_array( $tone, $allowed, true ) ? $tone : 'Cần duyệt';
 		$confidence = in_array( $confidence, array( 'high', 'medium', 'low' ), true ) ? $confidence : 'low';
 		return $this->save_visual( $snapshot_id, array( 'tone' => $tone, 'confidence' => $confidence, 'tone_reason' => sanitize_text_field( $reason ), 'tone_status' => 'classified', 'ai_raw' => (string) $raw ) );
+	}
+
+	/** A visual-model prompt change can safely reuse the stored screenshots. */
+	public function requeue_visual_tones() {
+		return (int) $this->wpdb->query( $this->wpdb->prepare( "UPDATE {$this->visuals} SET tone = '', confidence = '', tone_reason = '', tone_status = 'pending', ai_raw = '', updated_at = %s WHERE capture_status = 'captured'", MAC_Tracker_Time::now_utc() ) );
+	}
+
+	public function visual_tones() {
+		return array( 'Vàng kem sáng', 'Đen vàng', 'Hồng xanh trắng', 'Hồng trắng', 'Nâu kem', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Đỏ hồng', 'Tím hồng', 'Cần duyệt' );
 	}
 
 	private function save_visual( $snapshot_id, array $data ) {

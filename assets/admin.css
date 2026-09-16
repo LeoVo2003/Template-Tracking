@@ -401,7 +401,9 @@
 .mac-tracker-tone { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 3px 7px 3px 5px; color: var(--tone-ink, var(--text)); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 700; line-height: 1; text-decoration: none; background: var(--tone-soft, var(--mist-light)); border: 1px solid var(--tone-line, var(--line)); border-radius: 999px; white-space: nowrap; }
 .mac-tracker-tone:hover { color: var(--tone-ink, var(--text)); filter: brightness(.97); }
 .mac-tracker-tone i { display: block; width: 12px; height: 12px; background: linear-gradient(135deg, var(--tone-a), var(--tone-a) 49%, var(--tone-b) 51%, var(--tone-b)); border: 1px solid rgba(47, 59, 52, .18); border-radius: 50%; }
-.mac-tracker-tone--vang-den { --tone-a: #c39b43; --tone-b: #26332c; --tone-soft: #fbf5e5; --tone-line: #eadab4; --tone-ink: #6c5320; }
+.mac-tracker-tone--vang-kem-sang { --tone-a: #d9b758; --tone-b: #fbf3d5; --tone-soft: #fff9e8; --tone-line: #eedda9; --tone-ink: #806126; }
+.mac-tracker-tone--den-vang { --tone-a: #1f2824; --tone-b: #c9a046; --tone-soft: #f4f1e8; --tone-line: #ded2b4; --tone-ink: #5f4b21; }
+.mac-tracker-tone--hong-xanh-trang { --tone-a: #c66c96; --tone-b: #4f8768; --tone-soft: #fff6f8; --tone-line: #e8d3dc; --tone-ink: #7d4764; }
 .mac-tracker-tone--do-hong { --tone-a: #bd5460; --tone-b: #e6a0ad; --tone-soft: #fff0f2; --tone-line: #f1c6cd; --tone-ink: #8d3444; }
 .mac-tracker-tone--hong-trang { --tone-a: #d88d9b; --tone-b: #fffdfb; --tone-soft: #fff5f6; --tone-line: #f0d5d9; --tone-ink: #914b5b; }
 .mac-tracker-tone--nau-kem { --tone-a: #96775c; --tone-b: #eadfcd; --tone-soft: #faf5ee; --tone-line: #e5d6c4; --tone-ink: #71583f; }

@@ -442,7 +442,7 @@ class MAC_Tracker_Admin {
 	}
 
 	private function tone_options() {
-		return array( 'Vàng đen', 'Đỏ hồng', 'Hồng trắng', 'Nâu kem', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Tím hồng', 'Cần duyệt' );
+		return $this->repository->visual_tones();
 	}
 
 	private function tone_cell( array $row, $link = true ) {
