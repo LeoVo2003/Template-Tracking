@@ -29,6 +29,7 @@ class MAC_Tracker_Admin {
 		add_action( 'admin_post_mac_tracker_extract_all_elementor_colors', array( $this, 'handle_extract_all_elementor_colors' ) );
 		add_action( 'admin_post_mac_tracker_approve_colors', array( $this, 'handle_approve_colors' ) );
 		add_action( 'wp_ajax_mac_tracker_extract_colors', array( $this, 'handle_extract_colors_ajax' ) );
+		add_action( 'wp_ajax_mac_tracker_extract_all_colors', array( $this, 'handle_extract_all_colors_ajax' ) );
 		add_action( 'wp_ajax_mac_tracker_approve_colors', array( $this, 'handle_approve_colors_ajax' ) );
 		add_action( 'admin_post_mac_tracker_run_visual_workflow', array( $this, 'handle_run_visual_workflow' ) );
 		add_action( 'admin_post_mac_tracker_requeue_visuals', array( $this, 'handle_requeue_visuals' ) );
@@ -61,6 +62,7 @@ class MAC_Tracker_Admin {
 		wp_localize_script( 'mac-project-tracker-admin', 'macTrackerColors', array(
 			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 			'extractNonce' => wp_create_nonce( 'mac_tracker_extract_elementor_colors' ),
+			'extractAllNonce' => wp_create_nonce( 'mac_tracker_extract_all_elementor_colors' ),
 			'approveNonce' => wp_create_nonce( 'mac_tracker_approve_colors' ),
 		) );
 	}
@@ -490,6 +492,14 @@ class MAC_Tracker_Admin {
 		$result = $this->colors->extract_for_snapshot( absint( $_POST['snapshot_id'] ?? 0 ) );
 		if ( is_wp_error( $result ) ) { wp_send_json_error( array( 'message' => $result->get_error_message() ) ); }
 		wp_send_json_success( array( 'message' => sprintf( 'Extracted %d Elementor Global Color value(s).', count( $result['colors'] ) ), 'colors' => array_values( $result['colors'] ) ) );
+	}
+
+	public function handle_extract_all_colors_ajax() {
+		check_ajax_referer( 'mac_tracker_extract_all_elementor_colors', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( array( 'message' => 'You are not allowed to queue color extraction.' ), 403 ); }
+		$result = $this->colors->queue_all();
+		if ( is_wp_error( $result ) ) { wp_send_json_error( array( 'message' => $result->get_error_message() ) ); }
+		wp_send_json_success( array( 'message' => empty( $result['remaining'] ) ? 'No unextracted websites remain in the queue.' : sprintf( 'Elementor color extraction queued for %d website(s).', (int) $result['remaining'] ) ) );
 	}
 
 	public function handle_approve_colors_ajax() {
