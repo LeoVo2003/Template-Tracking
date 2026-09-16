@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MAC Project Tracker
  * Description: Internal WPM project tracker.
- * Version: 0.13.8
+ * Version: 0.13.9
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Author: MAC Marketing
