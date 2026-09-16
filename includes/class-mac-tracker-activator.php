@@ -182,6 +182,11 @@ class MAC_Tracker_Activator {
 			// Expand the tone taxonomy; recalculate AI results while preserving manual reviews.
 			( new MAC_Tracker_Repository() )->requeue_visual_tones();
 		}
+		if ( version_compare( $previous_version, '0.13.17', '<' ) ) {
+			// Prevent small UI accents and black body text from deciding a whole tone.
+			// Existing manual selections remain locked while AI results are revisited.
+			( new MAC_Tracker_Repository() )->requeue_visual_tones();
+		}
 		update_option( 'mac_tracker_db_version', MAC_TRACKER_VERSION, false );
 	}
 }

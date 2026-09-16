@@ -50,7 +50,7 @@ async function postJson(payload) {
 }
 
 function tonePrompt(evidence) {
-  return `Classify the website into one fixed visual tone. Weight the rendered UI palette about 80% of the decision: section backgrounds, header/footer bars, buttons, borders, navigation and repeated typography accents. Full-page screenshot colors are only secondary context at about 20%; photos of nails, skin, flowers, lipstick and products must never override a clear UI palette. The supplied model image intentionally hides photo/media content so UI remains primary. Weighted evidence: ${evidence.text}. Choose exactly one label: ${tones.join(', ')}. Key meanings: Vàng kem sáng = light cream/yellow UI; Vàng đen = yellow/gold with black UI; Vàng trắng = yellow/gold with white UI; Đen vàng = dark UI with gold/yellow accents; Hồng xanh trắng = pink and green UI accents on a light page; Hồng trắng = pink UI on a light page; Hồng đen = pink UI with black sections; Đỏ trắng = true red UI on a light page; Đỏ hồng = both true red and pink UI; Nâu kem = brown/taupe UI with cream UI; Nâu trắng = brown/taupe with white UI; Xanh vàng = green/blue UI with yellow accents; Xanh trắng = green/blue UI on a light page; Xanh đen = green/blue UI on a dark page; Đen trắng = neutral black/white UI; Trắng kem = mostly white and cream UI; Tím hồng = purple and pink UI. Return JSON only: {"tone":"one allowed label","confidence":"high|medium|low","reason":"one short Vietnamese sentence about the weighted palette"}.`;
+  return `Classify the website into one fixed visual tone. Weight rendered UI palette about 80%: section backgrounds, header/footer bars, buttons, borders, navigation and repeated typography accents. Full-page screenshot colors are only 20% secondary context; photos of nails, skin, flowers, lipstick and products must never override a clear UI palette. The supplied model image hides photo/media content. Important: the evidence percentages are absolute visible UI coverage, not percentages within only saturated pixels; never call a site red or pink from one small button, logo, photo, or accent. Weighted evidence: ${evidence.text}. Choose exactly one label: ${tones.join(', ')}. Key meanings: Vàng kem sáng = light cream/yellow UI; Vàng đen = yellow/gold with black UI; Vàng trắng = yellow/gold with white UI; Đen vàng = dark UI with gold/yellow accents; Hồng xanh trắng = pink and green UI accents on a light page; Hồng trắng = pink UI on a light page; Hồng đen = pink UI with black sections; Đỏ trắng = repeated true red UI on a light page; Đỏ hồng = repeated true red and pink UI; Nâu kem = brown/taupe UI with cream UI; Nâu trắng = brown/taupe with white UI; Xanh vàng = green/blue UI with yellow accents; Xanh trắng = green/blue UI on a light page; Xanh đen = green/blue UI on a dark page; Đen trắng = neutral black/white UI; Trắng kem = mostly white and cream UI; Tím hồng = purple and pink UI. If the UI is genuinely ambiguous, choose Cần duyệt. Return JSON only: {"tone":"one allowed label","confidence":"high|medium|low","reason":"one short Vietnamese sentence about the weighted palette"}.`;
 }
 
 function parseRgb(value) {
@@ -89,27 +89,31 @@ function uiCategory(rgb) {
   return l >= 0.72 ? 'light' : 'neutral';
 }
 
-function inferTone(c, dark, light, chromaRatio, cream = 0) {
-  let inferred = 'Cần duyệt';
-  if (dark >= 0.38 && c.yellow >= 0.14) inferred = 'Đen vàng';
-  else if (dark >= 0.38 && (c.green + c.blue) >= 0.18) inferred = 'Xanh đen';
-  else if (dark >= 0.42 && chromaRatio < 0.12) inferred = 'Đen trắng';
-  else if (dark >= 0.30 && c.yellow >= 0.13) inferred = 'Vàng đen';
-  else if (c.pink >= 0.18 && dark >= 0.18) inferred = 'Hồng đen';
-  else if (c.pink >= 0.18 && c.green >= 0.11) inferred = 'Hồng xanh trắng';
-  else if (c.brown >= 0.22 && c.brown > Math.max(c.red, c.pink) * 1.12) inferred = 'Nâu kem';
-  else if (c.brown >= 0.16 && light >= 0.45) inferred = 'Nâu trắng';
-  else if (c.red >= 0.20 && c.red > c.pink * 1.28) inferred = 'Đỏ trắng';
-  else if (c.pink >= 0.20 && c.pink > c.red * 1.18) inferred = 'Hồng trắng';
-  else if (c.red >= 0.12 && c.pink >= 0.12) inferred = 'Đỏ hồng';
-  else if (c.purple >= 0.13 && c.pink >= 0.08) inferred = 'Tím hồng';
-  else if ((c.green + c.blue) >= 0.22 && c.yellow >= 0.10) inferred = 'Xanh vàng';
-  else if ((c.green + c.blue) >= 0.22) inferred = 'Xanh trắng';
-  else if (c.yellow >= 0.16 && light >= 0.48) inferred = 'Vàng trắng';
-  else if ((c.yellow + cream) >= 0.18) inferred = 'Vàng kem sáng';
-  else if (light >= 0.72 && cream >= 0.35) inferred = 'Trắng kem';
-  else if (dark >= 0.35 && light >= 0.18) inferred = 'Đen trắng';
-  return inferred;
+function inferTone(c, dark, light, chromaRatio, cream = 0, coverage = {}) {
+  // `c` is the mix inside only saturated pixels. Never use it by itself: a
+  // 2% red button can otherwise become “21% red” and falsely label a whole UI.
+  const share = (name) => Number.isFinite(coverage[name]) ? coverage[name] : (c[name] || 0) * chromaRatio;
+  const red = share('red'), pink = share('pink'), brown = share('brown'), yellow = share('yellow');
+  const greenBlue = share('green') + share('blue');
+  // Dark body text is common on light sites. A dark tone must have enough
+  // actual dark UI surface; otherwise this stays ambiguous for Llama review.
+  if (chromaRatio < 0.045) return dark >= 0.56 ? 'Đen trắng' : (cream >= 0.23 ? 'Trắng kem' : 'Cần duyệt');
+  if (dark >= 0.50 && yellow >= 0.035) return 'Đen vàng';
+  if (dark >= 0.50 && greenBlue >= 0.045) return 'Xanh đen';
+  if (dark >= 0.58 && chromaRatio < 0.11) return 'Đen trắng';
+  if (yellow >= 0.06 && dark >= 0.38) return 'Vàng đen';
+  if (pink >= 0.06 && dark >= 0.32) return 'Hồng đen';
+  if (pink >= 0.045 && share('green') >= 0.028) return 'Hồng xanh trắng';
+  if (brown >= 0.065 && c.brown >= 0.30) return light >= 0.44 ? 'Nâu trắng' : 'Nâu kem';
+  if (red >= 0.05 && c.red >= 0.38) return 'Đỏ trắng';
+  if (pink >= 0.04 && c.pink >= 0.30) return 'Hồng trắng';
+  if (red >= 0.025 && pink >= 0.03) return 'Đỏ hồng';
+  if (share('purple') >= 0.035 && pink >= 0.025) return 'Tím hồng';
+  if (greenBlue >= 0.05 && yellow >= 0.025) return 'Xanh vàng';
+  if (greenBlue >= 0.06) return light >= 0.34 ? 'Xanh trắng' : 'Xanh đen';
+  if (yellow >= 0.055) return light >= 0.42 ? 'Vàng trắng' : 'Vàng kem sáng';
+  if (cream >= 0.28) return 'Trắng kem';
+  return 'Cần duyệt';
 }
 
 function summarizeUiSamples(samples) {
@@ -135,13 +139,14 @@ function summarizeUiSamples(samples) {
   const cream = share('cream');
   const c = Object.fromEntries(chromatic.map((key) => [key, chromaShare(key)]));
   const chromaRatio = chromaTotal / Math.max(total, 1);
-  const inferred = inferTone(c, dark, light, chromaRatio, cream);
+  const coverage = Object.fromEntries(chromatic.map((key) => [key, share(key)]));
+  const inferred = inferTone(c, dark, light, chromaRatio, cream, coverage);
   const ranked = [...colors.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([hex]) => hex);
   const percent = (value) => Math.round(value * 100);
-  const text = `Chỉ màu UI, đã loại ảnh: nền ${light >= dark ? 'sáng' : 'tối'}; nâu ${percent(c.brown)}%, hồng ${percent(c.pink)}%, đỏ thật ${percent(c.red)}%, xanh lá ${percent(c.green)}%, xanh dương ${percent(c.blue)}%, vàng ${percent(c.yellow)}%, tím ${percent(c.purple)}%; màu UI nổi bật ${ranked.join(', ') || 'không rõ'}.`;
-  const sorted = Object.values(c).sort((a, b) => b - a);
-  const certainty = inferred !== 'Cần duyệt' && (sorted[0] >= 0.34 || (sorted[0] - (sorted[1] || 0)) >= 0.12) ? 'high' : (inferred !== 'Cần duyệt' ? 'medium' : 'low');
-  return { ...c, dark, light, cream, chromaRatio, inferred, certainty, text };
+  const text = `Chỉ màu UI, đã loại ảnh: nền ${light >= dark ? 'sáng' : 'tối'}; diện tích UI nâu ${percent(coverage.brown)}%, hồng ${percent(coverage.pink)}%, đỏ thật ${percent(coverage.red)}%, xanh lá ${percent(coverage.green)}%, xanh dương ${percent(coverage.blue)}%, vàng ${percent(coverage.yellow)}%, tím ${percent(coverage.purple)}%; màu UI nổi bật ${ranked.join(', ') || 'không rõ'}.`;
+  const leadingCoverage = Math.max(...Object.values(coverage));
+  const certainty = inferred !== 'Cần duyệt' && (leadingCoverage >= 0.055 || (dark >= 0.32 && (coverage.yellow >= 0.028 || coverage.green + coverage.blue >= 0.035))) ? 'high' : (inferred !== 'Cần duyệt' ? 'medium' : 'low');
+  return { ...c, dark, light, cream, chromaRatio, coverage, inferred, certainty, text };
 }
 
 async function screenshotColorEvidence(imageBuffer) {
@@ -157,12 +162,14 @@ async function screenshotColorEvidence(imageBuffer) {
   const chromatic = ['red', 'pink', 'brown', 'yellow', 'green', 'blue', 'purple'];
   const chromaTotal = chromatic.reduce((sum, key) => sum + buckets[key], 0);
   const c = Object.fromEntries(chromatic.map((key) => [key, chromaTotal ? buckets[key] / chromaTotal : 0]));
+  const coverage = Object.fromEntries(chromatic.map((key) => [key, total ? buckets[key] / total : 0]));
   return {
     ...c,
     dark: total ? buckets.dark / total : 0,
     light: total ? (buckets.light + buckets.cream) / total : 0,
     cream: total ? buckets.cream / total : 0,
     chromaRatio: total ? chromaTotal / total : 0,
+    coverage,
   };
 }
 
@@ -173,12 +180,13 @@ function blendVisualEvidence(ui, screenshot) {
   const light = ui.light * 0.80 + screenshot.light * 0.20;
   const cream = ui.cream * 0.80 + screenshot.cream * 0.20;
   const chromaRatio = ui.chromaRatio * 0.80 + screenshot.chromaRatio * 0.20;
-  const inferred = inferTone(combined, dark, light, chromaRatio, cream);
-  const sorted = Object.values(combined).sort((a, b) => b - a);
-  const certainty = inferred !== 'Cần duyệt' && (sorted[0] >= 0.34 || (sorted[0] - (sorted[1] || 0)) >= 0.12) ? 'high' : (inferred !== 'Cần duyệt' ? 'medium' : 'low');
+  const coverage = Object.fromEntries(keys.map((key) => [key, (ui.coverage?.[key] || 0) * 0.80 + (screenshot.coverage?.[key] || 0) * 0.20]));
+  const inferred = inferTone(combined, dark, light, chromaRatio, cream, coverage);
+  const leadingCoverage = Math.max(...Object.values(coverage));
+  const certainty = inferred !== 'Cần duyệt' && (leadingCoverage >= 0.055 || (dark >= 0.32 && (coverage.yellow >= 0.028 || coverage.green + coverage.blue >= 0.035))) ? 'high' : (inferred !== 'Cần duyệt' ? 'medium' : 'low');
   const percent = (value) => Math.round(value * 100);
-  const text = `Trọng số 80% UI + 20% ảnh: nâu ${percent(combined.brown)}%, hồng ${percent(combined.pink)}%, đỏ thật ${percent(combined.red)}%, xanh lá ${percent(combined.green)}%, xanh dương ${percent(combined.blue)}%, vàng ${percent(combined.yellow)}%, tím ${percent(combined.purple)}%. Ảnh chỉ là tín hiệu phụ và không được tự ghi đè UI rõ ràng.`;
-  return { ...combined, dark, light, cream, chromaRatio, inferred, certainty, text };
+  const text = `Trọng số 80% UI + 20% ảnh: diện tích nâu ${percent(coverage.brown)}%, hồng ${percent(coverage.pink)}%, đỏ thật ${percent(coverage.red)}%, xanh lá ${percent(coverage.green)}%, xanh dương ${percent(coverage.blue)}%, vàng ${percent(coverage.yellow)}%, tím ${percent(coverage.purple)}%. Ảnh chỉ là tín hiệu phụ và không được tự ghi đè UI rõ ràng.`;
+  return { ...combined, dark, light, cream, chromaRatio, coverage, inferred, certainty, text };
 }
 
 async function renderedUiEvidence(browser, url) {
@@ -204,7 +212,11 @@ async function renderedUiEvidence(browser, url) {
         const parentBg = el.parentElement ? getComputedStyle(el.parentElement).backgroundColor : '';
         if (style.backgroundColor !== parentBg || semantic.has(el.tagName)) add(style.backgroundColor, Math.min(55, Math.sqrt(area) / 20) * structural, 'background');
         const hasOwnText = [...el.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
-        if (hasOwnText || /^H[1-4]$/.test(el.tagName) || ['A', 'BUTTON'].includes(el.tagName)) add(style.color, Math.min(12, 1 + (el.textContent || '').trim().length / 28) * (['A', 'BUTTON'].includes(el.tagName) ? 1.8 : 1), 'text');
+        if (hasOwnText || /^H[1-4]$/.test(el.tagName) || ['A', 'BUTTON'].includes(el.tagName)) {
+          const textWeight = Math.min(12, 1 + (el.textContent || '').trim().length / 28);
+          const textRole = ['A', 'BUTTON'].includes(el.tagName) ? 0.55 : (/^H[1-4]$/.test(el.tagName) ? 0.35 : 0.14);
+          add(style.color, textWeight * textRole, 'text');
+        }
         if (parseFloat(style.borderTopWidth) > 0) add(style.borderTopColor, semantic.has(el.tagName) ? 3 : 1, 'border');
         if (el.tagName === 'SVG') { add(style.fill, 2.5, 'icon'); add(style.stroke, 2, 'icon'); }
       }
@@ -247,12 +259,14 @@ function parseTone(response, evidence) {
     [/\b(brown|nâu)\b[\s\S]{0,180}\b(cream|kem)\b|\b(cream|kem)\b[\s\S]{0,180}\b(brown|nâu)\b/, 'Nâu kem'],
   ].find(([pattern]) => pattern.test(normalized))?.[1];
   const candidateTone = tones.includes(parsed.tone) ? parsed.tone : (explicitTone || englishTone || '');
-  const tone = evidence.inferred !== 'Cần duyệt' ? evidence.inferred : candidateTone;
+  // Strong measured UI evidence wins. For a borderline palette, let the
+  // vision model inspect the UI-only image instead of forcing a weak rule.
+  const tone = 'high' === evidence.certainty && evidence.inferred !== 'Cần duyệt' ? evidence.inferred : ( candidateTone || evidence.inferred );
   if (!tone) throw new Error(`Llama Vision returned no supported tone: ${text.replace(/\s+/g, ' ').slice(0, 500)}`);
   const confidenceMatch = text.match(/\b(high|medium|low)\b/i);
   return {
     tone,
-    confidence: evidence.inferred !== 'Cần duyệt' ? evidence.certainty : (['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : (confidenceMatch ? confidenceMatch[1].toLowerCase() : 'low')),
+    confidence: 'high' === evidence.certainty && evidence.inferred !== 'Cần duyệt' ? 'high' : (['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : (confidenceMatch ? confidenceMatch[1].toLowerCase() : evidence.certainty)),
     reason: evidence.text.slice(0, 500),
   };
 }
