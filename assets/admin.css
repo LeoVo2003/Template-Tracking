@@ -429,6 +429,8 @@
 .mac-tracker-visual-tools span { display: block; max-width: 660px; margin-top: var(--space-1); color: var(--text-muted); font-size: var(--text-xs); line-height: 1.5; }
 .mac-tracker-visual-tools__actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
 .mac-tracker-visual-tools__actions .button { white-space: nowrap; }
+.mac-tracker-select-all { display: inline-flex; align-items: center; gap: 5px; padding: 0 var(--space-1); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); cursor: pointer; white-space: nowrap; }
+.mac-tracker-wrap .mac-tracker-select-all input[type="checkbox"] { width: 16px; min-width: 16px; height: 16px; min-height: 16px; margin: 0; padding: 0; accent-color: var(--primary); }
 .mac-tracker-visual-card { overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 18px rgba(47, 59, 52, .05); }
 .mac-tracker-visual-card__select { display: flex; align-items: center; gap: 5px; padding: var(--space-2) var(--space-3); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); background: var(--mist-light); border-bottom: 1px solid var(--line); cursor: pointer; }
 .mac-tracker-wrap .mac-tracker-visual-card__select input[type="checkbox"] { width: 16px; min-width: 16px; height: 16px; min-height: 16px; margin: 0; padding: 0; accent-color: var(--primary); border-radius: 3px; }
@@ -445,11 +447,15 @@
 .mac-tracker-visual-status .dashicons { width: 14px; height: 14px; margin-top: 1px; font-size: 14px; flex: 0 0 auto; }
 .mac-tracker-visual-status--complete { color: var(--ok); }
 .mac-tracker-visual-status--queued { color: var(--warn); }
+.mac-tracker-visual-status--working { color: var(--willow-deep); font-weight: 700; }
+.mac-tracker-visual-status--working .dashicons { animation: mac-tracker-spin 1.15s linear infinite; }
 .mac-tracker-visual-status--failed { color: var(--danger); }
 .mac-tracker-visual-card__body > p:last-child { min-height: 3.2em; margin: var(--space-3) 0 0; color: var(--text-muted); font-size: var(--text-xs); line-height: 1.6; }
 .mac-tracker-visual-card__actions { display: flex; gap: var(--space-3); margin-top: var(--space-3); }
 .mac-tracker-visual-card__actions .button-link { padding: 0; color: var(--primary); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 700; background: transparent; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .mac-tracker-visual-card__actions .button-link:hover, .mac-tracker-visual-card__actions .button-link:focus { color: var(--primary-hover); }
+@keyframes mac-tracker-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .mac-tracker-visual-status--working .dashicons { animation: none; } }
 
 .mac-tracker-color-intro { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-5); margin-top: var(--space-5); padding: var(--space-5); background: var(--mist-light); border: 1px solid var(--line); border-radius: 8px; }
 .mac-tracker-color-intro h2 { margin: var(--space-2) 0 0; color: var(--text); font-size: var(--text-xl); letter-spacing: -.035em; }

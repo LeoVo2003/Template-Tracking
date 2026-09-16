@@ -546,15 +546,22 @@ class MAC_Tracker_Repository {
 		$limit = max( 1, min( 25, absint( $limit ) ) );
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
 		if ( 'tone' === $stage ) {
-			$sql = "SELECT p.id, p.website_url, v.screenshot_url, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.capture_status = 'captured' AND v.tone_status IN ('pending', 'failed') AND v.screenshot_url <> '' ORDER BY v.updated_at ASC LIMIT %d";
+			$sql = "SELECT p.id, p.website_url, v.screenshot_url, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.capture_status = 'captured' AND (v.tone_status IN ('pending', 'failed') OR (v.tone_status = 'analyzing' AND v.updated_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 MINUTE))) AND v.screenshot_url <> '' ORDER BY v.updated_at ASC LIMIT %d";
 		} else {
-			$sql = "SELECT p.id, p.website_url, '' AS screenshot_url, c.source_raw AS color_source_raw FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR v.capture_status = 'pending') ORDER BY CASE WHEN v.capture_status = 'pending' THEN 0 ELSE 1 END, v.updated_at DESC, p.task_completed_at DESC, p.id DESC LIMIT %d";
+			$sql = "SELECT p.id, p.website_url, '' AS screenshot_url, c.source_raw AS color_source_raw FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR v.capture_status = 'pending' OR (v.capture_status = 'capturing' AND v.updated_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 MINUTE))) ORDER BY CASE WHEN v.capture_status IN ('pending', 'capturing') THEN 0 ELSE 1 END, v.updated_at DESC, p.task_completed_at DESC, p.id DESC LIMIT %d";
 		}
 		return (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
 	}
 
 	public function save_visual_capture( $snapshot_id, $attachment_id, $url ) {
 		return $this->save_visual( $snapshot_id, array( 'capture_status' => 'captured', 'attachment_id' => absint( $attachment_id ), 'screenshot_url' => esc_url_raw( $url ), 'tone_status' => 'pending', 'captured_at' => MAC_Tracker_Time::now_utc() ) );
+	}
+
+	/** Mark the currently processed item so the admin can show live workflow state. */
+	public function mark_visual_stage( $snapshot_id, $stage ) {
+		$stage = 'tone' === $stage ? 'tone' : 'capture';
+		$data = 'tone' === $stage ? array( 'tone_status' => 'analyzing' ) : array( 'capture_status' => 'capturing' );
+		return $this->save_visual( $snapshot_id, $data );
 	}
 
 	public function save_visual_failure( $snapshot_id, $stage, $message ) {

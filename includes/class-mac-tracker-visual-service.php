@@ -47,6 +47,8 @@ class MAC_Tracker_Visual_Service {
 		}
 		if ( 'tone' === $mode ) {
 			$result = $this->repository->save_visual_tone( $snapshot_id, sanitize_text_field( $request->get_param( 'tone' ) ), sanitize_key( $request->get_param( 'confidence' ) ), sanitize_text_field( $request->get_param( 'reason' ) ), wp_json_encode( $request->get_json_params() ) );
+		} elseif ( 'capture_started' === $mode || 'tone_started' === $mode ) {
+			$result = $this->repository->mark_visual_stage( $snapshot_id, 'tone_started' === $mode ? 'tone' : 'capture' );
 		} elseif ( 'capture_failed' === $mode || 'tone_failed' === $mode ) {
 			$result = $this->repository->save_visual_failure( $snapshot_id, 'tone_failed' === $mode ? 'tone' : 'capture', sanitize_text_field( $request->get_param( 'message' ) ) );
 		} else {

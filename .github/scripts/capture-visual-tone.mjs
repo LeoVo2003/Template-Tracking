@@ -149,6 +149,7 @@ function parseTone(response, evidence) {
 
 async function classify(snapshotId, imageBuffer, colors = []) {
   if (!cloudflareAccount || !cloudflareToken) return { skipped: true };
+  await postJson({ mode: 'tone_started', snapshot_id: snapshotId });
   const evidence = await renderedColorEvidence(imageBuffer);
   const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cloudflareAccount}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct`, {
     method: 'POST',
@@ -171,7 +172,26 @@ async function captureBatch() {
       const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
       const file = join(workDir, `snapshot-${item.id}.jpg`);
       try {
+        await postJson({ mode: 'capture_started', snapshot_id: item.id });
         await page.goto(item.website_url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.evaluate(() => {
+          const copy = (element, target, sources) => {
+            if (element.getAttribute(target)) return;
+            for (const source of sources) {
+              const value = element.getAttribute(source);
+              if (value) { element.setAttribute(target, value); break; }
+            }
+          };
+          document.querySelectorAll('img').forEach((image) => {
+            image.loading = 'eager';
+            copy(image, 'src', ['data-src', 'data-lazy-src', 'data-original', 'data-e-src']);
+            copy(image, 'srcset', ['data-srcset', 'data-lazy-srcset', 'data-e-srcset']);
+          });
+          document.querySelectorAll('[data-bg], [data-background-image], [data-lazy-bg]').forEach((element) => {
+            const source = element.getAttribute('data-bg') || element.getAttribute('data-background-image') || element.getAttribute('data-lazy-bg');
+            if (source && !getComputedStyle(element).backgroundImage.includes('url(')) element.style.backgroundImage = `url("${source}")`;
+          });
+        });
         // Full-page screenshots do not automatically activate below-the-fold
         // lazy assets or scroll-triggered sections. Walk the document first.
         let lastHeight = 0;
@@ -186,7 +206,11 @@ async function captureBatch() {
         }
         const colors = await liveColorEvidence(page);
         await page.evaluate(() => window.scrollTo(0, 0));
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(1200);
+        await page.evaluate(() => Promise.race([
+          Promise.all([...document.images].map((image) => image.complete ? Promise.resolve() : new Promise((resolve) => { image.addEventListener('load', resolve, { once: true }); image.addEventListener('error', resolve, { once: true }); }))),
+          new Promise((resolve) => setTimeout(resolve, 6000)),
+        ]));
         await page.screenshot({ path: file, fullPage: true, type: 'jpeg', quality: 55 });
         const full = await readFile(file);
         const form = new FormData();
