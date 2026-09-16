@@ -529,7 +529,7 @@ class MAC_Tracker_Repository {
 		$limit = max( 1, min( 25, absint( $limit ) ) );
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
 		if ( 'tone' === $stage ) {
-			$sql = "SELECT p.id, p.website_url, v.screenshot_url FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND v.capture_status = 'captured' AND v.tone_status = 'pending' AND v.screenshot_url <> '' ORDER BY v.updated_at ASC LIMIT %d";
+			$sql = "SELECT p.id, p.website_url, v.screenshot_url FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND v.capture_status = 'captured' AND v.tone_status IN ('pending', 'failed') AND v.screenshot_url <> '' ORDER BY v.updated_at ASC LIMIT %d";
 		} else {
 			$sql = "SELECT p.id, p.website_url, '' AS screenshot_url FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR v.capture_status = 'pending') ORDER BY p.task_completed_at DESC, p.id DESC LIMIT %d";
 		}

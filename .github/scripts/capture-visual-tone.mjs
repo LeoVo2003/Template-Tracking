@@ -50,14 +50,24 @@ function tonePrompt() {
 }
 
 function parseTone(response) {
-  const text = String(response?.result?.response || response?.response || response?.result || '');
+  // Workers AI usually places text at result.response, but the model is not
+  // guaranteed to obey JSON-only output. Preserve the fixed label list as a
+  // safe fallback instead of throwing away an otherwise useful answer.
+  const value = response?.result?.response ?? response?.response ?? response?.result ?? response;
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('Llama Vision did not return JSON.');
-  const parsed = JSON.parse(match[0]);
+  let parsed = {};
+  if (match) {
+    try { parsed = JSON.parse(match[0]); } catch { parsed = {}; }
+  }
+  const explicitTone = tones.find((tone) => text.toLocaleLowerCase('vi-VN').includes(tone.toLocaleLowerCase('vi-VN')));
+  const tone = tones.includes(parsed.tone) ? parsed.tone : (explicitTone || '');
+  if (!tone) throw new Error(`Llama Vision returned no supported tone: ${text.replace(/\s+/g, ' ').slice(0, 500)}`);
+  const confidenceMatch = text.match(/\b(high|medium|low)\b/i);
   return {
-    tone: tones.includes(parsed.tone) ? parsed.tone : 'Cần duyệt',
-    confidence: ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : 'low',
-    reason: String(parsed.reason || '').slice(0, 500),
+    tone,
+    confidence: ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : (confidenceMatch ? confidenceMatch[1].toLowerCase() : 'low'),
+    reason: String(parsed.reason || text.replace(/\s+/g, ' ').slice(0, 500)).slice(0, 500),
   };
 }
 
