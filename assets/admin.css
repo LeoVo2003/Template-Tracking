@@ -411,6 +411,12 @@
 .mac-tracker-tone--xanh-trang { --tone-a: #6d9a91; --tone-b: #f8fbfa; --tone-soft: #f0f8f5; --tone-line: #cfe3da; --tone-ink: #416e63; }
 .mac-tracker-tone--xanh-den { --tone-a: #557c72; --tone-b: #27342f; --tone-soft: #eef4f1; --tone-line: #cadbd4; --tone-ink: #345d53; }
 .mac-tracker-tone--den-trang { --tone-a: #2d3431; --tone-b: #f8f8f5; --tone-soft: #f4f6f4; --tone-line: #d8dfda; --tone-ink: #3d4942; }
+.mac-tracker-tone--vang-den { --tone-a: #d9ad32; --tone-b: #222a25; --tone-soft: #f7f1dd; --tone-line: #e4d49d; --tone-ink: #6d551b; }
+.mac-tracker-tone--vang-trang { --tone-a: #e2bd43; --tone-b: #fffdf7; --tone-soft: #fff9e8; --tone-line: #eddda9; --tone-ink: #806126; }
+.mac-tracker-tone--hong-den { --tone-a: #d77b9d; --tone-b: #252b28; --tone-soft: #fff2f6; --tone-line: #e8c5d2; --tone-ink: #86465f; }
+.mac-tracker-tone--nau-trang { --tone-a: #947764; --tone-b: #fffdf8; --tone-soft: #faf4ef; --tone-line: #e5d6ca; --tone-ink: #705344; }
+.mac-tracker-tone--xanh-vang { --tone-a: #317c69; --tone-b: #e5b83b; --tone-soft: #edf8f3; --tone-line: #cfe3d8; --tone-ink: #356b58; }
+.mac-tracker-tone--trang-kem { --tone-a: #fffefa; --tone-b: #eadfc9; --tone-soft: #fbfaf5; --tone-line: #e7dece; --tone-ink: #6c675c; }
 .mac-tracker-tone--tim-hong { --tone-a: #80699a; --tone-b: #df9cae; --tone-soft: #faf2f7; --tone-line: #e3cedc; --tone-ink: #684a76; }
 .mac-tracker-tone--can-duyet, .mac-tracker-tone--pending { --tone-a: #9a7834; --tone-b: #e8dcc1; --tone-soft: var(--warning-soft); --tone-line: #dfcca5; --tone-ink: #765a27; }
 .mac-tracker-tone--pending i { opacity: .55; }

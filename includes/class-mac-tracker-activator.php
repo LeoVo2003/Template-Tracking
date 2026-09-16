@@ -178,6 +178,10 @@ class MAC_Tracker_Activator {
 			// Revisit AI tones after changing the UI/image weighting; manual reviews stay locked.
 			( new MAC_Tracker_Repository() )->requeue_visual_tones();
 		}
+		if ( version_compare( $previous_version, '0.13.16', '<' ) ) {
+			// Expand the tone taxonomy; recalculate AI results while preserving manual reviews.
+			( new MAC_Tracker_Repository() )->requeue_visual_tones();
+		}
 		update_option( 'mac_tracker_db_version', MAC_TRACKER_VERSION, false );
 	}
 }

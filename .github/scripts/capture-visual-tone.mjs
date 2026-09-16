@@ -10,7 +10,7 @@ const cloudflareAccount = String(process.env.CLOUDFLARE_ACCOUNT_ID || '');
 const cloudflareToken = String(process.env.CLOUDFLARE_API_TOKEN || '');
 const apiBase = `${siteUrl}/wp-json/mac-tracker/v1/visual`;
 const workDir = join(process.cwd(), '.visual-capture');
-const tones = ['Vàng kem sáng', 'Đen vàng', 'Hồng xanh trắng', 'Hồng trắng', 'Đỏ trắng', 'Nâu kem', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Đỏ hồng', 'Tím hồng', 'Cần duyệt'];
+const tones = ['Vàng kem sáng', 'Vàng đen', 'Vàng trắng', 'Đen vàng', 'Hồng xanh trắng', 'Hồng trắng', 'Hồng đen', 'Đỏ trắng', 'Đỏ hồng', 'Nâu kem', 'Nâu trắng', 'Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Trắng kem', 'Tím hồng', 'Cần duyệt'];
 
 if (!siteUrl || !secret) throw new Error('MAC_TRACKER_SITE_URL and MAC_TRACKER_AUTOMATION_SECRET are required.');
 
@@ -50,7 +50,7 @@ async function postJson(payload) {
 }
 
 function tonePrompt(evidence) {
-  return `Classify the website into one fixed visual tone. Weight the rendered UI palette about 80% of the decision: section backgrounds, header/footer bars, buttons, borders, navigation and repeated typography accents. Full-page screenshot colors are only secondary context at about 20%; photos of nails, skin, flowers, lipstick and products must never override a clear UI palette. The supplied model image intentionally hides photo/media content so UI remains primary. Weighted evidence: ${evidence.text}. Choose exactly one label: ${tones.join(', ')}. Key meanings: Vàng kem sáng = light cream/yellow UI; Đen vàng = dark UI with gold/yellow accents; Hồng xanh trắng = pink and green UI accents on a light page; Hồng trắng = pink UI on a light page; Đỏ trắng = true red UI on a light page; Nâu kem = brown/taupe UI with cream/light neutral areas; Xanh trắng = green/blue UI on a light page; Xanh đen = green/blue UI on a dark page; Đen trắng = neutral black/white UI; Đỏ hồng = both true red and pink are repeated UI colors; Tím hồng = purple and pink UI. Return JSON only: {"tone":"one allowed label","confidence":"high|medium|low","reason":"one short Vietnamese sentence about the weighted palette"}.`;
+  return `Classify the website into one fixed visual tone. Weight the rendered UI palette about 80% of the decision: section backgrounds, header/footer bars, buttons, borders, navigation and repeated typography accents. Full-page screenshot colors are only secondary context at about 20%; photos of nails, skin, flowers, lipstick and products must never override a clear UI palette. The supplied model image intentionally hides photo/media content so UI remains primary. Weighted evidence: ${evidence.text}. Choose exactly one label: ${tones.join(', ')}. Key meanings: Vàng kem sáng = light cream/yellow UI; Vàng đen = yellow/gold with black UI; Vàng trắng = yellow/gold with white UI; Đen vàng = dark UI with gold/yellow accents; Hồng xanh trắng = pink and green UI accents on a light page; Hồng trắng = pink UI on a light page; Hồng đen = pink UI with black sections; Đỏ trắng = true red UI on a light page; Đỏ hồng = both true red and pink UI; Nâu kem = brown/taupe UI with cream UI; Nâu trắng = brown/taupe with white UI; Xanh vàng = green/blue UI with yellow accents; Xanh trắng = green/blue UI on a light page; Xanh đen = green/blue UI on a dark page; Đen trắng = neutral black/white UI; Trắng kem = mostly white and cream UI; Tím hồng = purple and pink UI. Return JSON only: {"tone":"one allowed label","confidence":"high|medium|low","reason":"one short Vietnamese sentence about the weighted palette"}.`;
 }
 
 function parseRgb(value) {
@@ -94,14 +94,20 @@ function inferTone(c, dark, light, chromaRatio, cream = 0) {
   if (dark >= 0.38 && c.yellow >= 0.14) inferred = 'Đen vàng';
   else if (dark >= 0.38 && (c.green + c.blue) >= 0.18) inferred = 'Xanh đen';
   else if (dark >= 0.42 && chromaRatio < 0.12) inferred = 'Đen trắng';
+  else if (dark >= 0.30 && c.yellow >= 0.13) inferred = 'Vàng đen';
+  else if (c.pink >= 0.18 && dark >= 0.18) inferred = 'Hồng đen';
   else if (c.pink >= 0.18 && c.green >= 0.11) inferred = 'Hồng xanh trắng';
   else if (c.brown >= 0.22 && c.brown > Math.max(c.red, c.pink) * 1.12) inferred = 'Nâu kem';
+  else if (c.brown >= 0.16 && light >= 0.45) inferred = 'Nâu trắng';
   else if (c.red >= 0.20 && c.red > c.pink * 1.28) inferred = 'Đỏ trắng';
   else if (c.pink >= 0.20 && c.pink > c.red * 1.18) inferred = 'Hồng trắng';
   else if (c.red >= 0.12 && c.pink >= 0.12) inferred = 'Đỏ hồng';
   else if (c.purple >= 0.13 && c.pink >= 0.08) inferred = 'Tím hồng';
+  else if ((c.green + c.blue) >= 0.22 && c.yellow >= 0.10) inferred = 'Xanh vàng';
   else if ((c.green + c.blue) >= 0.22) inferred = 'Xanh trắng';
+  else if (c.yellow >= 0.16 && light >= 0.48) inferred = 'Vàng trắng';
   else if ((c.yellow + cream) >= 0.18) inferred = 'Vàng kem sáng';
+  else if (light >= 0.72 && cream >= 0.35) inferred = 'Trắng kem';
   else if (dark >= 0.35 && light >= 0.18) inferred = 'Đen trắng';
   return inferred;
 }
@@ -180,6 +186,8 @@ async function renderedUiEvidence(browser, url) {
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(1400);
+    const challenge = await page.evaluate(() => /performing security verification|verify you are human|checking your browser|just a moment\.\.\./i.test(`${document.title} ${document.body?.innerText || ''}`));
+    if (challenge) throw new Error('Homepage is behind a Cloudflare security challenge; the real UI was not captured.');
     const samples = await page.evaluate(() => {
       const result = [];
       const rgba = (value) => /^rgba?\(/i.test(String(value || '')) && !/rgba\([^)]*,\s*0(?:\.0+)?\s*\)$/i.test(String(value || ''));
@@ -228,6 +236,9 @@ function parseTone(response, evidence) {
   // Vision occasionally describes the palette in English even when asked for
   // a Vietnamese fixed label. Only map clear two-colour combinations.
   const englishTone = [
+    [/\b(yellow|gold|vàng)\b[\s\S]{0,180}\b(black|dark|đen)\b|\b(black|dark|đen)\b[\s\S]{0,180}\b(yellow|gold|vàng)\b/, 'Vàng đen'],
+    [/\b(pink|hồng)\b[\s\S]{0,180}\b(black|dark|đen)\b|\b(black|dark|đen)\b[\s\S]{0,180}\b(pink|hồng)\b/, 'Hồng đen'],
+    [/\b(blue|green|xanh)\b[\s\S]{0,180}\b(yellow|gold|vàng)\b|\b(yellow|gold|vàng)\b[\s\S]{0,180}\b(blue|green|xanh)\b/, 'Xanh vàng'],
     [/\b(pink|hồng)\b[\s\S]{0,180}\b(green|xanh)\b[\s\S]{0,180}\b(white|trắng)\b|\b(green|xanh)\b[\s\S]{0,180}\b(pink|hồng)\b[\s\S]{0,180}\b(white|trắng)\b/, 'Hồng xanh trắng'],
     [/\b(red|đỏ)\b[\s\S]{0,180}\b(white|trắng)\b|\b(white|trắng)\b[\s\S]{0,180}\b(red|đỏ)\b/, 'Đỏ trắng'],
     [/\b(pink|hồng)\b[\s\S]{0,180}\b(white|trắng)\b|\b(white|trắng)\b[\s\S]{0,180}\b(pink|hồng)\b/, 'Hồng trắng'],
@@ -281,6 +292,8 @@ async function captureBatch() {
       const file = join(workDir, `snapshot-${item.id}.jpg`);
       try {
         await page.goto(item.website_url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        const challenge = await page.evaluate(() => /performing security verification|verify you are human|checking your browser|just a moment\.\.\./i.test(`${document.title} ${document.body?.innerText || ''}`));
+        if (challenge) throw new Error('Homepage is behind a Cloudflare security challenge; the real UI was not captured.');
         await page.evaluate(() => {
           const copy = (element, target, sources) => {
             if (element.getAttribute(target)) return;

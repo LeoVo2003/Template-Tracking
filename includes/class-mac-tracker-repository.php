@@ -682,7 +682,7 @@ class MAC_Tracker_Repository {
 	}
 
 	public function visual_tones() {
-		return array( 'Vàng kem sáng', 'Đen vàng', 'Hồng xanh trắng', 'Hồng trắng', 'Đỏ trắng', 'Nâu kem', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Đỏ hồng', 'Tím hồng', 'Cần duyệt' );
+		return array( 'Vàng kem sáng', 'Vàng đen', 'Vàng trắng', 'Đen vàng', 'Hồng xanh trắng', 'Hồng trắng', 'Hồng đen', 'Đỏ trắng', 'Đỏ hồng', 'Nâu kem', 'Nâu trắng', 'Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Trắng kem', 'Tím hồng', 'Cần duyệt' );
 	}
 
 	/** Reject late callbacks from a superseded Analyze/Capture request. */

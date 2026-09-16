@@ -629,6 +629,9 @@ class MAC_Tracker_Admin {
 	private function tone_cell( array $row, $link = true ) {
 		$status = (string) ( $row['tone_status'] ?? '' );
 		$tone   = (string) ( $row['tone'] ?? '' );
+		if ( 'classified' === $status && ! in_array( $tone, $this->tone_options(), true ) ) {
+			$tone = 'Cần duyệt';
+		}
 		if ( 'classified' !== $status || ! in_array( $tone, $this->tone_options(), true ) ) {
 			echo '<span class="mac-tracker-tone mac-tracker-tone--pending">' . esc_html( 'failed' === $status ? 'Retry AI' : 'Waiting for AI' ) . '</span>';
 			return;
