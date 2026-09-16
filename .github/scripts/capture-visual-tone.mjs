@@ -111,6 +111,7 @@ async function renderedColorEvidence(imageBuffer) {
 function reconcileTone(tone, evidence) {
   const light = evidence.brightness >= 0.62;
   if (light && evidence.red >= 0.14 && evidence.red > evidence.pink * 1.3 && ['Hồng trắng', 'Đỏ hồng', 'Hồng xanh trắng'].includes(tone)) return 'Đỏ trắng';
+  if (evidence.green >= 0.22 && evidence.green > (evidence.pink + evidence.red) * 1.3 && ['Hồng trắng', 'Đỏ hồng', 'Hồng xanh trắng', 'Đỏ trắng'].includes(tone)) return evidence.brightness <= 0.50 ? 'Xanh đen' : 'Xanh trắng';
   if (light && evidence.blue >= 0.22 && evidence.blue > (evidence.pink + evidence.red) * 1.3 && ['Hồng trắng', 'Đỏ hồng', 'Hồng xanh trắng', 'Đỏ trắng'].includes(tone)) return 'Xanh trắng';
   if (light && evidence.yellow >= 0.24 && evidence.yellow > (evidence.pink + evidence.red) * 1.25 && ['Hồng trắng', 'Đỏ hồng', 'Đỏ trắng'].includes(tone)) return 'Vàng kem sáng';
   if (evidence.brightness <= 0.42 && evidence.yellow >= 0.16 && tone !== 'Đen vàng') return 'Đen vàng';
