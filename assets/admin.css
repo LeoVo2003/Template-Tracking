@@ -447,10 +447,13 @@
 .mac-tracker-visual-card__body { padding: var(--space-4); }
 .mac-tracker-visual-card__body > .mac-tracker-project-name { margin-top: var(--space-1); }
 .mac-tracker-visual-card__tone { margin-top: var(--space-3); }
-.mac-tracker-tone-review { display: grid; gap: var(--space-1); margin-top: var(--space-2); padding: var(--space-2); background: var(--mist-light); border: 1px solid var(--line); border-radius: 6px; }
-.mac-tracker-tone-review > label { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 700; }
+.mac-tracker-tone-review { margin-top: var(--space-2); padding: var(--space-2); background: var(--mist-light); border: 1px solid var(--line); border-radius: 6px; }
+.mac-tracker-tone-review summary { color: var(--primary); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 700; cursor: pointer; }
 .mac-tracker-tone-review > div { display: flex; gap: var(--space-2); align-items: center; }
+.mac-tracker-tone-review[open] > div { margin-top: var(--space-2); }
 .mac-tracker-tone-review select { min-width: 0; max-width: 170px; height: 30px; font-size: var(--text-xs); }
+.mac-tracker-tone-manual { display: inline-flex; margin-left: var(--space-2); padding: 3px 6px; color: var(--ok); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 700; background: var(--ok-soft); border: 1px solid rgba(61, 139, 122, .22); border-radius: 999px; vertical-align: middle; }
+.mac-tracker-visual-card.is-manual-tone [data-visual-reason] { display: none; }
 .mac-tracker-visual-status { display: flex; align-items: flex-start; gap: 4px; margin: var(--space-3) 0 0; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 1.45; }
 .mac-tracker-visual-status .dashicons { width: 14px; height: 14px; margin-top: 1px; font-size: 14px; flex: 0 0 auto; }
 .mac-tracker-visual-status--complete { color: var(--ok); }
@@ -459,6 +462,7 @@
 .mac-tracker-visual-status--working .dashicons { animation: mac-tracker-spin 1.15s linear infinite; }
 .mac-tracker-visual-status--failed { color: var(--danger); }
 .mac-tracker-visual-card__body > p:last-child { min-height: 3.2em; margin: var(--space-3) 0 0; color: var(--text-muted); font-size: var(--text-xs); line-height: 1.6; }
+.mac-tracker-visual-card__body [data-visual-reason] { margin: var(--space-3) 0 0; color: var(--text-muted); font-size: var(--text-xs); line-height: 1.6; }
 .mac-tracker-visual-card__actions { display: flex; gap: var(--space-3); margin-top: var(--space-3); }
 .mac-tracker-visual-card__actions .button-link { padding: 0; color: var(--primary); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 700; background: transparent; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .mac-tracker-visual-card__actions .button-link:hover, .mac-tracker-visual-card__actions .button-link:focus { color: var(--primary-hover); }

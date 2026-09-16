@@ -49,69 +49,123 @@ async function postJson(payload) {
   return ingest(form);
 }
 
-function colorEvidence(raw) {
-  try {
-    const variables = JSON.parse(String(raw || ''))?.variables || {};
-    return Object.entries(variables)
-      .filter(([name, value]) => /^--e-global-color-(primary|secondary|text|accent)$/i.test(name) && /^#[0-9a-f]{6}$/i.test(String(value).trim()))
-      .map(([name, value]) => `${name}=${String(value).trim().toUpperCase()}`);
-  } catch { return []; }
+function tonePrompt(evidence) {
+  return `Classify ONLY the rendered website interface palette into one fixed visual tone. The supplied image has photographs, product imagery, background photos and ordinary image content hidden. Judge section backgrounds, header/footer bars, buttons, borders, navigation and repeated typography accents. Never infer a brand color from nails, skin, flowers, lipstick or other photo content. Rendered UI color evidence: ${evidence.text}. Choose exactly one label: ${tones.join(', ')}. Key meanings: Vàng kem sáng = light cream/yellow UI; Đen vàng = dark UI with gold/yellow accents; Hồng xanh trắng = pink and green UI accents on a light page; Hồng trắng = pink UI on a light page; Đỏ trắng = true red UI on a light page; Nâu kem = brown/taupe UI with cream/light neutral areas; Xanh trắng = green/blue UI on a light page; Xanh đen = green/blue UI on a dark page; Đen trắng = neutral black/white UI; Đỏ hồng = both true red and pink are repeated UI colors; Tím hồng = purple and pink UI. Return JSON only: {"tone":"one allowed label","confidence":"high|medium|low","reason":"one short Vietnamese sentence about UI colors only"}.`;
 }
 
-function tonePrompt(colors) {
-  const evidence = colors.length ? colors.join(', ') : 'No Elementor global colors available; rely on the rendered screenshot.';
-  return `Classify a rendered nail salon website screenshot into one fixed visual tone. Prioritize the website UI palette: large header/footer bars, section backgrounds, buttons, borders and repeated typography accents. Treat photos of hands, nails, flowers or products as content, not the brand palette. Use Elementor global variables only as supporting evidence, never as a replacement for the rendered page. Global color evidence: ${evidence}. Choose exactly one label: ${tones.join(', ')}. Key meanings: Vàng kem sáng = pale yellow/cream dominant and light page; Đen vàng = dark/black dominant with gold/yellow accent; Hồng xanh trắng = pink and green UI accents on a mainly white/light page; Hồng trắng = pink UI dominant on a mainly white/light page; Đỏ trắng = red UI dominant on a mainly white/light page, even if photos contain pink nails. Return JSON only: {"tone":"one allowed label","confidence":"high|medium|low","reason":"one short Vietnamese sentence mentioning dominant UI colors and light/dark"}.`;
+function parseRgb(value) {
+  const match = String(value || '').match(/rgba?\(\s*(\d+(?:\.\d+)?)\s*[, ]\s*(\d+(?:\.\d+)?)\s*[, ]\s*(\d+(?:\.\d+)?)(?:\s*[,/]\s*(\d+(?:\.\d+)?))?/i);
+  if (!match) return null;
+  return { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]), a: match[4] === undefined ? 1 : Number(match[4]) };
 }
 
-async function renderedColorEvidence(imageBuffer) {
-  const { data, info } = await sharp(imageBuffer).resize({ width: 160, withoutEnlargement: true }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-  const buckets = { blue: 0, green: 0, pink: 0, red: 0, yellow: 0 };
-  let lightness = 0;
-  let colourful = 0;
-  for (let index = 0; index < data.length; index += info.channels) {
-    const r = data[index] / 255;
-    const g = data[index + 1] / 255;
-    const b = data[index + 2] / 255;
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const delta = max - min;
-    const value = max;
-    lightness += (max + min) / 2;
-    if (delta < 0.12 || value < 0.12) continue;
-    let hue = 0;
-    if (max === r) hue = 60 * (((g - b) / delta + 6) % 6);
-    if (max === g) hue = 60 * ((b - r) / delta + 2);
-    if (max === b) hue = 60 * ((r - g) / delta + 4);
-    const weight = delta * (0.35 + value);
-    colourful += weight;
-    if (hue >= 180 && hue < 275) buckets.blue += weight;
-    else if (hue >= 75 && hue < 180) buckets.green += weight;
-    else if (hue >= 300 && hue < 340) buckets.pink += weight;
-    else if (hue >= 340 || hue < 18) buckets.red += weight;
-    else if (hue >= 35 && hue < 75) buckets.yellow += weight;
+function rgbToHsl({ r, g, b }) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
+  let h = 0;
+  if (delta) {
+    if (max === r) h = 60 * (((g - b) / delta + 6) % 6);
+    else if (max === g) h = 60 * ((b - r) / delta + 2);
+    else h = 60 * ((r - g) / delta + 4);
   }
-  const count = data.length / info.channels;
-  const share = (name) => colourful ? buckets[name] / colourful : 0;
-  const brightness = lightness / count;
-  return {
-    brightness,
-    blue: share('blue'),
-    green: share('green'),
-    pink: share('pink'),
-    red: share('red'),
-    yellow: share('yellow'),
-    text: `Rendered-pixel measurement: ${brightness >= 0.62 ? 'mainly light' : brightness <= 0.42 ? 'mainly dark' : 'mixed brightness'}; blue/cyan ${Math.round(share('blue') * 100)}%, green ${Math.round(share('green') * 100)}%, pink ${Math.round(share('pink') * 100)}%, red ${Math.round(share('red') * 100)}%, yellow/gold ${Math.round(share('yellow') * 100)}% of saturated visible pixels. This measurement supports the rendered UI over a conflicting declared CSS variable.`,
-  };
+  const l = (max + min) / 2;
+  const s = delta ? delta / (1 - Math.abs(2 * l - 1)) : 0;
+  return { h, s, l };
 }
 
-function reconcileTone(tone, evidence) {
-  const light = evidence.brightness >= 0.62;
-  if (light && evidence.red >= 0.14 && evidence.red > evidence.pink * 1.3 && ['Hồng trắng', 'Đỏ hồng', 'Hồng xanh trắng'].includes(tone)) return 'Đỏ trắng';
-  if (evidence.green >= 0.22 && evidence.green > (evidence.pink + evidence.red) * 1.3 && ['Hồng trắng', 'Đỏ hồng', 'Hồng xanh trắng', 'Đỏ trắng'].includes(tone)) return evidence.brightness <= 0.50 ? 'Xanh đen' : 'Xanh trắng';
-  if (light && evidence.blue >= 0.22 && evidence.blue > (evidence.pink + evidence.red) * 1.3 && ['Hồng trắng', 'Đỏ hồng', 'Hồng xanh trắng', 'Đỏ trắng'].includes(tone)) return 'Xanh trắng';
-  if (light && evidence.yellow >= 0.24 && evidence.yellow > (evidence.pink + evidence.red) * 1.25 && ['Hồng trắng', 'Đỏ hồng', 'Đỏ trắng'].includes(tone)) return 'Vàng kem sáng';
-  if (evidence.brightness <= 0.42 && evidence.yellow >= 0.16 && tone !== 'Đen vàng') return 'Đen vàng';
-  return tone;
+function uiCategory(rgb) {
+  const { h, s, l } = rgbToHsl(rgb);
+  if (l <= 0.22) return 'dark';
+  if (s <= 0.12) return l >= 0.72 ? 'light' : (l <= 0.38 ? 'dark' : 'neutral');
+  if (l >= 0.82 && s <= 0.38 && (h < 70 || h >= 330)) return 'cream';
+  if ((h < 14 || h >= 350) && l < 0.62 && s >= 0.32) return 'red';
+  if ((h >= 315 || h < 14) && l >= 0.56) return 'pink';
+  if (h >= 315 && h < 350) return 'pink';
+  if (h >= 255 && h < 315) return 'purple';
+  if (h >= 165 && h < 255) return 'blue';
+  if (h >= 72 && h < 165) return 'green';
+  if (h >= 38 && h < 72) return 'yellow';
+  if (h >= 14 && h < 38) return l < 0.76 ? 'brown' : 'cream';
+  return l >= 0.72 ? 'light' : 'neutral';
+}
+
+function summarizeUiSamples(samples) {
+  const buckets = { red: 0, pink: 0, brown: 0, yellow: 0, green: 0, blue: 0, purple: 0, dark: 0, light: 0, cream: 0, neutral: 0 };
+  const colors = new Map();
+  let total = 0;
+  for (const sample of samples) {
+    const rgb = parseRgb(sample.color);
+    const weight = Number(sample.weight || 0);
+    if (!rgb || rgb.a <= 0.03 || weight <= 0) continue;
+    const category = uiCategory(rgb);
+    buckets[category] += weight;
+    total += weight;
+    const hex = `#${[rgb.r, rgb.g, rgb.b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
+    colors.set(hex, (colors.get(hex) || 0) + weight);
+  }
+  const share = (name) => total ? buckets[name] / total : 0;
+  const chromatic = ['red', 'pink', 'brown', 'yellow', 'green', 'blue', 'purple'];
+  const chromaTotal = chromatic.reduce((sum, key) => sum + buckets[key], 0);
+  const chromaShare = (name) => chromaTotal ? buckets[name] / chromaTotal : 0;
+  const dark = share('dark');
+  const light = share('light') + share('cream');
+  const c = Object.fromEntries(chromatic.map((key) => [key, chromaShare(key)]));
+  let inferred = 'Cần duyệt';
+  if (dark >= 0.38 && c.yellow >= 0.14) inferred = 'Đen vàng';
+  else if (dark >= 0.38 && (c.green + c.blue) >= 0.18) inferred = 'Xanh đen';
+  else if (dark >= 0.42 && chromaTotal / Math.max(total, 1) < 0.12) inferred = 'Đen trắng';
+  else if (c.pink >= 0.18 && c.green >= 0.11) inferred = 'Hồng xanh trắng';
+  else if (c.brown >= 0.22 && c.brown > Math.max(c.red, c.pink) * 1.12) inferred = 'Nâu kem';
+  else if (c.red >= 0.20 && c.red > c.pink * 1.28) inferred = 'Đỏ trắng';
+  else if (c.pink >= 0.20 && c.pink > c.red * 1.18) inferred = 'Hồng trắng';
+  else if (c.red >= 0.12 && c.pink >= 0.12) inferred = 'Đỏ hồng';
+  else if (c.purple >= 0.13 && c.pink >= 0.08) inferred = 'Tím hồng';
+  else if ((c.green + c.blue) >= 0.22) inferred = 'Xanh trắng';
+  else if ((c.yellow + share('cream')) >= 0.18) inferred = 'Vàng kem sáng';
+  else if (dark >= 0.35 && light >= 0.18) inferred = 'Đen trắng';
+  const ranked = [...colors.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([hex]) => hex);
+  const percent = (value) => Math.round(value * 100);
+  const text = `Chỉ màu UI, đã loại ảnh: nền ${light >= dark ? 'sáng' : 'tối'}; nâu ${percent(c.brown)}%, hồng ${percent(c.pink)}%, đỏ thật ${percent(c.red)}%, xanh lá ${percent(c.green)}%, xanh dương ${percent(c.blue)}%, vàng ${percent(c.yellow)}%, tím ${percent(c.purple)}%; màu UI nổi bật ${ranked.join(', ') || 'không rõ'}.`;
+  const sorted = Object.values(c).sort((a, b) => b - a);
+  const certainty = inferred !== 'Cần duyệt' && (sorted[0] >= 0.34 || (sorted[0] - (sorted[1] || 0)) >= 0.12) ? 'high' : (inferred !== 'Cần duyệt' ? 'medium' : 'low');
+  return { ...c, dark, light, inferred, certainty, text };
+}
+
+async function renderedUiEvidence(browser, url) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(1400);
+    const samples = await page.evaluate(() => {
+      const result = [];
+      const rgba = (value) => /^rgba?\(/i.test(String(value || '')) && !/rgba\([^)]*,\s*0(?:\.0+)?\s*\)$/i.test(String(value || ''));
+      const add = (color, weight, role) => { if (rgba(color) && weight > 0) result.push({ color, weight, role }); };
+      const semantic = new Set(['HEADER', 'NAV', 'MAIN', 'SECTION', 'ARTICLE', 'FOOTER', 'BUTTON']);
+      const nodes = [document.body, ...document.querySelectorAll('header,nav,main,section,article,footer,button,a,h1,h2,h3,h4,p,div,li,input,select,textarea,svg')];
+      for (const el of nodes.slice(0, 6000)) {
+        if (!el || el.matches?.('img,picture,video,canvas,iframe,source') || el.closest?.('picture,video')) continue;
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity || 1) <= 0.03 || rect.width < 2 || rect.height < 2) continue;
+        const area = Math.min(rect.width * rect.height, innerWidth * 1400);
+        const structural = semantic.has(el.tagName) ? 1.9 : 1;
+        const parentBg = el.parentElement ? getComputedStyle(el.parentElement).backgroundColor : '';
+        if (style.backgroundColor !== parentBg || semantic.has(el.tagName)) add(style.backgroundColor, Math.min(55, Math.sqrt(area) / 20) * structural, 'background');
+        const hasOwnText = [...el.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+        if (hasOwnText || /^H[1-4]$/.test(el.tagName) || ['A', 'BUTTON'].includes(el.tagName)) add(style.color, Math.min(12, 1 + (el.textContent || '').trim().length / 28) * (['A', 'BUTTON'].includes(el.tagName) ? 1.8 : 1), 'text');
+        if (parseFloat(style.borderTopWidth) > 0) add(style.borderTopColor, semantic.has(el.tagName) ? 3 : 1, 'border');
+        if (el.tagName === 'SVG') { add(style.fill, 2.5, 'icon'); add(style.stroke, 2, 'icon'); }
+      }
+      return result;
+    });
+    await page.addStyleTag({ content: `img,picture,video,canvas,iframe{visibility:hidden!important} *{background-image:none!important} *::before,*::after{background-image:none!important}` });
+    await page.waitForTimeout(120);
+    const uiOnly = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 58 });
+    const preview = await sharp(uiOnly).resize({ width: 768, withoutEnlargement: true }).jpeg({ quality: 62 }).toBuffer();
+    return { image: preview, evidence: summarizeUiSamples(samples) };
+  } finally {
+    await page.close();
+  }
 }
 
 function parseTone(response, evidence) {
@@ -138,23 +192,22 @@ function parseTone(response, evidence) {
     [/\b(brown|nâu)\b[\s\S]{0,180}\b(cream|kem)\b|\b(cream|kem)\b[\s\S]{0,180}\b(brown|nâu)\b/, 'Nâu kem'],
   ].find(([pattern]) => pattern.test(normalized))?.[1];
   const candidateTone = tones.includes(parsed.tone) ? parsed.tone : (explicitTone || englishTone || '');
-  const tone = reconcileTone(candidateTone, evidence);
+  const tone = evidence.inferred !== 'Cần duyệt' ? evidence.inferred : candidateTone;
   if (!tone) throw new Error(`Llama Vision returned no supported tone: ${text.replace(/\s+/g, ' ').slice(0, 500)}`);
   const confidenceMatch = text.match(/\b(high|medium|low)\b/i);
   return {
     tone,
-    confidence: ['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : (confidenceMatch ? confidenceMatch[1].toLowerCase() : 'low'),
-    reason: tone !== candidateTone ? `Screenshot pixel check corrected the AI response: ${evidence.text}` : String(parsed.reason || text.replace(/\s+/g, ' ').slice(0, 500)).slice(0, 500),
+    confidence: evidence.inferred !== 'Cần duyệt' ? evidence.certainty : (['high', 'medium', 'low'].includes(parsed.confidence) ? parsed.confidence : (confidenceMatch ? confidenceMatch[1].toLowerCase() : 'low')),
+    reason: evidence.text.slice(0, 500),
   };
 }
 
-async function classify(snapshotId, imageBuffer, colors = [], jobToken) {
+async function classify(snapshotId, uiImageBuffer, evidence, jobToken) {
   if (!cloudflareAccount || !cloudflareToken) return { skipped: true };
-  const evidence = await renderedColorEvidence(imageBuffer);
   const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cloudflareAccount}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${cloudflareToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt: `${tonePrompt(colors)}\n${evidence.text}`, image: `data:image/jpeg;base64,${imageBuffer.toString('base64')}`, max_tokens: 160, temperature: 0.1 }),
+    body: JSON.stringify({ prompt: tonePrompt(evidence), image: `data:image/jpeg;base64,${uiImageBuffer.toString('base64')}`, max_tokens: 160, temperature: 0.1 }),
   });
   if (response.status === 429) {
     await postJson({ mode: 'tone_deferred', snapshot_id: snapshotId, job_token: jobToken });
@@ -250,18 +303,22 @@ async function captureBatch() {
 async function classifyPendingBatch() {
   if (!cloudflareAccount || !cloudflareToken) return 0;
   const items = await queue('tone');
-  for (const item of items) {
-    try {
-      const response = await fetch(item.screenshot_url);
-      if (!response.ok) throw new Error(`Screenshot download failed: HTTP ${response.status}`);
-      const preview = await sharp(Buffer.from(await response.arrayBuffer())).resize({ width: 768, withoutEnlargement: true }).jpeg({ quality: 62 }).toBuffer();
-      const result = await classify(item.id, preview, colorEvidence(item.color_source_raw), item.job_token);
-      if (result.quota) { console.log('Workers AI daily quota reached; remaining tone jobs stay queued.'); break; }
-      console.log(`Classified #${item.id}: ${result.tone}`);
-    } catch (error) {
-      await reportFailure('tone_failed', item, error);
-      console.warn(`Tone failed #${item.id}: ${error.message}`);
+  if (!items.length) return 0;
+  const browser = await chromium.launch({ headless: true });
+  try {
+    for (const item of items) {
+      try {
+        const ui = await renderedUiEvidence(browser, item.website_url);
+        const result = await classify(item.id, ui.image, ui.evidence, item.job_token);
+        if (result.quota) { console.log('Workers AI daily quota reached; remaining tone jobs stay queued.'); break; }
+        console.log(`Classified #${item.id}: ${result.tone} — ${ui.evidence.text}`);
+      } catch (error) {
+        await reportFailure('tone_failed', item, error);
+        console.warn(`Tone failed #${item.id}: ${error.message}`);
+      }
     }
+  } finally {
+    await browser.close();
   }
   return items.length;
 }

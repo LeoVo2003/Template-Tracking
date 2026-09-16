@@ -164,6 +164,11 @@ class MAC_Tracker_Activator {
 		if ( version_compare( $previous_version, '0.13.7', '<' ) ) {
 			( new MAC_Tracker_Repository() )->repair_legacy_visual_claims();
 		}
+		if ( version_compare( $previous_version, '0.13.12', '<' ) ) {
+			// The classifier now measures rendered UI colors with media removed.
+			// Revisit prior AI results once, while preserving manual reviews.
+			( new MAC_Tracker_Repository() )->requeue_visual_tones();
+		}
 		update_option( 'mac_tracker_db_version', MAC_TRACKER_VERSION, false );
 	}
 }
