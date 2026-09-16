@@ -30,6 +30,8 @@ class MAC_Tracker_Admin {
 		add_action( 'admin_post_mac_tracker_approve_colors', array( $this, 'handle_approve_colors' ) );
 		add_action( 'admin_post_mac_tracker_run_visual_workflow', array( $this, 'handle_run_visual_workflow' ) );
 		add_action( 'admin_post_mac_tracker_requeue_visuals', array( $this, 'handle_requeue_visuals' ) );
+		add_action( 'wp_ajax_mac_tracker_visual_action', array( $this, 'handle_visual_action_ajax' ) );
+		add_action( 'wp_ajax_mac_tracker_visual_status', array( $this, 'handle_visual_status_ajax' ) );
 	}
 
 	public function register_menu() {
@@ -49,6 +51,11 @@ class MAC_Tracker_Admin {
 		wp_enqueue_style( 'mac-tracker-fonts', 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap', array(), null );
 		wp_enqueue_style( 'mac-project-tracker-admin', MAC_TRACKER_URL . 'assets/admin.css', array( 'mac-tracker-fonts' ), MAC_TRACKER_VERSION );
 		wp_enqueue_script( 'mac-project-tracker-admin', MAC_TRACKER_URL . 'assets/admin.js', array(), MAC_TRACKER_VERSION, true );
+		wp_localize_script( 'mac-project-tracker-admin', 'macTrackerVisual', array(
+			'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
+			'actionNonce' => wp_create_nonce( 'mac_tracker_requeue_visuals' ),
+			'statusNonce' => wp_create_nonce( 'mac_tracker_visual_status' ),
+		) );
 	}
 
 	public function render_dashboard() {
@@ -198,7 +205,7 @@ class MAC_Tracker_Admin {
 		?>
 		<section class="mac-tracker-overview mac-tracker-visual-overview"><div class="mac-tracker-overview__lead"><p class="mac-tracker-eyebrow">Screenshot → AI tone</p><h2>Visual identity, recorded</h2><p>Each card is the stored full-page capture, so the tone reflects the delivered website rather than its CSS variables.</p></div><div class="mac-tracker-summary-grid"><?php $this->stat_card( 'Captured', (int) ( $stats['captured'] ?? 0 ), 'dashicons-format-image' ); ?><?php $this->stat_card( 'Tone classified', (int) ( $stats['classified'] ?? 0 ), 'dashicons-admin-appearance' ); ?><?php $this->stat_card( 'In queue', (int) ( $stats['capture_pending'] ?? 0 ) + (int) ( $stats['tone_pending'] ?? 0 ), 'dashicons-update' ); ?></div></section>
 		<section class="mac-tracker-visual-auto"><div><p class="mac-tracker-eyebrow">Cloud automation</p><h2>Runs automatically, twice per hour</h2><p>GitHub captures up to 10 new homepages each run, then Llama Vision classifies any stored images waiting for review. No computer is needed.</p></div><div class="mac-tracker-visual-auto__actions"><?php if ( get_option( 'mac_tracker_github_dispatch_token', '' ) ) : ?><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_run_visual_workflow' ); ?><input type="hidden" name="action" value="mac_tracker_run_visual_workflow"><button class="button button-primary" type="submit"><span class="dashicons dashicons-controls-play"></span>Run now</button></form><?php else : ?><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-settings#mac-tracker-github-dispatch' ) ); ?>">Enable Run now</a><?php endif; ?><span class="mac-tracker-visual-auto__signal"><i></i>Automation active</span></div></section>
-		<form class="mac-tracker-visual-work" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_requeue_visuals' ); ?><input type="hidden" name="action" value="mac_tracker_requeue_visuals"><section class="mac-tracker-visual-tools" aria-label="Visual review actions"><div><p class="mac-tracker-eyebrow">Targeted retry</p><strong>Use saved screenshots first</strong><span>Analyze again costs no new capture. Capture again refreshes only sites whose design changed.</span></div><div class="mac-tracker-visual-tools__actions"><label class="mac-tracker-select-all"><input type="checkbox" data-visual-select-all><span>Select all</span></label><button class="button" type="submit" name="visual_action" value="reanalyze_selected">Analyze selected</button><button class="button" type="submit" name="visual_action" value="recapture_selected">Capture selected again</button><button class="button" type="submit" name="visual_action" value="retry_failed">Retry failed</button><button class="button" type="submit" name="visual_action" value="reanalyze_all">Analyze all stored</button></div></section><section class="mac-tracker-visual-gallery" aria-label="Visual tone gallery"><?php if ( empty( $rows ) ) : ?><div class="mac-tracker-empty"><span class="dashicons dashicons-format-image"></span><strong>No screenshots yet</strong><p>The automatic workflow will add cards here after its first completed run.</p></div><?php else : foreach ( $rows as $row ) : ?><article class="mac-tracker-visual-card" id="visual-<?php echo (int) $row['id']; ?>"><label class="mac-tracker-visual-card__select"><input type="checkbox" name="snapshot_ids[]" value="<?php echo (int) $row['id']; ?>" data-visual-select><span>Select</span></label><a class="mac-tracker-visual-card__image" href="<?php echo esc_url( $row['screenshot_url'] ); ?>" target="_blank" rel="noopener"><img src="<?php echo esc_url( $row['screenshot_url'] ); ?>" alt="<?php echo esc_attr( $row['name'] . ' homepage screenshot' ); ?>" loading="lazy"><span>Open full capture <span class="dashicons dashicons-external"></span></span></a><div class="mac-tracker-visual-card__body"><p class="mac-tracker-eyebrow">#<?php echo esc_html( $row['wpm_project_id'] ); ?> · <?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></p><?php $this->project_link( $row ); ?><div class="mac-tracker-visual-card__tone"><?php $this->tone_cell( $row, false ); ?></div><?php $this->visual_status_cell( $row ); ?><p><?php echo esc_html( $row['tone_reason'] ?: ( 'classified' === $row['tone_status'] ? 'AI classified the visible website.' : 'Waiting for the next automatic AI pass.' ) ); ?></p><div class="mac-tracker-visual-card__actions"><button type="submit" class="button-link" name="visual_action" value="reanalyze_one_<?php echo (int) $row['id']; ?>" title="Use this stored screenshot again">Analyze again</button><button type="submit" class="button-link" name="visual_action" value="recapture_one_<?php echo (int) $row['id']; ?>" title="Take a fresh full-page screenshot">Capture again</button></div></div></article><?php endforeach; endif; ?></section></form>
+		<form class="mac-tracker-visual-work" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_requeue_visuals' ); ?><input type="hidden" name="action" value="mac_tracker_requeue_visuals"><section class="mac-tracker-visual-tools" aria-label="Visual review actions"><div><p class="mac-tracker-eyebrow">Targeted retry</p><strong>Use saved screenshots first</strong><span>Analyze again costs no new capture. Capture again refreshes only sites whose design changed.</span></div><div class="mac-tracker-visual-tools__actions"><label class="mac-tracker-select-all"><input type="checkbox" data-visual-select-all><span>Select all</span></label><button class="button" type="submit" name="visual_action" value="reanalyze_selected">Analyze selected</button><button class="button" type="submit" name="visual_action" value="recapture_selected">Capture selected again</button><button class="button" type="submit" name="visual_action" value="retry_failed">Retry failed</button><button class="button" type="submit" name="visual_action" value="reanalyze_all">Analyze all stored</button></div></section><section class="mac-tracker-visual-gallery" aria-label="Visual tone gallery"><?php if ( empty( $rows ) ) : ?><div class="mac-tracker-empty"><span class="dashicons dashicons-format-image"></span><strong>No screenshots yet</strong><p>The automatic workflow will add cards here after its first completed run.</p></div><?php else : foreach ( $rows as $row ) : ?><article class="mac-tracker-visual-card" id="visual-<?php echo (int) $row['id']; ?>" data-visual-card="<?php echo (int) $row['id']; ?>"><label class="mac-tracker-visual-card__select"><input type="checkbox" name="snapshot_ids[]" value="<?php echo (int) $row['id']; ?>" data-visual-select><span>Select</span></label><a class="mac-tracker-visual-card__image" href="<?php echo esc_url( $row['screenshot_url'] ); ?>" target="_blank" rel="noopener"><img src="<?php echo esc_url( $row['screenshot_url'] ); ?>" alt="<?php echo esc_attr( $row['name'] . ' homepage screenshot' ); ?>" loading="lazy"><span>Open full capture <span class="dashicons dashicons-external"></span></span></a><div class="mac-tracker-visual-card__body"><p class="mac-tracker-eyebrow">#<?php echo esc_html( $row['wpm_project_id'] ); ?> · <?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></p><?php $this->project_link( $row ); ?><div class="mac-tracker-visual-card__tone"><?php $this->tone_cell( $row, false ); ?></div><?php $this->visual_status_cell( $row ); ?><p data-visual-reason><?php echo esc_html( $row['tone_reason'] ?: ( 'classified' === $row['tone_status'] ? 'AI classified the visible website.' : 'Waiting for the next automatic AI pass.' ) ); ?></p><div class="mac-tracker-visual-card__actions"><button type="submit" class="button-link" name="visual_action" value="reanalyze_one_<?php echo (int) $row['id']; ?>" title="Use this stored screenshot again">Analyze again</button><button type="submit" class="button-link" name="visual_action" value="recapture_one_<?php echo (int) $row['id']; ?>" title="Take a fresh full-page screenshot">Capture again</button></div></div></article><?php endforeach; endif; ?></section></form>
 		<?php $this->page_end();
 	}
 
@@ -284,6 +291,59 @@ class MAC_Tracker_Admin {
 			return new WP_Error( 'mac_tracker_github_response', 'Queued, but GitHub rejected the immediate run (HTTP ' . $status . '). Check Actions: Write.' );
 		}
 		return true;
+	}
+
+	/** Shared queue operation used by the normal form and the in-page AJAX controls. */
+	private function process_visual_action( $action, array $ids, array $manual_tones = array() ) {
+		if ( preg_match( '/^save_tone_(\d+)$/', $action, $tone_match ) ) {
+			$result = $this->repository->save_manual_visual_tone( absint( $tone_match[1] ), $manual_tones[ absint( $tone_match[1] ) ] ?? '' );
+			return array( 'result' => $result, 'message' => 'Visual tone reviewed and saved.', 'dispatch' => false );
+		}
+		if ( preg_match( '/^(reanalyze_one|recapture_one)_(\d+)$/', $action, $one_match ) ) {
+			$action = $one_match[1];
+			$ids = array( absint( $one_match[2] ) );
+		}
+		if ( 'reanalyze_all' === $action ) {
+			$result = $this->repository->requeue_visual_tones();
+			$message = sprintf( '%d stored screenshot(s) queued for AI analysis.', (int) $result );
+		} elseif ( 'retry_failed' === $action ) {
+			$result = $this->repository->requeue_failed_visual_items();
+			$message = sprintf( '%d failed visual job(s) queued again.', (int) $result );
+		} else {
+			$mode = in_array( $action, array( 'reanalyze_selected', 'reanalyze_one' ), true ) ? 'reanalyze' : ( in_array( $action, array( 'recapture_selected', 'recapture_one' ), true ) ? 'recapture' : '' );
+			$attachments = 'recapture' === $mode ? $this->repository->visual_attachment_ids( $ids ) : array();
+			$result = $this->repository->requeue_visual_items( $ids, $mode );
+			if ( ! is_wp_error( $result ) && 'recapture' === $mode ) { foreach ( $attachments as $attachment_id ) { wp_delete_attachment( $attachment_id, true ); } }
+			$message = sprintf( '%d selected screenshot(s) queued to %s.', is_wp_error( $result ) ? 0 : (int) $result, 'recapture' === $mode ? 'capture again' : 'analyze again' );
+		}
+		if ( is_wp_error( $result ) || (int) $result <= 0 ) { return array( 'result' => $result, 'message' => is_wp_error( $result ) ? $result->get_error_message() : 'No eligible screenshot changed. Check the selected card status, then try again.', 'dispatch' => false ); }
+		$dispatch = $this->dispatch_visual_workflow( (int) $result );
+		$message .= is_wp_error( $dispatch ) ? ' ' . $dispatch->get_error_message() : ' GitHub batch started now.';
+		return array( 'result' => $result, 'message' => $message, 'dispatch' => ! is_wp_error( $dispatch ) );
+	}
+
+	public function handle_visual_action_ajax() {
+		check_ajax_referer( 'mac_tracker_requeue_visuals', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( array( 'message' => 'You are not allowed to run visual actions.' ), 403 ); }
+		$action = sanitize_key( wp_unslash( $_POST['visual_action'] ?? '' ) );
+		$ids = isset( $_POST['snapshot_ids'] ) && is_array( $_POST['snapshot_ids'] ) ? array_values( array_filter( array_map( 'absint', wp_unslash( $_POST['snapshot_ids'] ) ) ) ) : array();
+		$manual = isset( $_POST['manual_tone'] ) && is_array( $_POST['manual_tone'] ) ? wp_unslash( $_POST['manual_tone'] ) : array();
+		$processed = $this->process_visual_action( $action, $ids, $manual );
+		if ( is_wp_error( $processed['result'] ) || (int) $processed['result'] <= 0 ) { wp_send_json_error( array( 'message' => $processed['message'] ) ); }
+		wp_send_json_success( array( 'message' => $processed['message'], 'ids' => $ids, 'stats' => $this->repository->visual_stats() ) );
+	}
+
+	public function handle_visual_status_ajax() {
+		check_ajax_referer( 'mac_tracker_visual_status', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( array( 'message' => 'You are not allowed to read visual status.' ), 403 ); }
+		$wanted = isset( $_POST['snapshot_ids'] ) && is_array( $_POST['snapshot_ids'] ) ? array_values( array_filter( array_map( 'absint', wp_unslash( $_POST['snapshot_ids'] ) ) ) ) : array();
+		$map = array_fill_keys( $wanted, true );
+		$statuses = array();
+		foreach ( $this->repository->visual_review_rows( 300 ) as $row ) {
+			if ( $wanted && empty( $map[ (int) $row['id'] ] ) ) { continue; }
+			$statuses[] = array( 'id' => (int) $row['id'], 'capture_status' => (string) ( $row['capture_status'] ?? '' ), 'tone_status' => (string) ( $row['tone_status'] ?? '' ), 'tone' => (string) ( $row['tone'] ?? '' ), 'tone_reason' => (string) ( $row['tone_reason'] ?? '' ), 'screenshot_url' => esc_url_raw( $row['screenshot_url'] ?? '' ) );
+		}
+		wp_send_json_success( array( 'statuses' => $statuses, 'stats' => $this->repository->visual_stats() ) );
 	}
 
 	public function handle_requeue_visuals() {

@@ -1,50 +1,14 @@
-document.addEventListener('click', function (event) {
-  var trigger = event.target.closest('[data-edit-target]');
-  if (!trigger) return;
-  var row = document.getElementById(trigger.getAttribute('data-edit-target'));
-  if (!row) return;
-  row.hidden = !row.hidden;
-  if (!row.hidden) { var first = row.querySelector('input'); if (first) first.focus(); }
-});
-
-document.addEventListener('DOMContentLoaded', function () {
-  var selectAll = document.querySelector('[data-visual-select-all]');
-  var selections = Array.prototype.slice.call(document.querySelectorAll('[data-visual-select]'));
-  if (selectAll && selections.length) {
-    selectAll.addEventListener('change', function () {
-      selections.forEach(function (checkbox) { checkbox.checked = selectAll.checked; });
-    });
-    selections.forEach(function (checkbox) {
-      checkbox.addEventListener('change', function () {
-        var selected = selections.filter(function (item) { return item.checked; }).length;
-        selectAll.checked = selected === selections.length;
-        selectAll.indeterminate = selected > 0 && selected < selections.length;
-      });
-    });
-  }
-  var visualWork = document.querySelector('.mac-tracker-visual-work');
-  if (visualWork) {
-    var submitting = false;
-    visualWork.addEventListener('submit', function (event) {
-      var submitter = event.submitter;
-      var action = submitter ? submitter.value : '';
-      if ((action === 'reanalyze_selected' || action === 'recapture_selected') && !selections.some(function (checkbox) { return checkbox.checked; })) {
-        event.preventDefault();
-        window.alert('Select at least one screenshot first.');
-        return;
-      }
-      if (submitting) {
-        event.preventDefault();
-        return;
-      }
-      submitting = true;
-      visualWork.querySelectorAll('button[type="submit"]').forEach(function (button) {
-        button.setAttribute('aria-disabled', 'true');
-      });
-      if (submitter) submitter.textContent = action.indexOf('recapture') === 0 ? 'Queuing capture…' : 'Queuing…';
-    });
-  }
-  if (document.querySelector('[data-visual-active]')) {
-    window.setTimeout(function () { window.location.reload(); }, 15000);
-  }
+document.addEventListener('click',function(e){var t=e.target.closest('[data-edit-target]');if(!t)return;var r=document.getElementById(t.getAttribute('data-edit-target'));if(!r)return;r.hidden=!r.hidden;if(!r.hidden){var i=r.querySelector('input');if(i)i.focus();}});
+document.addEventListener('DOMContentLoaded',function(){
+ var f=document.querySelector('.mac-tracker-visual-work');if(!f||typeof macTrackerVisual==='undefined')return;
+ var all=f.querySelector('[data-visual-select-all]'), boxes=[].slice.call(f.querySelectorAll('[data-visual-select]')),busy=false,timer=null;
+ var ids=function(){return boxes.filter(function(x){return x.checked;}).map(function(x){return x.value;});};
+ var notice=function(msg,err){var n=f.parentNode.querySelector('[data-visual-ajax-notice]');if(n)n.remove();n=document.createElement('div');n.dataset.visualAjaxNotice='1';n.className='mac-tracker-notice mac-tracker-notice--'+(err?'error':'success');n.setAttribute('role','status');n.textContent=msg;f.parentNode.insertBefore(n,f);};
+ var queue=function(list,cap){list.forEach(function(id){var c=document.querySelector('[data-visual-card="'+id+'"]');if(!c)return;var s=c.querySelector('.mac-tracker-visual-status');if(s){s.className='mac-tracker-visual-status mac-tracker-visual-status--queued';s.dataset.visualActive='1';s.innerHTML='<span class="dashicons dashicons-'+(cap?'camera':'admin-appearance')+'"></span>'+(cap?'Capture queued · waiting for GitHub':'AI analysis queued · waiting for GitHub');}var r=c.querySelector('[data-visual-reason]');if(r)r.textContent=cap?'A fresh screenshot will replace the current capture.':'The stored screenshot will be analyzed again.';});};
+ var update=function(list){list.forEach(function(x){var c=document.querySelector('[data-visual-card="'+x.id+'"]');if(!c)return;var s=c.querySelector('.mac-tracker-visual-status'),active=x.capture_status==='pending'||x.capture_status==='capturing'||x.tone_status==='pending'||x.tone_status==='analyzing';if(s){s.removeAttribute('data-visual-active');if(x.capture_status==='pending'){s.className='mac-tracker-visual-status mac-tracker-visual-status--queued';s.innerHTML='<span class="dashicons dashicons-clock"></span>Capture queued · waiting for GitHub';}else if(x.capture_status==='capturing'){s.className='mac-tracker-visual-status mac-tracker-visual-status--working';s.dataset.visualActive='1';s.innerHTML='<span class="dashicons dashicons-camera"></span>GitHub is capturing this homepage now';}else if(x.tone_status==='pending'||x.tone_status==='analyzing'){s.className='mac-tracker-visual-status mac-tracker-visual-status--working';s.dataset.visualActive='1';s.innerHTML='<span class="dashicons dashicons-admin-appearance"></span>Llama Vision is analyzing this screenshot';}else if(x.tone_status==='failed'||x.capture_status==='failed'){s.className='mac-tracker-visual-status mac-tracker-visual-status--failed';s.innerHTML='<span class="dashicons dashicons-warning"></span>Needs retry';}else{s.className='mac-tracker-visual-status mac-tracker-visual-status--complete';s.innerHTML='<span class="dashicons dashicons-yes-alt"></span>Screenshot and AI analysis complete';}}var r=c.querySelector('[data-visual-reason]');if(r&&x.tone_reason)r.textContent=x.tone_reason;var tone=c.querySelector('.mac-tracker-visual-card__tone .mac-tracker-tone span:last-child');if(tone&&x.tone)tone.textContent=x.tone;if(x.screenshot_url){var l=c.querySelector('.mac-tracker-visual-card__image'),im=c.querySelector('.mac-tracker-visual-card__image img');if(l)l.href=x.screenshot_url;if(im)im.src=x.screenshot_url;}if(!active&&s)s.removeAttribute('data-visual-active');});};
+ var poll=function(){var list=[].slice.call(document.querySelectorAll('[data-visual-card]')).filter(function(c){return c.querySelector('[data-visual-active]');}).map(function(c){return c.dataset.visualCard;});if(!list.length){timer=null;return;}var b=new URLSearchParams({action:'mac_tracker_visual_status',nonce:macTrackerVisual.statusNonce});list.forEach(function(i){b.append('snapshot_ids[]',i);});fetch(macTrackerVisual.ajaxUrl,{method:'POST',credentials:'same-origin',body:b}).then(function(r){return r.json();}).then(function(j){if(j.success)update(j.data.statuses||[]);timer=setTimeout(poll,8000);}).catch(function(){timer=setTimeout(poll,12000);});};
+ var start=function(){if(!timer)timer=setTimeout(poll,4000);};
+ if(all){all.addEventListener('change',function(){boxes.forEach(function(x){x.checked=all.checked;});});boxes.forEach(function(x){x.addEventListener('change',function(){var n=ids().length;all.checked=n===boxes.length;all.indeterminate=n>0&&n<boxes.length;});});}
+ f.addEventListener('submit',function(e){var b=e.submitter,a=b?b.value:'';if((a==='reanalyze_selected'||a==='recapture_selected')&&!ids().length){e.preventDefault();alert('Select at least one screenshot first.');return;}if(busy||!a){e.preventDefault();return;}e.preventDefault();busy=true;var list=ids(),body=new URLSearchParams({action:'mac_tracker_visual_action',nonce:macTrackerVisual.actionNonce,visual_action:a});list.forEach(function(i){body.append('snapshot_ids[]',i);});if(b)b.textContent=a.indexOf('recapture')===0?'Queuing capture…':'Queuing…';fetch(macTrackerVisual.ajaxUrl,{method:'POST',credentials:'same-origin',body:body}).then(function(r){return r.json();}).then(function(j){if(!j.success)throw new Error(j.data&&j.data.message?j.data.message:'Visual action failed.');queue(list,a.indexOf('recapture')===0);notice(j.data.message,false);start();}).catch(function(err){notice(err.message,true);}).finally(function(){busy=false;if(b)b.textContent=a.indexOf('recapture')===0?'Capture selected again':'Analyze selected';});});
+ if(document.querySelector('[data-visual-active]'))start();
 });
