@@ -105,6 +105,7 @@ class MAC_Tracker_Admin {
 			<label><span>Snapshot type</span><select name="kind"><option value="">All types</option><option value="action_design" <?php selected( $filters['kind'], 'action_design' ); ?>>Action Design</option><option value="csv_pin" <?php selected( $filters['kind'], 'csv_pin' ); ?>>CSV pin</option></select></label>
 			<label><span>Website</span><select name="website"><option value="">Any</option><option value="yes" <?php selected( $filters['website'], 'yes' ); ?>>Has website</option><option value="no" <?php selected( $filters['website'], 'no' ); ?>>Missing</option></select></label>
 			<label><span>Layout</span><select name="layout"><option value="">Any</option><option value="yes" <?php selected( $filters['layout'], 'yes' ); ?>>Has layout</option><option value="no" <?php selected( $filters['layout'], 'no' ); ?>>Missing</option></select></label>
+			<label><span>AI tone</span><select name="tone"><option value="">All tones</option><option value="pending" <?php selected( $filters['tone'], 'pending' ); ?>>Waiting for AI</option><?php foreach ( $this->tone_options() as $tone ) : ?><option value="<?php echo esc_attr( $tone ); ?>" <?php selected( $filters['tone'], $tone ); ?>><?php echo esc_html( $tone ); ?></option><?php endforeach; ?></select></label>
 			<label><span>From month</span><input type="month" name="month_from" value="<?php echo esc_attr( $filters['month_from'] ); ?>"></label>
 			<label><span>To month</span><input type="month" name="month_to" value="<?php echo esc_attr( $filters['month_to'] ); ?>"></label>
 			<label><span>Rows</span><select name="per_page"><option value="50" <?php selected( $filters['per_page'], 50 ); ?>>50</option><option value="100" <?php selected( $filters['per_page'], 100 ); ?>>100</option><option value="150" <?php selected( $filters['per_page'], 150 ); ?>>150</option><option value="200" <?php selected( $filters['per_page'], 200 ); ?>>200</option><option value="0" <?php selected( $filters['per_page'], 0 ); ?>>All</option></select></label>
@@ -117,7 +118,7 @@ class MAC_Tracker_Admin {
 				<div class="mac-tracker-empty"><span class="dashicons dashicons-archive"></span><strong>No project snapshots yet</strong><p>Import the pin baseline or save WPM Settings and run a background sync.</p></div>
 			<?php else : ?>
 				<div class="mac-tracker-table-scroll"><table class="widefat striped mac-tracker-project-table"><thead><tr>
-					<th scope="col" class="mac-tracker-col--index">#</th><?php $this->sort_header( 'id', 'ID', $filters ); ?><?php $this->sort_header( 'project', 'Project', $filters ); ?><?php $this->sort_header( 'website', 'Website', $filters ); ?><?php $this->sort_header( 'layout', 'Layout', $filters ); ?><?php $this->sort_header( 'assignee', 'Assignee', $filters ); ?><?php $this->sort_header( 'date', 'Date', $filters, 'mac-tracker-col--date' ); ?><?php $this->sort_header( 'palette', 'Palette', $filters ); ?>
+					<th scope="col" class="mac-tracker-col--index">#</th><?php $this->sort_header( 'id', 'ID', $filters ); ?><?php $this->sort_header( 'project', 'Project', $filters ); ?><?php $this->sort_header( 'website', 'Website', $filters ); ?><?php $this->sort_header( 'layout', 'Layout', $filters ); ?><?php $this->sort_header( 'assignee', 'Assignee', $filters ); ?><?php $this->sort_header( 'date', 'Date', $filters, 'mac-tracker-col--date' ); ?><?php $this->sort_header( 'palette', 'Palette', $filters ); ?><?php $this->sort_header( 'tone', 'AI tone', $filters ); ?>
 				</tr></thead><tbody>
 					<?php $row_number = 1 + ( 0 === (int) $page['per_page'] ? 0 : ( (int) $page['paged'] - 1 ) * (int) $page['per_page'] ); foreach ( $page['rows'] as $row ) : ?>
 						<tr>
@@ -129,8 +130,9 @@ class MAC_Tracker_Admin {
 							<td><?php echo esc_html( $this->person_name( $row['assignee_json'] ) ?: '—' ); ?></td>
 							<td class="mac-tracker-date mac-tracker-date--day"><?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></td>
 							<td><?php $this->palette_cell( $row ); ?></td>
+							<td><?php $this->tone_cell( $row ); ?></td>
 						</tr>
-		<tr id="edit-<?php echo (int) $row['id']; ?>" class="mac-tracker-edit-row" hidden><td colspan="8"><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_edit_project' ); ?><input type="hidden" name="action" value="mac_tracker_edit_project"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><label>Project ID<input type="number" min="1" name="project_id" value="<?php echo (int) $row['wpm_project_id']; ?>" required></label><label>Project name<input type="text" name="project_name" value="<?php echo esc_attr( $row['name'] ); ?>" required></label><label>Date & time<input type="datetime-local" name="date_time" value="<?php echo esc_attr( MAC_Tracker_Time::bangkok_input( $row['task_completed_at'] ) ); ?>"></label><button class="button button-primary" type="submit">Save project</button><button class="button" type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Cancel</button></form></td></tr>
+		<tr id="edit-<?php echo (int) $row['id']; ?>" class="mac-tracker-edit-row" hidden><td colspan="9"><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_edit_project' ); ?><input type="hidden" name="action" value="mac_tracker_edit_project"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><label>Project ID<input type="number" min="1" name="project_id" value="<?php echo (int) $row['wpm_project_id']; ?>" required></label><label>Project name<input type="text" name="project_name" value="<?php echo esc_attr( $row['name'] ); ?>" required></label><label>Date & time<input type="datetime-local" name="date_time" value="<?php echo esc_attr( MAC_Tracker_Time::bangkok_input( $row['task_completed_at'] ) ); ?>"></label><button class="button button-primary" type="submit">Save project</button><button class="button" type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Cancel</button></form></td></tr>
 					<?php endforeach; ?>
 				</tbody></table></div>
 				<?php $this->pagination( $page, $filters ); ?>
@@ -189,10 +191,12 @@ class MAC_Tracker_Admin {
 	public function render_visuals() {
 		$this->require_capability();
 		$stats = $this->repository->visual_stats();
+		$rows  = $this->repository->visual_review_rows();
 		$this->page_start( 'Visual Tone', 'GitHub Actions captures each homepage in the cloud; Llama Vision classifies the stored screenshot, not the live website.', 'visuals' );
 		?>
-		<section class="mac-tracker-overview mac-tracker-visual-overview"><div class="mac-tracker-overview__lead"><p class="mac-tracker-eyebrow">Screenshot → AI tone</p><h2>Running without your computer</h2><p>The workflow takes a full-page JPEG, saves it to WordPress Media Library, then sends a smaller copy to Llama Vision for tone classification.</p></div><div class="mac-tracker-summary-grid"><?php $this->stat_card( 'Captured', (int) ( $stats['captured'] ?? 0 ), 'dashicons-format-image' ); ?><?php $this->stat_card( 'Tone classified', (int) ( $stats['classified'] ?? 0 ), 'dashicons-admin-appearance' ); ?><?php $this->stat_card( 'Needs retry', (int) ( $stats['failed'] ?? 0 ), 'dashicons-warning' ); ?></div></section>
-		<section class="mac-tracker-panel mac-tracker-panel--wide"><p class="mac-tracker-eyebrow">One-time setup</p><h2>Connect the GitHub workflow</h2><ol class="mac-tracker-setup-list"><li>Save an Automation shared secret in Settings.</li><li>Add the same value to GitHub Secret <code>MAC_TRACKER_AUTOMATION_SECRET</code>.</li><li>Add <code>MAC_TRACKER_SITE_URL</code>, <code>CLOUDFLARE_ACCOUNT_ID</code> and <code>CLOUDFLARE_API_TOKEN</code> as GitHub Secrets.</li><li>Run the <strong>Capture visual tone</strong> workflow. It repeats on schedule while there is work.</li></ol><p>The Llama Vision API token needs Cloudflare Workers AI permission. The screenshot and AI queues continue safely on the next scheduled run if a quota is reached.</p></section>
+		<section class="mac-tracker-overview mac-tracker-visual-overview"><div class="mac-tracker-overview__lead"><p class="mac-tracker-eyebrow">Screenshot → AI tone</p><h2>Visual identity, recorded</h2><p>Each card is the stored full-page capture, so the tone reflects the delivered website rather than its CSS variables.</p></div><div class="mac-tracker-summary-grid"><?php $this->stat_card( 'Captured', (int) ( $stats['captured'] ?? 0 ), 'dashicons-format-image' ); ?><?php $this->stat_card( 'Tone classified', (int) ( $stats['classified'] ?? 0 ), 'dashicons-admin-appearance' ); ?><?php $this->stat_card( 'In queue', (int) ( $stats['capture_pending'] ?? 0 ) + (int) ( $stats['tone_pending'] ?? 0 ), 'dashicons-update' ); ?></div></section>
+		<section class="mac-tracker-visual-auto"><div><p class="mac-tracker-eyebrow">Cloud automation</p><h2>Runs automatically, twice per hour</h2><p>GitHub captures up to 10 new homepages each run, then Llama Vision classifies any stored images waiting for review. No computer or manual Action click is needed.</p></div><span class="mac-tracker-visual-auto__signal"><i></i>Automation active</span></section>
+		<section class="mac-tracker-visual-gallery" aria-label="Visual tone gallery"><?php if ( empty( $rows ) ) : ?><div class="mac-tracker-empty"><span class="dashicons dashicons-format-image"></span><strong>No screenshots yet</strong><p>The automatic workflow will add cards here after its first completed run.</p></div><?php else : foreach ( $rows as $row ) : ?><article class="mac-tracker-visual-card" id="visual-<?php echo (int) $row['id']; ?>"><a class="mac-tracker-visual-card__image" href="<?php echo esc_url( $row['screenshot_url'] ); ?>" target="_blank" rel="noopener"><img src="<?php echo esc_url( $row['screenshot_url'] ); ?>" alt="<?php echo esc_attr( $row['name'] . ' homepage screenshot' ); ?>" loading="lazy"><span>Open full capture <span class="dashicons dashicons-external"></span></span></a><div class="mac-tracker-visual-card__body"><p class="mac-tracker-eyebrow">#<?php echo esc_html( $row['wpm_project_id'] ); ?> · <?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></p><?php $this->project_link( $row ); ?><div class="mac-tracker-visual-card__tone"><?php $this->tone_cell( $row, false ); ?></div><p><?php echo esc_html( $row['tone_reason'] ?: ( 'classified' === $row['tone_status'] ? 'AI classified the visible website.' : 'Waiting for the next automatic AI pass.' ) ); ?></p></div></article><?php endforeach; endif; ?></section>
 		<?php $this->page_end();
 	}
 
@@ -375,6 +379,7 @@ class MAC_Tracker_Admin {
 			'kind'     => isset( $get['kind'] ) ? sanitize_key( $get['kind'] ) : '',
 			'website'  => isset( $get['website'] ) ? sanitize_key( $get['website'] ) : '',
 			'layout'   => isset( $get['layout'] ) ? sanitize_key( $get['layout'] ) : '',
+			'tone'     => isset( $get['tone'] ) ? sanitize_text_field( $get['tone'] ) : '',
 			'month_from' => isset( $get['month_from'] ) && preg_match( '/^\d{4}-\d{2}$/', (string) $get['month_from'] ) ? (string) $get['month_from'] : '',
 			'month_to'   => isset( $get['month_to'] ) && preg_match( '/^\d{4}-\d{2}$/', (string) $get['month_to'] ) ? (string) $get['month_to'] : '',
 			'per_page' => isset( $get['per_page'] ) ? absint( $get['per_page'] ) : 150,
@@ -434,6 +439,27 @@ class MAC_Tracker_Admin {
 			return;
 		}
 		echo '<a class="mac-tracker-palette-link mac-tracker-palette-link--empty" href="' . esc_url( admin_url( 'admin.php?page=mac-project-tracker-colors' ) ) . '">Color review</a>';
+	}
+
+	private function tone_options() {
+		return array( 'Vàng đen', 'Đỏ hồng', 'Hồng trắng', 'Nâu kem', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Tím hồng', 'Cần duyệt' );
+	}
+
+	private function tone_cell( array $row, $link = true ) {
+		$status = (string) ( $row['tone_status'] ?? '' );
+		$tone   = (string) ( $row['tone'] ?? '' );
+		if ( 'classified' !== $status || ! in_array( $tone, $this->tone_options(), true ) ) {
+			echo '<span class="mac-tracker-tone mac-tracker-tone--pending">' . esc_html( 'failed' === $status ? 'Retry AI' : 'Waiting for AI' ) . '</span>';
+			return;
+		}
+		$classes = 'mac-tracker-tone mac-tracker-tone--' . sanitize_title( $tone );
+		$title = trim( (string) ( $row['tone_reason'] ?? '' ) );
+		$content = '<i aria-hidden="true"></i><span>' . esc_html( $tone ) . '</span>';
+		if ( $link ) {
+			echo '<a class="' . esc_attr( $classes ) . '" href="' . esc_url( admin_url( 'admin.php?page=mac-project-tracker-visuals#visual-' . (int) $row['id'] ) ) . '" title="' . esc_attr( $title ?: 'Open stored screenshot' ) . '">' . $content . '</a>';
+			return;
+		}
+		echo '<span class="' . esc_attr( $classes ) . '" title="' . esc_attr( $title ) . '">' . $content . '</span>';
 	}
 
 	private function row_colors( array $row ) {
