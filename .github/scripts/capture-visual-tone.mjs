@@ -195,21 +195,25 @@ async function captureBatch() {
         // Full-page screenshots do not automatically activate below-the-fold
         // lazy assets or scroll-triggered sections. Walk the document first.
         let lastHeight = 0;
-        for (let pass = 0; pass < 3; pass += 1) {
+        // Four deliberate passes give slow Elementor/lazy image observers time
+        // to fetch sections that only mount after they enter the viewport.
+        for (let pass = 0; pass < 4; pass += 1) {
           const height = await page.evaluate(() => Math.max(document.body.scrollHeight, document.documentElement.scrollHeight));
           for (let y = 0; y < height; y += 720) {
             await page.evaluate((top) => window.scrollTo(0, top), y);
-            await page.waitForTimeout(180);
+            await page.waitForTimeout(280);
           }
           if (height === lastHeight) break;
           lastHeight = height;
         }
         const colors = await liveColorEvidence(page);
         await page.evaluate(() => window.scrollTo(0, 0));
-        await page.waitForTimeout(1200);
+        // Let transitions, background images and deferred sections settle after
+        // returning to the top. This is intentionally separate from <img> load.
+        await page.waitForTimeout(2500);
         await page.evaluate(() => Promise.race([
           Promise.all([...document.images].map((image) => image.complete ? Promise.resolve() : new Promise((resolve) => { image.addEventListener('load', resolve, { once: true }); image.addEventListener('error', resolve, { once: true }); }))),
-          new Promise((resolve) => setTimeout(resolve, 6000)),
+          new Promise((resolve) => setTimeout(resolve, 12000)),
         ]));
         await page.screenshot({ path: file, fullPage: true, type: 'jpeg', quality: 55 });
         const full = await readFile(file);
