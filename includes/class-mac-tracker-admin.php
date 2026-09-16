@@ -28,6 +28,7 @@ class MAC_Tracker_Admin {
 		add_action( 'admin_post_mac_tracker_extract_elementor_colors', array( $this, 'handle_extract_elementor_colors' ) );
 		add_action( 'admin_post_mac_tracker_extract_all_elementor_colors', array( $this, 'handle_extract_all_elementor_colors' ) );
 		add_action( 'admin_post_mac_tracker_approve_colors', array( $this, 'handle_approve_colors' ) );
+		add_action( 'admin_post_mac_tracker_run_visual_workflow', array( $this, 'handle_run_visual_workflow' ) );
 	}
 
 	public function register_menu() {
@@ -195,7 +196,7 @@ class MAC_Tracker_Admin {
 		$this->page_start( 'Visual Tone', 'GitHub Actions captures each homepage in the cloud; Llama Vision classifies the stored screenshot, not the live website.', 'visuals' );
 		?>
 		<section class="mac-tracker-overview mac-tracker-visual-overview"><div class="mac-tracker-overview__lead"><p class="mac-tracker-eyebrow">Screenshot → AI tone</p><h2>Visual identity, recorded</h2><p>Each card is the stored full-page capture, so the tone reflects the delivered website rather than its CSS variables.</p></div><div class="mac-tracker-summary-grid"><?php $this->stat_card( 'Captured', (int) ( $stats['captured'] ?? 0 ), 'dashicons-format-image' ); ?><?php $this->stat_card( 'Tone classified', (int) ( $stats['classified'] ?? 0 ), 'dashicons-admin-appearance' ); ?><?php $this->stat_card( 'In queue', (int) ( $stats['capture_pending'] ?? 0 ) + (int) ( $stats['tone_pending'] ?? 0 ), 'dashicons-update' ); ?></div></section>
-		<section class="mac-tracker-visual-auto"><div><p class="mac-tracker-eyebrow">Cloud automation</p><h2>Runs automatically, twice per hour</h2><p>GitHub captures up to 10 new homepages each run, then Llama Vision classifies any stored images waiting for review. No computer or manual Action click is needed.</p></div><span class="mac-tracker-visual-auto__signal"><i></i>Automation active</span></section>
+		<section class="mac-tracker-visual-auto"><div><p class="mac-tracker-eyebrow">Cloud automation</p><h2>Runs automatically, twice per hour</h2><p>GitHub captures up to 10 new homepages each run, then Llama Vision classifies any stored images waiting for review. No computer is needed.</p></div><div class="mac-tracker-visual-auto__actions"><?php if ( get_option( 'mac_tracker_github_dispatch_token', '' ) ) : ?><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_run_visual_workflow' ); ?><input type="hidden" name="action" value="mac_tracker_run_visual_workflow"><button class="button button-primary" type="submit"><span class="dashicons dashicons-controls-play"></span>Run now</button></form><?php else : ?><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-settings#mac-tracker-github-dispatch' ) ); ?>">Enable Run now</a><?php endif; ?><span class="mac-tracker-visual-auto__signal"><i></i>Automation active</span></div></section>
 		<section class="mac-tracker-visual-gallery" aria-label="Visual tone gallery"><?php if ( empty( $rows ) ) : ?><div class="mac-tracker-empty"><span class="dashicons dashicons-format-image"></span><strong>No screenshots yet</strong><p>The automatic workflow will add cards here after its first completed run.</p></div><?php else : foreach ( $rows as $row ) : ?><article class="mac-tracker-visual-card" id="visual-<?php echo (int) $row['id']; ?>"><a class="mac-tracker-visual-card__image" href="<?php echo esc_url( $row['screenshot_url'] ); ?>" target="_blank" rel="noopener"><img src="<?php echo esc_url( $row['screenshot_url'] ); ?>" alt="<?php echo esc_attr( $row['name'] . ' homepage screenshot' ); ?>" loading="lazy"><span>Open full capture <span class="dashicons dashicons-external"></span></span></a><div class="mac-tracker-visual-card__body"><p class="mac-tracker-eyebrow">#<?php echo esc_html( $row['wpm_project_id'] ); ?> · <?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></p><?php $this->project_link( $row ); ?><div class="mac-tracker-visual-card__tone"><?php $this->tone_cell( $row, false ); ?></div><p><?php echo esc_html( $row['tone_reason'] ?: ( 'classified' === $row['tone_status'] ? 'AI classified the visible website.' : 'Waiting for the next automatic AI pass.' ) ); ?></p></div></article><?php endforeach; endif; ?></section>
 		<?php $this->page_end();
 	}
@@ -212,6 +213,7 @@ class MAC_Tracker_Admin {
 			<label><span>WPM endpoint</span><input type="url" name="wpm_endpoint" required placeholder="https://wpm.macusaone.com/api/v1/tracking-template/projects" value="<?php echo esc_attr( $settings['wpm_endpoint'] ?? '' ); ?>"><small>Use exactly <code>https://wpm.macusaone.com/api/v1/tracking-template/projects</code>. The list endpoint returns projects with tasks.</small></label>
 			<label><span>Tracking-Template-Header value</span><input type="password" name="wpm_secret" autocomplete="new-password" placeholder="<?php echo get_option( 'mac_tracker_wpm_secret', '' ) ? 'Saved — leave blank to keep it' : 'Paste API value'; ?>"><small>Leave blank when editing other settings to keep the saved value.</small></label>
 			<label><span>Automation shared secret</span><input type="password" name="visual_secret" autocomplete="new-password" placeholder="<?php echo get_option( 'mac_tracker_visual_secret', '' ) ? 'Saved — leave blank to keep it' : 'Paste a long random value'; ?>"><small>Use the exact same value for GitHub Secret <code>MAC_TRACKER_AUTOMATION_SECRET</code>. It protects the private screenshot queue and upload endpoint.</small></label>
+			<label id="mac-tracker-github-dispatch"><span>GitHub Run now token</span><input type="password" name="github_dispatch_token" autocomplete="new-password" placeholder="<?php echo get_option( 'mac_tracker_github_dispatch_token', '' ) ? 'Saved — leave blank to keep it' : 'Fine-grained token'; ?>"><small>Optional. Enables the Visual Tone <strong>Run now</strong> button. Create a fine-grained GitHub token scoped only to <code>LeoVo2003/Template-Tracking</code> with repository permission <code>Actions: Write</code>.</small></label>
 			<div class="mac-tracker-settings-note"><span class="dashicons dashicons-shield"></span><p>Credentials are encrypted at rest with this WordPress site's authentication salt. They are not rendered in this page or written to sync logs.</p></div>
 			<div class="mac-tracker-settings-actions"><button class="button button-primary" type="submit">Save connection</button></div>
 		</form></section>
@@ -239,8 +241,38 @@ class MAC_Tracker_Admin {
 			if ( is_wp_error( $encrypted ) ) { $this->redirect( 'mac-project-tracker-settings', $encrypted->get_error_message(), 'error' ); }
 			update_option( 'mac_tracker_visual_secret', $encrypted, false );
 		}
+		$github_token = isset( $_POST['github_dispatch_token'] ) ? trim( (string) wp_unslash( $_POST['github_dispatch_token'] ) ) : '';
+		if ( '' !== $github_token ) {
+			$encrypted = MAC_Tracker_Crypto::encrypt( $github_token );
+			if ( is_wp_error( $encrypted ) ) { $this->redirect( 'mac-project-tracker-settings', $encrypted->get_error_message(), 'error' ); }
+			update_option( 'mac_tracker_github_dispatch_token', $encrypted, false );
+		}
 		$this->sync->ensure_hourly_schedule();
 		$this->redirect( 'mac-project-tracker-settings', 'Connection saved. Background sync can now be queued.', 'success' );
+	}
+
+	public function handle_run_visual_workflow() {
+		$this->require_request( 'mac_tracker_run_visual_workflow' );
+		$token = MAC_Tracker_Crypto::decrypt( get_option( 'mac_tracker_github_dispatch_token', '' ) );
+		if ( '' === $token ) {
+			$this->redirect( 'mac-project-tracker-visuals', 'Add a GitHub Run now token in Settings first.', 'error' );
+		}
+		$response = wp_remote_post(
+			'https://api.github.com/repos/LeoVo2003/Template-Tracking/actions/workflows/capture-visual-tone.yml/dispatches',
+			array(
+				'timeout' => 20,
+				'headers' => array( 'Authorization' => 'Bearer ' . $token, 'Accept' => 'application/vnd.github+json', 'X-GitHub-Api-Version' => '2026-03-10', 'User-Agent' => 'MAC-Project-Tracker/' . MAC_TRACKER_VERSION, 'Content-Type' => 'application/json' ),
+				'body'    => wp_json_encode( array( 'ref' => 'main', 'inputs' => array( 'limit' => '10' ) ) ),
+			)
+		);
+		if ( is_wp_error( $response ) ) {
+			$this->redirect( 'mac-project-tracker-visuals', 'GitHub could not start the workflow: ' . $response->get_error_message(), 'error' );
+		}
+		$status = (int) wp_remote_retrieve_response_code( $response );
+		if ( $status < 200 || $status >= 300 ) {
+			$this->redirect( 'mac-project-tracker-visuals', 'GitHub rejected Run now (HTTP ' . $status . '). Check that the token has Actions: Write for Template-Tracking.', 'error' );
+		}
+		$this->redirect( 'mac-project-tracker-visuals', 'Visual Tone workflow started. The gallery will update after GitHub finishes the batch.', 'success' );
 	}
 
 	public function handle_test_connection() {
