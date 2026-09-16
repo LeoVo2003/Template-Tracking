@@ -548,7 +548,7 @@ class MAC_Tracker_Repository {
 		if ( 'tone' === $stage ) {
 			$sql = "SELECT p.id, p.website_url, v.screenshot_url, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.capture_status = 'captured' AND v.tone_status IN ('pending', 'failed') AND v.screenshot_url <> '' ORDER BY v.updated_at ASC LIMIT %d";
 		} else {
-			$sql = "SELECT p.id, p.website_url, '' AS screenshot_url, c.source_raw AS color_source_raw FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR v.capture_status = 'pending') ORDER BY p.task_completed_at DESC, p.id DESC LIMIT %d";
+			$sql = "SELECT p.id, p.website_url, '' AS screenshot_url, c.source_raw AS color_source_raw FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR v.capture_status = 'pending') ORDER BY CASE WHEN v.capture_status = 'pending' THEN 0 ELSE 1 END, v.updated_at DESC, p.task_completed_at DESC, p.id DESC LIMIT %d";
 		}
 		return (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
 	}
@@ -574,6 +574,33 @@ class MAC_Tracker_Repository {
 	/** A visual-model prompt change can safely reuse the stored screenshots. */
 	public function requeue_visual_tones() {
 		return (int) $this->wpdb->query( $this->wpdb->prepare( "UPDATE {$this->visuals} SET tone = '', confidence = '', tone_reason = '', tone_status = 'pending', ai_raw = '', updated_at = %s WHERE capture_status = 'captured'", MAC_Tracker_Time::now_utc() ) );
+	}
+
+	/** Queue stored captures or fresh captures without deleting the existing image. */
+	public function requeue_visual_items( array $snapshot_ids, $mode ) {
+		$ids = array_values( array_unique( array_filter( array_map( 'absint', $snapshot_ids ) ) ) );
+		$mode = in_array( $mode, array( 'reanalyze', 'recapture', 'retry' ), true ) ? $mode : '';
+		if ( empty( $ids ) || '' === $mode ) { return new WP_Error( 'mac_tracker_visual_selection', 'Select at least one screenshot first.' ); }
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$now = MAC_Tracker_Time::now_utc();
+		if ( 'reanalyze' === $mode ) {
+			$sql = "UPDATE {$this->visuals} SET tone = '', confidence = '', tone_reason = '', tone_status = 'pending', ai_raw = '', updated_at = %s WHERE capture_status = 'captured' AND screenshot_url <> '' AND project_id IN ({$placeholders})";
+			$args = array_merge( array( $now ), $ids );
+		} elseif ( 'recapture' === $mode ) {
+			$sql = "UPDATE {$this->visuals} SET capture_status = 'pending', tone = '', confidence = '', tone_reason = '', tone_status = 'pending', ai_raw = '', updated_at = %s WHERE project_id IN ({$placeholders})";
+			$args = array_merge( array( $now ), $ids );
+		} else {
+			$sql = "UPDATE {$this->visuals} SET capture_status = IF(capture_status = 'failed', 'pending', capture_status), tone_status = IF(tone_status = 'failed', 'pending', tone_status), ai_raw = '', updated_at = %s WHERE (capture_status = 'failed' OR tone_status = 'failed') AND project_id IN ({$placeholders})";
+			$args = array_merge( array( $now ), $ids );
+		}
+		$result = $this->wpdb->query( $this->wpdb->prepare( $sql, $args ) );
+		return false === $result ? new WP_Error( 'mac_tracker_visual_requeue', $this->wpdb->last_error ?: 'Unable to queue visual work.' ) : (int) $result;
+	}
+
+	public function requeue_failed_visual_items() {
+		$now = MAC_Tracker_Time::now_utc();
+		$result = $this->wpdb->query( $this->wpdb->prepare( "UPDATE {$this->visuals} SET capture_status = IF(capture_status = 'failed', 'pending', capture_status), tone_status = IF(tone_status = 'failed', 'pending', tone_status), ai_raw = '', updated_at = %s WHERE capture_status = 'failed' OR tone_status = 'failed'", $now ) );
+		return false === $result ? new WP_Error( 'mac_tracker_visual_retry', $this->wpdb->last_error ?: 'Unable to retry failed visual work.' ) : (int) $result;
 	}
 
 	public function visual_tones() {
