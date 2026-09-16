@@ -537,7 +537,7 @@ class MAC_Tracker_Repository {
 	public function visual_review_rows( $limit = 120 ) {
 		$limit = max( 1, min( 300, absint( $limit ) ) );
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
-		$sql = "SELECT p.*, v.screenshot_url, v.tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.capture_status, v.captured_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND v.screenshot_url <> '' ORDER BY CASE WHEN v.tone_status = 'classified' THEN 0 ELSE 1 END, v.updated_at DESC LIMIT %d";
+		$sql = "SELECT p.*, v.screenshot_url, v.tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND v.screenshot_url <> '' ORDER BY CASE WHEN v.tone_status = 'classified' THEN 0 ELSE 1 END, v.updated_at DESC LIMIT %d";
 		return (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
 	}
 
