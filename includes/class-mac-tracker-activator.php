@@ -153,6 +153,9 @@ class MAC_Tracker_Activator {
 		if ( version_compare( $previous_version, '0.12.7', '<' ) ) {
 			( new MAC_Tracker_Repository() )->requeue_visual_tones();
 		}
+		if ( version_compare( $previous_version, '0.13.5', '<' ) ) {
+			( new MAC_Tracker_Repository() )->requeue_visual_tones_by_labels( array( 'Hồng trắng', 'Đỏ hồng' ) );
+		}
 		update_option( 'mac_tracker_db_version', MAC_TRACKER_VERSION, false );
 	}
 }

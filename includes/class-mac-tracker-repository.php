@@ -583,6 +583,16 @@ class MAC_Tracker_Repository {
 		return (int) $this->wpdb->query( $this->wpdb->prepare( "UPDATE {$this->visuals} SET tone = '', confidence = '', tone_reason = '', tone_status = 'pending', ai_raw = '', updated_at = %s WHERE capture_status = 'captured'", MAC_Tracker_Time::now_utc() ) );
 	}
 
+	/** Revisit only categories affected by a visual taxonomy adjustment. */
+	public function requeue_visual_tones_by_labels( array $labels ) {
+		$labels = array_values( array_intersect( array_map( 'sanitize_text_field', $labels ), $this->visual_tones() ) );
+		if ( empty( $labels ) ) { return 0; }
+		$placeholders = implode( ',', array_fill( 0, count( $labels ), '%s' ) );
+		$args = array_merge( array( MAC_Tracker_Time::now_utc() ), $labels );
+		$sql = "UPDATE {$this->visuals} SET tone = '', confidence = '', tone_reason = '', tone_status = 'pending', ai_raw = '', updated_at = %s WHERE capture_status = 'captured' AND tone IN ({$placeholders})";
+		return (int) $this->wpdb->query( $this->wpdb->prepare( $sql, $args ) );
+	}
+
 	/** Queue stored captures or fresh captures without deleting the existing image. */
 	public function requeue_visual_items( array $snapshot_ids, $mode ) {
 		$ids = array_values( array_unique( array_filter( array_map( 'absint', $snapshot_ids ) ) ) );
@@ -621,7 +631,7 @@ class MAC_Tracker_Repository {
 	}
 
 	public function visual_tones() {
-		return array( 'Vàng kem sáng', 'Đen vàng', 'Hồng xanh trắng', 'Hồng trắng', 'Nâu kem', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Đỏ hồng', 'Tím hồng', 'Cần duyệt' );
+		return array( 'Vàng kem sáng', 'Đen vàng', 'Hồng xanh trắng', 'Hồng trắng', 'Đỏ trắng', 'Nâu kem', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Đỏ hồng', 'Tím hồng', 'Cần duyệt' );
 	}
 
 	private function save_visual( $snapshot_id, array $data ) {

@@ -10,7 +10,7 @@ const cloudflareAccount = String(process.env.CLOUDFLARE_ACCOUNT_ID || '');
 const cloudflareToken = String(process.env.CLOUDFLARE_API_TOKEN || '');
 const apiBase = `${siteUrl}/wp-json/mac-tracker/v1/visual`;
 const workDir = join(process.cwd(), '.visual-capture');
-const tones = ['Vàng kem sáng', 'Đen vàng', 'Hồng xanh trắng', 'Hồng trắng', 'Nâu kem', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Đỏ hồng', 'Tím hồng', 'Cần duyệt'];
+const tones = ['Vàng kem sáng', 'Đen vàng', 'Hồng xanh trắng', 'Hồng trắng', 'Đỏ trắng', 'Nâu kem', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Đỏ hồng', 'Tím hồng', 'Cần duyệt'];
 
 if (!siteUrl || !secret) throw new Error('MAC_TRACKER_SITE_URL and MAC_TRACKER_AUTOMATION_SECRET are required.');
 
@@ -64,12 +64,12 @@ async function liveColorEvidence(page) {
 
 function tonePrompt(colors) {
   const evidence = colors.length ? colors.join(', ') : 'No Elementor global colors available; rely on the rendered screenshot.';
-  return `Classify a rendered nail salon website screenshot into one fixed visual tone. Use TWO sources together: (1) visible design: large backgrounds, hero, header, buttons, primary/secondary accents, and whether the page is mainly light or dark; (2) Elementor global variables below, which are the declared primary/secondary/text/accent colors. Do not decide from a single photo, nail colour, or a small text colour. Global color evidence: ${evidence}. Choose exactly one label: ${tones.join(', ')}. Key meanings: Vàng kem sáng = pale yellow/cream dominant and light page; Đen vàng = dark or black dominant with gold/yellow accent; Hồng xanh trắng = pink and green accents on a mainly white/light page; Hồng trắng = pink dominant on a mainly white/light page. Return JSON only: {"tone":"one allowed label","confidence":"high|medium|low","reason":"one short Vietnamese sentence mentioning dominant colors and light/dark"}.`;
+  return `Classify a rendered nail salon website screenshot into one fixed visual tone. Prioritize the website UI palette: large header/footer bars, section backgrounds, buttons, borders and repeated typography accents. Treat photos of hands, nails, flowers or products as content, not the brand palette. Use Elementor global variables only as supporting evidence, never as a replacement for the rendered page. Global color evidence: ${evidence}. Choose exactly one label: ${tones.join(', ')}. Key meanings: Vàng kem sáng = pale yellow/cream dominant and light page; Đen vàng = dark/black dominant with gold/yellow accent; Hồng xanh trắng = pink and green UI accents on a mainly white/light page; Hồng trắng = pink UI dominant on a mainly white/light page; Đỏ trắng = red UI dominant on a mainly white/light page, even if photos contain pink nails. Return JSON only: {"tone":"one allowed label","confidence":"high|medium|low","reason":"one short Vietnamese sentence mentioning dominant UI colors and light/dark"}.`;
 }
 
 async function renderedColorEvidence(imageBuffer) {
   const { data, info } = await sharp(imageBuffer).resize({ width: 160, withoutEnlargement: true }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-  const buckets = { blue: 0, green: 0, pink: 0, yellow: 0 };
+  const buckets = { blue: 0, green: 0, pink: 0, red: 0, yellow: 0 };
   let lightness = 0;
   let colourful = 0;
   for (let index = 0; index < data.length; index += info.channels) {
@@ -90,7 +90,8 @@ async function renderedColorEvidence(imageBuffer) {
     colourful += weight;
     if (hue >= 180 && hue < 275) buckets.blue += weight;
     else if (hue >= 75 && hue < 180) buckets.green += weight;
-    else if (hue >= 300 || hue < 18) buckets.pink += weight;
+    else if (hue >= 300 && hue < 340) buckets.pink += weight;
+    else if (hue >= 340 || hue < 18) buckets.red += weight;
     else if (hue >= 35 && hue < 75) buckets.yellow += weight;
   }
   const count = data.length / info.channels;
@@ -101,15 +102,17 @@ async function renderedColorEvidence(imageBuffer) {
     blue: share('blue'),
     green: share('green'),
     pink: share('pink'),
+    red: share('red'),
     yellow: share('yellow'),
-    text: `Rendered-pixel measurement: ${brightness >= 0.62 ? 'mainly light' : brightness <= 0.42 ? 'mainly dark' : 'mixed brightness'}; blue/cyan ${Math.round(share('blue') * 100)}%, green ${Math.round(share('green') * 100)}%, pink/red ${Math.round(share('pink') * 100)}%, yellow/gold ${Math.round(share('yellow') * 100)}% of saturated visible pixels. This measurement overrides a conflicting declared CSS variable.`,
+    text: `Rendered-pixel measurement: ${brightness >= 0.62 ? 'mainly light' : brightness <= 0.42 ? 'mainly dark' : 'mixed brightness'}; blue/cyan ${Math.round(share('blue') * 100)}%, green ${Math.round(share('green') * 100)}%, pink ${Math.round(share('pink') * 100)}%, red ${Math.round(share('red') * 100)}%, yellow/gold ${Math.round(share('yellow') * 100)}% of saturated visible pixels. This measurement supports the rendered UI over a conflicting declared CSS variable.`,
   };
 }
 
 function reconcileTone(tone, evidence) {
   const light = evidence.brightness >= 0.62;
-  if (light && evidence.blue >= 0.22 && evidence.blue > evidence.pink * 1.3 && ['Hồng trắng', 'Đỏ hồng', 'Hồng xanh trắng'].includes(tone)) return 'Xanh trắng';
-  if (light && evidence.yellow >= 0.24 && evidence.yellow > evidence.pink * 1.25 && ['Hồng trắng', 'Đỏ hồng'].includes(tone)) return 'Vàng kem sáng';
+  if (light && evidence.red >= 0.14 && evidence.red > evidence.pink * 1.3 && ['Hồng trắng', 'Đỏ hồng', 'Hồng xanh trắng'].includes(tone)) return 'Đỏ trắng';
+  if (light && evidence.blue >= 0.22 && evidence.blue > (evidence.pink + evidence.red) * 1.3 && ['Hồng trắng', 'Đỏ hồng', 'Hồng xanh trắng', 'Đỏ trắng'].includes(tone)) return 'Xanh trắng';
+  if (light && evidence.yellow >= 0.24 && evidence.yellow > (evidence.pink + evidence.red) * 1.25 && ['Hồng trắng', 'Đỏ hồng', 'Đỏ trắng'].includes(tone)) return 'Vàng kem sáng';
   if (evidence.brightness <= 0.42 && evidence.yellow >= 0.16 && tone !== 'Đen vàng') return 'Đen vàng';
   return tone;
 }
@@ -131,6 +134,7 @@ function parseTone(response, evidence) {
   // a Vietnamese fixed label. Only map clear two-colour combinations.
   const englishTone = [
     [/\b(pink|hồng)\b[\s\S]{0,180}\b(green|xanh)\b[\s\S]{0,180}\b(white|trắng)\b|\b(green|xanh)\b[\s\S]{0,180}\b(pink|hồng)\b[\s\S]{0,180}\b(white|trắng)\b/, 'Hồng xanh trắng'],
+    [/\b(red|đỏ)\b[\s\S]{0,180}\b(white|trắng)\b|\b(white|trắng)\b[\s\S]{0,180}\b(red|đỏ)\b/, 'Đỏ trắng'],
     [/\b(pink|hồng)\b[\s\S]{0,180}\b(white|trắng)\b|\b(white|trắng)\b[\s\S]{0,180}\b(pink|hồng)\b/, 'Hồng trắng'],
     [/\b(red|đỏ)\b[\s\S]{0,180}\b(pink|hồng)\b|\b(pink|hồng)\b[\s\S]{0,180}\b(red|đỏ)\b/, 'Đỏ hồng'],
     [/\b(purple|tím)\b[\s\S]{0,180}\b(pink|hồng)\b|\b(pink|hồng)\b[\s\S]{0,180}\b(purple|tím)\b/, 'Tím hồng'],
