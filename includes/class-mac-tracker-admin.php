@@ -262,7 +262,8 @@ class MAC_Tracker_Admin {
 	}
 
 	/** Start one cloud batch for a manual visual action, without holding the browser open. */
-	private function dispatch_visual_workflow() {
+	private function dispatch_visual_workflow( $limit = 10 ) {
+		$limit = max( 1, min( 25, absint( $limit ) ) );
 		$token = MAC_Tracker_Crypto::decrypt( get_option( 'mac_tracker_github_dispatch_token', '' ) );
 		if ( '' === $token ) {
 			return new WP_Error( 'mac_tracker_github_token', 'Queued, but GitHub could not start now because the Run now token is missing. Automation will pick it up.' );
@@ -272,7 +273,7 @@ class MAC_Tracker_Admin {
 			array(
 				'timeout' => 20,
 				'headers' => array( 'Authorization' => 'Bearer ' . $token, 'Accept' => 'application/vnd.github+json', 'X-GitHub-Api-Version' => '2026-03-10', 'User-Agent' => 'MAC-Project-Tracker/' . MAC_TRACKER_VERSION, 'Content-Type' => 'application/json' ),
-				'body'    => wp_json_encode( array( 'ref' => 'main', 'inputs' => array( 'limit' => '10' ) ) ),
+				'body'    => wp_json_encode( array( 'ref' => 'main', 'inputs' => array( 'limit' => (string) $limit ) ) ),
 			)
 		);
 		if ( is_wp_error( $response ) ) {
@@ -309,7 +310,8 @@ class MAC_Tracker_Admin {
 			$message = sprintf( '%d selected screenshot(s) queued to %s.', is_wp_error( $result ) ? 0 : (int) $result, 'recapture' === $mode ? 'capture again' : 'analyze again' );
 		}
 		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker-visuals', $result->get_error_message(), 'error' ); }
-		$dispatch = $this->dispatch_visual_workflow();
+		if ( (int) $result <= 0 ) { $this->redirect( 'mac-project-tracker-visuals', 'No eligible screenshot changed. Check the selected card status, then try again.', 'warning' ); }
+		$dispatch = $this->dispatch_visual_workflow( (int) $result );
 		$message .= is_wp_error( $dispatch ) ? ' ' . $dispatch->get_error_message() : ' GitHub batch started now.';
 		$this->redirect( 'mac-project-tracker-visuals', $message, is_wp_error( $dispatch ) ? 'warning' : 'success' );
 	}
@@ -541,7 +543,7 @@ class MAC_Tracker_Admin {
 			return;
 		}
 		if ( 'pending' === $capture ) {
-			echo '<p class="mac-tracker-visual-status mac-tracker-visual-status--queued"><span class="dashicons dashicons-clock"></span>Queued for a fresh capture · waiting for GitHub</p>';
+			echo '<p class="mac-tracker-visual-status mac-tracker-visual-status--queued" data-visual-active><span class="dashicons dashicons-clock"></span>Queued for a fresh capture · waiting for GitHub</p>';
 			return;
 		}
 		if ( 'capturing' === $capture ) {
@@ -561,7 +563,7 @@ class MAC_Tracker_Admin {
 			echo '<p class="mac-tracker-visual-status mac-tracker-visual-status--complete"><span class="dashicons dashicons-yes-alt"></span>Screenshot ' . esc_html( $capture_label ) . ' · AI analyzed ' . esc_html( MAC_Tracker_Time::bangkok_label( $row['visual_updated_at'] ?? '' ) ) . '</p>';
 			return;
 		}
-		echo '<p class="mac-tracker-visual-status mac-tracker-visual-status--queued"><span class="dashicons dashicons-update"></span>Screenshot saved ' . esc_html( $capture_label ) . ' · AI queued</p>';
+		echo '<p class="mac-tracker-visual-status mac-tracker-visual-status--queued" data-visual-active><span class="dashicons dashicons-update"></span>Screenshot saved ' . esc_html( $capture_label ) . ' · AI queued</p>';
 	}
 
 	private function row_colors( array $row ) {

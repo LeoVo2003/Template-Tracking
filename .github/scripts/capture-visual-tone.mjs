@@ -24,7 +24,11 @@ const headers = {
 await mkdir(workDir, { recursive: true });
 
 async function queue(stage) {
-  const response = await fetch(`${apiBase}/queue?stage=${stage}&limit=${limit}`, { headers });
+  const response = await fetch(`${apiBase}/queue`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ stage, limit }),
+  });
   if (!response.ok) {
     const detail = (await response.text()).replace(/\s+/g, ' ').slice(0, 700);
     throw new Error(`Queue ${stage} failed: HTTP ${response.status}${detail ? ` — ${detail}` : ''}`);
@@ -52,14 +56,6 @@ function colorEvidence(raw) {
       .filter(([name, value]) => /^--e-global-color-(primary|secondary|text|accent)$/i.test(name) && /^#[0-9a-f]{6}$/i.test(String(value).trim()))
       .map(([name, value]) => `${name}=${String(value).trim().toUpperCase()}`);
   } catch { return []; }
-}
-
-async function liveColorEvidence(page) {
-  return page.evaluate(() => ['primary', 'secondary', 'text', 'accent'].flatMap((role) => {
-    const name = `--e-global-color-${role}`;
-    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    return /^#[0-9a-f]{6}$/i.test(value) ? [`${name}=${value.toUpperCase()}`] : [];
-  }));
 }
 
 function tonePrompt(colors) {
@@ -152,20 +148,30 @@ function parseTone(response, evidence) {
   };
 }
 
-async function classify(snapshotId, imageBuffer, colors = []) {
+async function classify(snapshotId, imageBuffer, colors = [], jobToken) {
   if (!cloudflareAccount || !cloudflareToken) return { skipped: true };
-  await postJson({ mode: 'tone_started', snapshot_id: snapshotId });
   const evidence = await renderedColorEvidence(imageBuffer);
   const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cloudflareAccount}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${cloudflareToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt: `${tonePrompt(colors)}\n${evidence.text}`, image: `data:image/jpeg;base64,${imageBuffer.toString('base64')}`, max_tokens: 160, temperature: 0.1 }),
   });
-  if (response.status === 429) return { skipped: true, quota: true };
+  if (response.status === 429) {
+    await postJson({ mode: 'tone_deferred', snapshot_id: snapshotId, job_token: jobToken });
+    return { skipped: true, quota: true };
+  }
   if (!response.ok) throw new Error(`Llama Vision failed: HTTP ${response.status} ${await response.text()}`);
   const tone = parseTone(await response.json(), evidence);
-  await postJson({ mode: 'tone', snapshot_id: snapshotId, ...tone });
+  await postJson({ mode: 'tone', snapshot_id: snapshotId, job_token: jobToken, ...tone });
   return tone;
+}
+
+async function reportFailure(mode, item, error) {
+  try {
+    await postJson({ mode, snapshot_id: item.id, job_token: item.job_token, message: error.message });
+  } catch (reportError) {
+    console.warn(`Failure callback ignored for #${item.id}: ${reportError.message}`);
+  }
 }
 
 async function captureBatch() {
@@ -177,7 +183,6 @@ async function captureBatch() {
       const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
       const file = join(workDir, `snapshot-${item.id}.jpg`);
       try {
-        await postJson({ mode: 'capture_started', snapshot_id: item.id });
         await page.goto(item.website_url, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.evaluate(() => {
           const copy = (element, target, sources) => {
@@ -211,7 +216,6 @@ async function captureBatch() {
           if (height === lastHeight) break;
           lastHeight = height;
         }
-        const colors = await liveColorEvidence(page);
         await page.evaluate(() => window.scrollTo(0, 0));
         // Let transitions, background images and deferred sections settle after
         // returning to the top. This is intentionally separate from <img> load.
@@ -225,18 +229,12 @@ async function captureBatch() {
         const form = new FormData();
         form.append('mode', 'capture');
         form.append('snapshot_id', String(item.id));
+        form.append('job_token', item.job_token);
         form.append('screenshot', new Blob([full], { type: 'image/jpeg' }), `mac-tracker-${item.id}.jpg`);
         await ingest(form);
-        const preview = await sharp(full).resize({ width: 768, withoutEnlargement: true }).jpeg({ quality: 62 }).toBuffer();
-        try {
-          await classify(item.id, preview, colors.length ? colors : colorEvidence(item.color_source_raw));
-        } catch (error) {
-          await postJson({ mode: 'tone_failed', snapshot_id: item.id, message: error.message });
-          console.warn(`Tone failed #${item.id}: ${error.message}`);
-        }
         console.log(`Captured #${item.id}`);
       } catch (error) {
-        await postJson({ mode: 'capture_failed', snapshot_id: item.id, message: error.message });
+        await reportFailure('capture_failed', item, error);
         console.warn(`Capture failed #${item.id}: ${error.message}`);
       } finally {
         await page.close();
@@ -257,11 +255,11 @@ async function classifyPendingBatch() {
       const response = await fetch(item.screenshot_url);
       if (!response.ok) throw new Error(`Screenshot download failed: HTTP ${response.status}`);
       const preview = await sharp(Buffer.from(await response.arrayBuffer())).resize({ width: 768, withoutEnlargement: true }).jpeg({ quality: 62 }).toBuffer();
-      const result = await classify(item.id, preview, colorEvidence(item.color_source_raw));
+      const result = await classify(item.id, preview, colorEvidence(item.color_source_raw), item.job_token);
       if (result.quota) { console.log('Workers AI daily quota reached; remaining tone jobs stay queued.'); break; }
       console.log(`Classified #${item.id}: ${result.tone}`);
     } catch (error) {
-      await postJson({ mode: 'tone_failed', snapshot_id: item.id, message: error.message });
+      await reportFailure('tone_failed', item, error);
       console.warn(`Tone failed #${item.id}: ${error.message}`);
     }
   }

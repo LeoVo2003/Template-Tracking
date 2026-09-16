@@ -457,6 +457,7 @@
 .mac-tracker-visual-card__actions { display: flex; gap: var(--space-3); margin-top: var(--space-3); }
 .mac-tracker-visual-card__actions .button-link { padding: 0; color: var(--primary); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 700; background: transparent; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .mac-tracker-visual-card__actions .button-link:hover, .mac-tracker-visual-card__actions .button-link:focus { color: var(--primary-hover); }
+.mac-tracker-visual-work button[aria-disabled="true"] { pointer-events: none; opacity: .55; }
 @keyframes mac-tracker-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .mac-tracker-visual-status--working .dashicons { animation: none; } }
 

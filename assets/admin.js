@@ -22,6 +22,28 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
   }
+  var visualWork = document.querySelector('.mac-tracker-visual-work');
+  if (visualWork) {
+    var submitting = false;
+    visualWork.addEventListener('submit', function (event) {
+      var submitter = event.submitter;
+      var action = submitter ? submitter.value : '';
+      if ((action === 'reanalyze_selected' || action === 'recapture_selected') && !selections.some(function (checkbox) { return checkbox.checked; })) {
+        event.preventDefault();
+        window.alert('Select at least one screenshot first.');
+        return;
+      }
+      if (submitting) {
+        event.preventDefault();
+        return;
+      }
+      submitting = true;
+      visualWork.querySelectorAll('button[type="submit"]').forEach(function (button) {
+        button.setAttribute('aria-disabled', 'true');
+      });
+      if (submitter) submitter.textContent = action.indexOf('recapture') === 0 ? 'Queuing capture…' : 'Queuing…';
+    });
+  }
   if (document.querySelector('[data-visual-active]')) {
     window.setTimeout(function () { window.location.reload(); }, 15000);
   }

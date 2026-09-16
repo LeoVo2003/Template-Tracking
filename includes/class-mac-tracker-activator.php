@@ -78,12 +78,14 @@ class MAC_Tracker_Activator {
 				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 				project_id bigint(20) unsigned NOT NULL,
 				capture_status varchar(32) NOT NULL DEFAULT 'pending',
+				capture_token varchar(64) NOT NULL DEFAULT '',
 				attachment_id bigint(20) unsigned NOT NULL DEFAULT 0,
 				screenshot_url varchar(2048) NOT NULL DEFAULT '',
 				tone varchar(64) NOT NULL DEFAULT '',
 				confidence varchar(16) NOT NULL DEFAULT '',
 				tone_reason text NULL,
 				tone_status varchar(32) NOT NULL DEFAULT 'pending',
+				tone_token varchar(64) NOT NULL DEFAULT '',
 				ai_raw longtext NULL,
 				captured_at datetime NULL,
 				created_at datetime NOT NULL,
@@ -158,6 +160,9 @@ class MAC_Tracker_Activator {
 		}
 		if ( version_compare( $previous_version, '0.13.6', '<' ) ) {
 			( new MAC_Tracker_Repository() )->requeue_visual_tones_by_labels( array( 'Hồng trắng', 'Hồng xanh trắng', 'Đỏ trắng', 'Đỏ hồng' ) );
+		}
+		if ( version_compare( $previous_version, '0.13.7', '<' ) ) {
+			( new MAC_Tracker_Repository() )->repair_legacy_visual_claims();
 		}
 		update_option( 'mac_tracker_db_version', MAC_TRACKER_VERSION, false );
 	}

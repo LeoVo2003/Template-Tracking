@@ -20,7 +20,7 @@ class MAC_Tracker_Visual_Service {
 
 	public function register_routes() {
 		register_rest_route( self::NAMESPACE, '/visual/queue', array(
-			'methods'             => WP_REST_Server::READABLE,
+			'methods'             => WP_REST_Server::CREATABLE,
 			'callback'            => array( $this, 'queue' ),
 			'permission_callback' => '__return_true',
 			'args'                => array( 'stage' => array( 'default' => 'capture' ), 'limit' => array( 'default' => 10 ) ),
@@ -42,22 +42,26 @@ class MAC_Tracker_Visual_Service {
 		if ( ! $this->authorized( $request ) ) { return new WP_Error( 'mac_tracker_visual_forbidden', 'Automation authorization failed.', array( 'status' => 401 ) ); }
 		$snapshot_id = absint( $request->get_param( 'snapshot_id' ) );
 		$mode = sanitize_key( $request->get_param( 'mode' ) );
+		$job_token = sanitize_text_field( (string) $request->get_param( 'job_token' ) );
+		if ( '' === $job_token ) { return new WP_Error( 'mac_tracker_visual_token', 'Visual job token is required.', array( 'status' => 400 ) ); }
 		if ( 'capture' === $mode ) {
-			return $this->ingest_capture( $snapshot_id );
+			return $this->ingest_capture( $snapshot_id, $job_token );
 		}
 		if ( 'tone' === $mode ) {
-			$result = $this->repository->save_visual_tone( $snapshot_id, sanitize_text_field( $request->get_param( 'tone' ) ), sanitize_key( $request->get_param( 'confidence' ) ), sanitize_text_field( $request->get_param( 'reason' ) ), wp_json_encode( $request->get_json_params() ) );
+			$result = $this->repository->save_visual_tone( $snapshot_id, sanitize_text_field( $request->get_param( 'tone' ) ), sanitize_key( $request->get_param( 'confidence' ) ), sanitize_text_field( $request->get_param( 'reason' ) ), wp_json_encode( $request->get_json_params() ), $job_token );
 		} elseif ( 'capture_started' === $mode || 'tone_started' === $mode ) {
-			$result = $this->repository->mark_visual_stage( $snapshot_id, 'tone_started' === $mode ? 'tone' : 'capture' );
+			$result = $this->repository->mark_visual_stage( $snapshot_id, 'tone_started' === $mode ? 'tone' : 'capture', $job_token );
 		} elseif ( 'capture_failed' === $mode || 'tone_failed' === $mode ) {
-			$result = $this->repository->save_visual_failure( $snapshot_id, 'tone_failed' === $mode ? 'tone' : 'capture', sanitize_text_field( $request->get_param( 'message' ) ) );
+			$result = $this->repository->save_visual_failure( $snapshot_id, 'tone_failed' === $mode ? 'tone' : 'capture', sanitize_text_field( $request->get_param( 'message' ) ), $job_token );
+		} elseif ( 'tone_deferred' === $mode ) {
+			$result = $this->repository->release_visual_claim( $snapshot_id, 'tone', $job_token );
 		} else {
 			return new WP_Error( 'mac_tracker_visual_mode', 'Unsupported visual ingest mode.', array( 'status' => 400 ) );
 		}
 		return is_wp_error( $result ) ? $result : rest_ensure_response( array( 'saved' => true ) );
 	}
 
-	private function ingest_capture( $snapshot_id ) {
+	private function ingest_capture( $snapshot_id, $job_token ) {
 		$files = $_FILES;
 		if ( empty( $files['screenshot']['tmp_name'] ) ) { return new WP_Error( 'mac_tracker_visual_file', 'Screenshot file is required.', array( 'status' => 400 ) ); }
 		if ( (int) $files['screenshot']['size'] > 10 * MB_IN_BYTES ) { return new WP_Error( 'mac_tracker_visual_size', 'Screenshot must be 10 MB or smaller.', array( 'status' => 413 ) ); }
@@ -67,7 +71,7 @@ class MAC_Tracker_Visual_Service {
 		$attachment_id = media_handle_upload( 'screenshot', 0, array( 'post_title' => 'MAC Tracker visual #' . $snapshot_id ) );
 		if ( is_wp_error( $attachment_id ) ) { return $attachment_id; }
 		$url = (string) wp_get_attachment_url( $attachment_id );
-		$result = $this->repository->save_visual_capture( $snapshot_id, $attachment_id, $url );
+		$result = $this->repository->save_visual_capture( $snapshot_id, $attachment_id, $url, $job_token );
 		if ( is_wp_error( $result ) ) { wp_delete_attachment( $attachment_id, true ); return $result; }
 		return rest_ensure_response( array( 'saved' => true, 'screenshot_url' => $url ) );
 	}

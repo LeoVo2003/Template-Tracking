@@ -13,6 +13,12 @@ on:
 permissions:
   contents: read
 
+# Manual clicks and the twice-hourly schedule may overlap. Keep every run, but
+# process them in order so two browsers never work the same queue concurrently.
+concurrency:
+  group: mac-project-tracker-visual-tone
+  cancel-in-progress: false
+
 jobs:
   capture-and-classify:
     runs-on: ubuntu-latest
