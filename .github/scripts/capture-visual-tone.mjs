@@ -50,7 +50,7 @@ async function postJson(payload) {
 }
 
 function tonePrompt(evidence) {
-  return `Classify ONLY the rendered website interface palette into one fixed visual tone. The supplied image has photographs, product imagery, background photos and ordinary image content hidden. Judge section backgrounds, header/footer bars, buttons, borders, navigation and repeated typography accents. Never infer a brand color from nails, skin, flowers, lipstick or other photo content. Rendered UI color evidence: ${evidence.text}. Choose exactly one label: ${tones.join(', ')}. Key meanings: Vàng kem sáng = light cream/yellow UI; Đen vàng = dark UI with gold/yellow accents; Hồng xanh trắng = pink and green UI accents on a light page; Hồng trắng = pink UI on a light page; Đỏ trắng = true red UI on a light page; Nâu kem = brown/taupe UI with cream/light neutral areas; Xanh trắng = green/blue UI on a light page; Xanh đen = green/blue UI on a dark page; Đen trắng = neutral black/white UI; Đỏ hồng = both true red and pink are repeated UI colors; Tím hồng = purple and pink UI. Return JSON only: {"tone":"one allowed label","confidence":"high|medium|low","reason":"one short Vietnamese sentence about UI colors only"}.`;
+  return `Classify the website into one fixed visual tone. Weight the rendered UI palette about 80% of the decision: section backgrounds, header/footer bars, buttons, borders, navigation and repeated typography accents. Full-page screenshot colors are only secondary context at about 20%; photos of nails, skin, flowers, lipstick and products must never override a clear UI palette. The supplied model image intentionally hides photo/media content so UI remains primary. Weighted evidence: ${evidence.text}. Choose exactly one label: ${tones.join(', ')}. Key meanings: Vàng kem sáng = light cream/yellow UI; Đen vàng = dark UI with gold/yellow accents; Hồng xanh trắng = pink and green UI accents on a light page; Hồng trắng = pink UI on a light page; Đỏ trắng = true red UI on a light page; Nâu kem = brown/taupe UI with cream/light neutral areas; Xanh trắng = green/blue UI on a light page; Xanh đen = green/blue UI on a dark page; Đen trắng = neutral black/white UI; Đỏ hồng = both true red and pink are repeated UI colors; Tím hồng = purple and pink UI. Return JSON only: {"tone":"one allowed label","confidence":"high|medium|low","reason":"one short Vietnamese sentence about the weighted palette"}.`;
 }
 
 function parseRgb(value) {
@@ -89,6 +89,23 @@ function uiCategory(rgb) {
   return l >= 0.72 ? 'light' : 'neutral';
 }
 
+function inferTone(c, dark, light, chromaRatio, cream = 0) {
+  let inferred = 'Cần duyệt';
+  if (dark >= 0.38 && c.yellow >= 0.14) inferred = 'Đen vàng';
+  else if (dark >= 0.38 && (c.green + c.blue) >= 0.18) inferred = 'Xanh đen';
+  else if (dark >= 0.42 && chromaRatio < 0.12) inferred = 'Đen trắng';
+  else if (c.pink >= 0.18 && c.green >= 0.11) inferred = 'Hồng xanh trắng';
+  else if (c.brown >= 0.22 && c.brown > Math.max(c.red, c.pink) * 1.12) inferred = 'Nâu kem';
+  else if (c.red >= 0.20 && c.red > c.pink * 1.28) inferred = 'Đỏ trắng';
+  else if (c.pink >= 0.20 && c.pink > c.red * 1.18) inferred = 'Hồng trắng';
+  else if (c.red >= 0.12 && c.pink >= 0.12) inferred = 'Đỏ hồng';
+  else if (c.purple >= 0.13 && c.pink >= 0.08) inferred = 'Tím hồng';
+  else if ((c.green + c.blue) >= 0.22) inferred = 'Xanh trắng';
+  else if ((c.yellow + cream) >= 0.18) inferred = 'Vàng kem sáng';
+  else if (dark >= 0.35 && light >= 0.18) inferred = 'Đen trắng';
+  return inferred;
+}
+
 function summarizeUiSamples(samples) {
   const buckets = { red: 0, pink: 0, brown: 0, yellow: 0, green: 0, blue: 0, purple: 0, dark: 0, light: 0, cream: 0, neutral: 0 };
   const colors = new Map();
@@ -109,26 +126,53 @@ function summarizeUiSamples(samples) {
   const chromaShare = (name) => chromaTotal ? buckets[name] / chromaTotal : 0;
   const dark = share('dark');
   const light = share('light') + share('cream');
+  const cream = share('cream');
   const c = Object.fromEntries(chromatic.map((key) => [key, chromaShare(key)]));
-  let inferred = 'Cần duyệt';
-  if (dark >= 0.38 && c.yellow >= 0.14) inferred = 'Đen vàng';
-  else if (dark >= 0.38 && (c.green + c.blue) >= 0.18) inferred = 'Xanh đen';
-  else if (dark >= 0.42 && chromaTotal / Math.max(total, 1) < 0.12) inferred = 'Đen trắng';
-  else if (c.pink >= 0.18 && c.green >= 0.11) inferred = 'Hồng xanh trắng';
-  else if (c.brown >= 0.22 && c.brown > Math.max(c.red, c.pink) * 1.12) inferred = 'Nâu kem';
-  else if (c.red >= 0.20 && c.red > c.pink * 1.28) inferred = 'Đỏ trắng';
-  else if (c.pink >= 0.20 && c.pink > c.red * 1.18) inferred = 'Hồng trắng';
-  else if (c.red >= 0.12 && c.pink >= 0.12) inferred = 'Đỏ hồng';
-  else if (c.purple >= 0.13 && c.pink >= 0.08) inferred = 'Tím hồng';
-  else if ((c.green + c.blue) >= 0.22) inferred = 'Xanh trắng';
-  else if ((c.yellow + share('cream')) >= 0.18) inferred = 'Vàng kem sáng';
-  else if (dark >= 0.35 && light >= 0.18) inferred = 'Đen trắng';
+  const chromaRatio = chromaTotal / Math.max(total, 1);
+  const inferred = inferTone(c, dark, light, chromaRatio, cream);
   const ranked = [...colors.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([hex]) => hex);
   const percent = (value) => Math.round(value * 100);
   const text = `Chỉ màu UI, đã loại ảnh: nền ${light >= dark ? 'sáng' : 'tối'}; nâu ${percent(c.brown)}%, hồng ${percent(c.pink)}%, đỏ thật ${percent(c.red)}%, xanh lá ${percent(c.green)}%, xanh dương ${percent(c.blue)}%, vàng ${percent(c.yellow)}%, tím ${percent(c.purple)}%; màu UI nổi bật ${ranked.join(', ') || 'không rõ'}.`;
   const sorted = Object.values(c).sort((a, b) => b - a);
   const certainty = inferred !== 'Cần duyệt' && (sorted[0] >= 0.34 || (sorted[0] - (sorted[1] || 0)) >= 0.12) ? 'high' : (inferred !== 'Cần duyệt' ? 'medium' : 'low');
-  return { ...c, dark, light, inferred, certainty, text };
+  return { ...c, dark, light, cream, chromaRatio, inferred, certainty, text };
+}
+
+async function screenshotColorEvidence(imageBuffer) {
+  const { data, info } = await sharp(imageBuffer).resize({ width: 160, withoutEnlargement: true }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const buckets = { red: 0, pink: 0, brown: 0, yellow: 0, green: 0, blue: 0, purple: 0, dark: 0, light: 0, cream: 0, neutral: 0 };
+  let total = 0;
+  for (let index = 0; index < data.length; index += info.channels) {
+    const rgb = { r: data[index], g: data[index + 1], b: data[index + 2] };
+    const category = uiCategory(rgb);
+    buckets[category] += 1;
+    total += 1;
+  }
+  const chromatic = ['red', 'pink', 'brown', 'yellow', 'green', 'blue', 'purple'];
+  const chromaTotal = chromatic.reduce((sum, key) => sum + buckets[key], 0);
+  const c = Object.fromEntries(chromatic.map((key) => [key, chromaTotal ? buckets[key] / chromaTotal : 0]));
+  return {
+    ...c,
+    dark: total ? buckets.dark / total : 0,
+    light: total ? (buckets.light + buckets.cream) / total : 0,
+    cream: total ? buckets.cream / total : 0,
+    chromaRatio: total ? chromaTotal / total : 0,
+  };
+}
+
+function blendVisualEvidence(ui, screenshot) {
+  const keys = ['red', 'pink', 'brown', 'yellow', 'green', 'blue', 'purple'];
+  const combined = Object.fromEntries(keys.map((key) => [key, ui[key] * 0.80 + screenshot[key] * 0.20]));
+  const dark = ui.dark * 0.80 + screenshot.dark * 0.20;
+  const light = ui.light * 0.80 + screenshot.light * 0.20;
+  const cream = ui.cream * 0.80 + screenshot.cream * 0.20;
+  const chromaRatio = ui.chromaRatio * 0.80 + screenshot.chromaRatio * 0.20;
+  const inferred = inferTone(combined, dark, light, chromaRatio, cream);
+  const sorted = Object.values(combined).sort((a, b) => b - a);
+  const certainty = inferred !== 'Cần duyệt' && (sorted[0] >= 0.34 || (sorted[0] - (sorted[1] || 0)) >= 0.12) ? 'high' : (inferred !== 'Cần duyệt' ? 'medium' : 'low');
+  const percent = (value) => Math.round(value * 100);
+  const text = `Trọng số 80% UI + 20% ảnh: nâu ${percent(combined.brown)}%, hồng ${percent(combined.pink)}%, đỏ thật ${percent(combined.red)}%, xanh lá ${percent(combined.green)}%, xanh dương ${percent(combined.blue)}%, vàng ${percent(combined.yellow)}%, tím ${percent(combined.purple)}%. Ảnh chỉ là tín hiệu phụ và không được tự ghi đè UI rõ ràng.`;
+  return { ...combined, dark, light, cream, chromaRatio, inferred, certainty, text };
 }
 
 async function renderedUiEvidence(browser, url) {
@@ -309,9 +353,13 @@ async function classifyPendingBatch() {
     for (const item of items) {
       try {
         const ui = await renderedUiEvidence(browser, item.website_url);
-        const result = await classify(item.id, ui.image, ui.evidence, item.job_token);
+        const screenshotResponse = await fetch(item.screenshot_url);
+        if (!screenshotResponse.ok) throw new Error(`Screenshot download failed: HTTP ${screenshotResponse.status}`);
+        const screenshotEvidence = await screenshotColorEvidence(Buffer.from(await screenshotResponse.arrayBuffer()));
+        const evidence = blendVisualEvidence(ui.evidence, screenshotEvidence);
+        const result = await classify(item.id, ui.image, evidence, item.job_token);
         if (result.quota) { console.log('Workers AI daily quota reached; remaining tone jobs stay queued.'); break; }
-        console.log(`Classified #${item.id}: ${result.tone} — ${ui.evidence.text}`);
+        console.log(`Classified #${item.id}: ${result.tone} — ${evidence.text}`);
       } catch (error) {
         await reportFailure('tone_failed', item, error);
         console.warn(`Tone failed #${item.id}: ${error.message}`);

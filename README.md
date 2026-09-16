@@ -36,7 +36,7 @@ Installations on `0.2.0` have no updater; installations on older `0.7.x` may not
 
 ## Visual Tone automation
 
-The repository workflow **Capture visual tone** runs in GitHub Actions, not on the WordPress host or a local computer. It captures a homepage as a full-page JPEG, uploads the image directly to the site's Media Library, then asks Cloudflare Workers AI Llama Vision to classify one controlled tone label.
+The repository workflow **Capture visual tone** runs in GitHub Actions, not on the WordPress host or a local computer. It captures a homepage as a full-page JPEG and uploads it to the site's Media Library. Tone classification weighs rendered UI colors at 80% and full-screenshot image colors at 20%, so photos can add context without overriding a clear interface palette.
 
 Before the first run, save an **Automation shared secret** in MAC Tracker → Settings and add these GitHub repository Secrets:
 
