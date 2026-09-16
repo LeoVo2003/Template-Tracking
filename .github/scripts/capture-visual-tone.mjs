@@ -14,19 +14,28 @@ const tones = ['Vàng đen', 'Đỏ hồng', 'Hồng trắng', 'Nâu kem', 'Xanh
 
 if (!siteUrl || !secret) throw new Error('MAC_TRACKER_SITE_URL and MAC_TRACKER_AUTOMATION_SECRET are required.');
 
-const headers = { 'X-MAC-Tracker-Automation': secret };
+// Explicitly identify the cloud job. Some WordPress firewalls reject Node's
+// default fetch signature before the request reaches our private REST route.
+const headers = {
+  'X-MAC-Tracker-Automation': secret,
+  'User-Agent': 'MAC-Project-Tracker-GitHub-Action/0.12.1',
+  'Accept': 'application/json',
+};
 await mkdir(workDir, { recursive: true });
 
 async function queue(stage) {
   const response = await fetch(`${apiBase}/queue?stage=${stage}&limit=${limit}`, { headers });
-  if (!response.ok) throw new Error(`Queue ${stage} failed: HTTP ${response.status}`);
+  if (!response.ok) {
+    const detail = (await response.text()).replace(/\s+/g, ' ').slice(0, 700);
+    throw new Error(`Queue ${stage} failed: HTTP ${response.status}${detail ? ` — ${detail}` : ''}`);
+  }
   const payload = await response.json();
   return payload.items || [];
 }
 
 async function ingest(form) {
   const response = await fetch(`${apiBase}/ingest`, { method: 'POST', headers, body: form });
-  if (!response.ok) throw new Error(`Ingest failed: HTTP ${response.status} ${await response.text()}`);
+  if (!response.ok) throw new Error(`Ingest failed: HTTP ${response.status} ${(await response.text()).replace(/\s+/g, ' ').slice(0, 700)}`);
   return response.json();
 }
 
