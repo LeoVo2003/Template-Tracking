@@ -606,6 +606,22 @@ class MAC_Tracker_Repository {
 		return $this->save_claimed_visual( $snapshot_id, 'tone', $token, array( 'tone' => $tone, 'confidence' => $confidence, 'tone_reason' => sanitize_text_field( $reason ), 'tone_status' => 'classified', 'ai_raw' => (string) $raw ) );
 	}
 
+	public function save_manual_visual_tone( $snapshot_id, $tone ) {
+		$tone = sanitize_text_field( (string) $tone );
+		$allowed = array_diff( $this->visual_tones(), array( 'Cần duyệt' ) );
+		if ( ! in_array( $tone, $allowed, true ) ) {
+			return new WP_Error( 'mac_tracker_visual_manual_tone', 'Choose a valid visual tone first.' );
+		}
+		return $this->save_visual( absint( $snapshot_id ), array(
+			'tone'        => $tone,
+			'confidence'  => 'high',
+			'tone_reason' => 'Manually reviewed in MAC Project Tracker.',
+			'tone_status' => 'classified',
+			'tone_token'  => '',
+			'ai_raw'      => wp_json_encode( array( 'manual' => true, 'user_id' => get_current_user_id() ) ),
+		) );
+	}
+
 	/** A visual-model prompt change can safely reuse the stored screenshots. */
 	public function requeue_visual_tones() {
 		return (int) $this->wpdb->query( $this->wpdb->prepare( "UPDATE {$this->visuals} SET tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', updated_at = %s WHERE capture_status = 'captured'", MAC_Tracker_Time::now_utc() ) );

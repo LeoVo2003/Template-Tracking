@@ -406,6 +406,7 @@
 .mac-tracker-tone--hong-xanh-trang { --tone-a: #c66c96; --tone-b: #4f8768; --tone-soft: #fff6f8; --tone-line: #e8d3dc; --tone-ink: #7d4764; }
 .mac-tracker-tone--do-hong { --tone-a: #bd5460; --tone-b: #e6a0ad; --tone-soft: #fff0f2; --tone-line: #f1c6cd; --tone-ink: #8d3444; }
 .mac-tracker-tone--hong-trang { --tone-a: #d88d9b; --tone-b: #fffdfb; --tone-soft: #fff5f6; --tone-line: #f0d5d9; --tone-ink: #914b5b; }
+.mac-tracker-tone--do-trang { --tone-a: #b53f45; --tone-b: #fffdfb; --tone-soft: #fff3f3; --tone-line: #edc9cb; --tone-ink: #863136; }
 .mac-tracker-tone--nau-kem { --tone-a: #96775c; --tone-b: #eadfcd; --tone-soft: #faf5ee; --tone-line: #e5d6c4; --tone-ink: #71583f; }
 .mac-tracker-tone--xanh-trang { --tone-a: #6d9a91; --tone-b: #f8fbfa; --tone-soft: #f0f8f5; --tone-line: #cfe3da; --tone-ink: #416e63; }
 .mac-tracker-tone--xanh-den { --tone-a: #557c72; --tone-b: #27342f; --tone-soft: #eef4f1; --tone-line: #cadbd4; --tone-ink: #345d53; }
@@ -446,6 +447,10 @@
 .mac-tracker-visual-card__body { padding: var(--space-4); }
 .mac-tracker-visual-card__body > .mac-tracker-project-name { margin-top: var(--space-1); }
 .mac-tracker-visual-card__tone { margin-top: var(--space-3); }
+.mac-tracker-tone-review { display: grid; gap: var(--space-1); margin-top: var(--space-2); padding: var(--space-2); background: var(--mist-light); border: 1px solid var(--line); border-radius: 6px; }
+.mac-tracker-tone-review > label { color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 700; }
+.mac-tracker-tone-review > div { display: flex; gap: var(--space-2); align-items: center; }
+.mac-tracker-tone-review select { min-width: 0; max-width: 170px; height: 30px; font-size: var(--text-xs); }
 .mac-tracker-visual-status { display: flex; align-items: flex-start; gap: 4px; margin: var(--space-3) 0 0; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 1.45; }
 .mac-tracker-visual-status .dashicons { width: 14px; height: 14px; margin-top: 1px; font-size: 14px; flex: 0 0 auto; }
 .mac-tracker-visual-status--complete { color: var(--ok); }

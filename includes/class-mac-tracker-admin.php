@@ -290,6 +290,13 @@ class MAC_Tracker_Admin {
 		$this->require_request( 'mac_tracker_requeue_visuals' );
 		$action = sanitize_key( wp_unslash( $_POST['visual_action'] ?? '' ) );
 		$ids = isset( $_POST['snapshot_ids'] ) && is_array( $_POST['snapshot_ids'] ) ? array_map( 'absint', wp_unslash( $_POST['snapshot_ids'] ) ) : array();
+		if ( preg_match( '/^save_tone_(\d+)$/', $action, $tone_match ) ) {
+			$snapshot_id = absint( $tone_match[1] );
+			$manual_tones = isset( $_POST['manual_tone'] ) && is_array( $_POST['manual_tone'] ) ? wp_unslash( $_POST['manual_tone'] ) : array();
+			$result = $this->repository->save_manual_visual_tone( $snapshot_id, $manual_tones[ $snapshot_id ] ?? '' );
+			if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker-visuals', $result->get_error_message(), 'error' ); }
+			$this->redirect( 'mac-project-tracker-visuals', 'Visual tone reviewed and saved.', 'success' );
+		}
 		if ( preg_match( '/^(reanalyze_one|recapture_one)_(\d+)$/', $action, $one_match ) ) {
 			$action = $one_match[1];
 			$ids = array( absint( $one_match[2] ) );
@@ -533,6 +540,14 @@ class MAC_Tracker_Admin {
 			return;
 		}
 		echo '<span class="' . esc_attr( $classes ) . '" title="' . esc_attr( $title ) . '">' . $content . '</span>';
+		if ( 'Cần duyệt' === $tone ) {
+			$snapshot_id = (int) $row['id'];
+			echo '<div class="mac-tracker-tone-review"><label for="manual-tone-' . $snapshot_id . '">Choose the correct tone</label><div><select id="manual-tone-' . $snapshot_id . '" name="manual_tone[' . $snapshot_id . ']"><option value="">Select tone…</option>';
+			foreach ( array_diff( $this->tone_options(), array( 'Cần duyệt' ) ) as $option ) {
+				echo '<option value="' . esc_attr( $option ) . '">' . esc_html( $option ) . '</option>';
+			}
+			echo '</select><button type="submit" class="button button-small" name="visual_action" value="save_tone_' . $snapshot_id . '">Save tone</button></div></div>';
+		}
 	}
 
 	private function visual_status_cell( array $row ) {
@@ -560,6 +575,10 @@ class MAC_Tracker_Admin {
 			return;
 		}
 		if ( 'classified' === $tone ) {
+			if ( 'Cần duyệt' === (string) ( $row['tone'] ?? '' ) ) {
+				echo '<p class="mac-tracker-visual-status mac-tracker-visual-status--queued"><span class="dashicons dashicons-visibility"></span>AI could not decide · choose the tone above</p>';
+				return;
+			}
 			echo '<p class="mac-tracker-visual-status mac-tracker-visual-status--complete"><span class="dashicons dashicons-yes-alt"></span>Screenshot ' . esc_html( $capture_label ) . ' · AI analyzed ' . esc_html( MAC_Tracker_Time::bangkok_label( $row['visual_updated_at'] ?? '' ) ) . '</p>';
 			return;
 		}
