@@ -15,6 +15,10 @@ on:
         description: "JSON snapshot ID list for a targeted run"
         required: false
         default: "[]"
+      source_action:
+        description: "Auditable Visual Tone action contract"
+        required: false
+        default: "run_batch_now"
       limit:
         description: "Maximum logical websites this run"
         required: false
@@ -50,6 +54,7 @@ jobs:
       RUN_MODE: ${{ inputs.run_mode || 'batch' }}
       VISUAL_STAGE: ${{ inputs.stage || 'full' }}
       TARGET_IDS: ${{ inputs.target_ids || '[]' }}
+      SOURCE_ACTION: ${{ inputs.source_action || 'run_batch_now' }}
       BATCH_LIMIT: ${{ inputs.limit || '10' }}
     steps:
       - uses: actions/checkout@v4

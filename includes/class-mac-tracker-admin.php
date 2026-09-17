@@ -239,7 +239,7 @@ class MAC_Tracker_Admin {
 		<form class="mac-tracker-visual-work" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<?php wp_nonce_field( 'mac_tracker_requeue_visuals' ); ?>
 			<input type="hidden" name="action" value="mac_tracker_requeue_visuals">
-			<section class="mac-tracker-visual-tools" aria-label="Visual review actions"><div><p class="mac-tracker-eyebrow">Targeted retry</p><strong>Use saved screenshots first</strong><span>Analyze again costs no new capture. Capture again refreshes only sites whose design changed.</span></div><div class="mac-tracker-visual-tools__actions"><label class="mac-tracker-select-all"><input type="checkbox" data-visual-select-all><span>Select all in this tab</span></label><button class="button" type="submit" name="visual_action" value="reanalyze_selected">Analyze selected</button><button class="button" type="submit" name="visual_action" value="recapture_selected">Capture selected again</button><button class="button" type="submit" name="visual_action" value="retry_failed">Retry failed</button><button class="button" type="submit" name="visual_action" value="reanalyze_all">Analyze all stored</button></div></section>
+			<section class="mac-tracker-visual-tools" aria-label="Visual review actions"><div><p class="mac-tracker-eyebrow">Targeted retry</p><strong>Use saved captures first</strong><span>Analyze reuses saved evidence only. Capture refreshes website evidence only; AI does not run automatically.</span></div><div class="mac-tracker-visual-tools__actions"><label class="mac-tracker-select-all"><input type="checkbox" data-visual-select-all><span>Select all in this tab</span></label><button class="button" type="submit" name="visual_action" value="reanalyze_selected" title="Re-analyze selected saved captures. No website recapture.">Analyze selected</button><button class="button" type="submit" name="visual_action" value="recapture_selected" title="Create fresh captures only. AI analysis will not run automatically.">Capture selected again</button><button class="button" type="submit" name="visual_action" value="retry_failed" title="Retry only the stage that failed.">Retry failed</button><button class="button" type="submit" name="visual_action" value="reanalyze_all" title="Analyze eligible saved captures in batches. No websites are recaptured.">Analyze all stored</button></div></section>
 			<nav class="mac-tracker-visual-tabs" aria-label="Visual tone status"><button type="button" class="is-active" data-visual-tab="queue">Queue &amp; processing <span><?php echo esc_html( $queue_count ); ?></span></button><button type="button" data-visual-tab="review">Cần duyệt <span><?php echo esc_html( $review_count ); ?></span></button><button type="button" data-visual-tab="completed">Completed <span><?php echo esc_html( $classified_count ); ?></span></button></nav>
 			<section class="mac-tracker-visual-gallery" aria-label="Visual tone gallery">
 				<?php if ( empty( $rows ) ) : ?>
@@ -349,7 +349,7 @@ class MAC_Tracker_Admin {
 	}
 
 	/** Start one cloud batch for a manual visual action, without holding the browser open. */
-	private function dispatch_visual_workflow( $limit = 10, $run_mode = 'batch', $stage = 'full', array $target_ids = array() ) {
+	private function dispatch_visual_workflow( $limit = 10, $run_mode = 'batch', $stage = 'full', array $target_ids = array(), $source_action = 'run_batch_now' ) {
 		$limit = max( 1, min( 25, absint( $limit ) ) );
 		$run_mode = 'targeted' === $run_mode ? 'targeted' : 'batch';
 		$stage = in_array( $stage, array( 'capture', 'tone', 'full', 'auto' ), true ) ? $stage : 'full';
@@ -368,7 +368,7 @@ class MAC_Tracker_Admin {
 			array(
 				'timeout' => 20,
 				'headers' => array( 'Authorization' => 'Bearer ' . $token, 'Accept' => 'application/vnd.github+json', 'X-GitHub-Api-Version' => '2026-03-10', 'User-Agent' => 'MAC-Project-Tracker/' . MAC_TRACKER_VERSION, 'Content-Type' => 'application/json' ),
-				'body'    => wp_json_encode( array( 'ref' => 'main', 'inputs' => array( 'run_mode' => $run_mode, 'stage' => $stage, 'target_ids' => wp_json_encode( $target_ids ), 'limit' => (string) $limit ) ) ),
+				'body'    => wp_json_encode( array( 'ref' => 'main', 'inputs' => array( 'run_mode' => $run_mode, 'stage' => $stage, 'target_ids' => wp_json_encode( $target_ids ), 'source_action' => sanitize_key( $source_action ), 'limit' => (string) $limit ) ) ),
 			)
 		);
 		if ( is_wp_error( $response ) ) {
@@ -399,8 +399,15 @@ class MAC_Tracker_Admin {
 			$result = $this->repository->requeue_visual_tones();
 			$message = sprintf( '%d stored screenshot(s) queued for AI analysis.', (int) $result );
 		} elseif ( 'retry_failed' === $action ) {
-			$result = $this->repository->requeue_failed_visual_items();
-			$message = sprintf( '%d failed visual job(s) queued again.', (int) $result );
+			$retry = $this->repository->requeue_failed_visual_items_by_stage();
+			$capture_ids = (array) $retry['capture']; $tone_ids = (array) $retry['tone'];
+			$result = count( $capture_ids ) + count( $tone_ids );
+			if ( ! $result ) { return array( 'result' => 0, 'message' => 'No failed Visual Tone stage is eligible to retry. Ambiguous legacy records require review.', 'dispatch' => false ); }
+			$capture_dispatch = empty( $capture_ids ) ? true : $this->dispatch_visual_workflow( count( $capture_ids ), 'targeted', 'capture', $capture_ids, 'retry_failed_capture' );
+			$tone_dispatch = empty( $tone_ids ) ? true : $this->dispatch_visual_workflow( count( $tone_ids ), 'targeted', 'tone', $tone_ids, 'retry_failed_analysis' );
+			$message = sprintf( 'Retry failed: Capture retries: %d. Analysis retries: %d.', count( $capture_ids ), count( $tone_ids ) );
+			if ( is_wp_error( $capture_dispatch ) || is_wp_error( $tone_dispatch ) ) { $message .= ' GitHub could not start one retry scope.'; }
+			return array( 'result' => $result, 'message' => $message, 'dispatch' => ! is_wp_error( $capture_dispatch ) && ! is_wp_error( $tone_dispatch ) );
 		} else {
 			$mode = in_array( $action, array( 'reanalyze_selected', 'reanalyze_one' ), true ) ? 'reanalyze' : ( in_array( $action, array( 'recapture_selected', 'recapture_one' ), true ) ? 'recapture' : '' );
 			$result = $this->repository->requeue_visual_items( $ids, $mode );
@@ -419,7 +426,18 @@ class MAC_Tracker_Admin {
 			$stage = 'capture';
 			$dispatch_ids = $ids;
 		}
-		$dispatch = $this->dispatch_visual_workflow( (int) $result, $run_mode, $stage, $dispatch_ids );
+		$source = 'reanalyze_all' === $action ? 'analyze_all_stored' : ( 'tone' === $stage ? 'analyze_selected' : ( 'capture' === $stage ? 'capture_selected_again' : 'run_batch_now' ) );
+		if ( 'analyze_all_stored' === $source ) {
+			$dispatch = true;
+			// GitHub concurrency serializes these scopes; each remains tone-only and
+			// therefore cannot claim a new capture item.
+			for ( $remaining = (int) $result; $remaining > 0; $remaining -= 10 ) {
+				$dispatch = $this->dispatch_visual_workflow( min( 10, $remaining ), 'batch', 'tone', array(), $source );
+				if ( is_wp_error( $dispatch ) ) { break; }
+			}
+		} else {
+			$dispatch = $this->dispatch_visual_workflow( (int) $result, $run_mode, $stage, $dispatch_ids, $source );
+		}
 		$message .= is_wp_error( $dispatch ) ? ' ' . $dispatch->get_error_message() : ' GitHub batch started now.';
 		return array( 'result' => $result, 'message' => $message, 'dispatch' => ! is_wp_error( $dispatch ) );
 	}
@@ -465,38 +483,10 @@ class MAC_Tracker_Admin {
 			if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker-visuals', $result->get_error_message(), 'error' ); }
 			$this->redirect( 'mac-project-tracker-visuals', 'Manual tone lock removed. You can queue AI again now.', 'success' );
 		}
-		if ( preg_match( '/^(reanalyze_one|recapture_one)_(\d+)$/', $action, $one_match ) ) {
-			$action = $one_match[1];
-			$ids = array( absint( $one_match[2] ) );
-		}
-		if ( 'reanalyze_all' === $action ) {
-			$result = $this->repository->requeue_visual_tones();
-			$message = sprintf( '%d stored screenshot(s) queued for AI analysis.', (int) $result );
-		} elseif ( 'retry_failed' === $action ) {
-			$result = $this->repository->requeue_failed_visual_items();
-			$message = sprintf( '%d failed visual job(s) queued again.', (int) $result );
-		} else {
-			$mode = in_array( $action, array( 'reanalyze_selected', 'reanalyze_one' ), true ) ? 'reanalyze' : ( in_array( $action, array( 'recapture_selected', 'recapture_one' ), true ) ? 'recapture' : '' );
-			$result = $this->repository->requeue_visual_items( $ids, $mode );
-			$message = sprintf( '%d selected screenshot(s) queued to %s.', is_wp_error( $result ) ? 0 : (int) $result, 'recapture' === $mode ? 'capture again' : 'analyze again' );
-		}
-		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker-visuals', $result->get_error_message(), 'error' ); }
-		if ( (int) $result <= 0 ) { $this->redirect( 'mac-project-tracker-visuals', 'No eligible screenshot changed. Check the selected card status, then try again.', 'warning' ); }
-		$run_mode = 'batch';
-		$stage = 'full';
-		$dispatch_ids = array();
-		if ( in_array( $action, array( 'reanalyze_selected', 'reanalyze_one' ), true ) ) {
-			$run_mode = 'targeted';
-			$stage = 'tone';
-			$dispatch_ids = $ids;
-		} elseif ( in_array( $action, array( 'recapture_selected', 'recapture_one' ), true ) ) {
-			$run_mode = 'targeted';
-			$stage = 'capture';
-			$dispatch_ids = $ids;
-		}
-		$dispatch = $this->dispatch_visual_workflow( (int) $result, $run_mode, $stage, $dispatch_ids );
-		$message .= is_wp_error( $dispatch ) ? ' ' . $dispatch->get_error_message() : ' GitHub batch started now.';
-		$this->redirect( 'mac-project-tracker-visuals', $message, is_wp_error( $dispatch ) ? 'warning' : 'success' );
+		$manual = isset( $_POST['manual_tone'] ) && is_array( $_POST['manual_tone'] ) ? wp_unslash( $_POST['manual_tone'] ) : array();
+		$processed = $this->process_visual_action( $action, $ids, $manual );
+		if ( is_wp_error( $processed['result'] ) ) { $this->redirect( 'mac-project-tracker-visuals', $processed['message'], 'error' ); }
+		$this->redirect( 'mac-project-tracker-visuals', $processed['message'], ! empty( $processed['dispatch'] ) ? 'success' : 'warning' );
 	}
 
 	public function handle_test_connection() {

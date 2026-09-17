@@ -9,6 +9,7 @@ import { PageValidationError } from './validate-page.mjs';
 const siteUrl = String(process.env.MAC_TRACKER_SITE_URL || '').replace(/\/+$/, '');
 const secret = String(process.env.MAC_TRACKER_AUTOMATION_SECRET || '');
 const scope = normalizeJobScope({ run_mode: process.env.RUN_MODE, stage: process.env.VISUAL_STAGE, target_ids: process.env.TARGET_IDS, limit: process.env.BATCH_LIMIT });
+const sourceAction = String(process.env.SOURCE_ACTION || 'run_batch_now');
 const cloudflareAccount = String(process.env.CLOUDFLARE_ACCOUNT_ID || '');
 const cloudflareToken = String(process.env.CLOUDFLARE_API_TOKEN || '');
 const groqApiKey = String(process.env.GROQ_API_KEY || '');
@@ -129,7 +130,7 @@ async function processToneItems(items, aiStrategy, autoAccept) {
 }
 
 async function writeSummary() {
-  const lines = ['## Visual Tone Run', '', `- Scope: ${scope.run_mode}/${scope.stage}`, `- Logical website limit: ${scope.limit}`, `- Claimed: ${summary.claimed}; skipped exact targets: ${summary.skipped}`, '', '### Capture', `- Success: ${summary.captureSuccess}`, `- Blocked: ${summary.captureBlocked}`, `- Failed: ${summary.captureFailed}`, '', '### Analysis', `- Qwen accepted: ${summary.qwenAccepted}`, `- Gemini judged: ${summary.geminiJudged}`, `- Needs review: ${summary.needsReview}`, `- Free provider deferred: ${summary.providerDeferred}`, '', '- Policy: FREE_ONLY=true; no paid provider was selected.', ''].join('\n');
+  const lines = ['## Visual Tone Action', '', `- Action: ${sourceAction}`, `- Scope: ${scope.run_mode}/${scope.stage}`, `- Logical website limit: ${scope.limit}`, `- Claimed: ${summary.claimed}; skipped exact targets: ${summary.skipped}`, `- Capture operations: ${summary.captureSuccess + summary.captureBlocked + summary.captureFailed}`, `- Analysis operations: ${summary.qwenAccepted + summary.geminiJudged + summary.needsReview + summary.providerDeferred}`, '', '### Capture', `- Success: ${summary.captureSuccess}`, `- Blocked: ${summary.captureBlocked}`, `- Failed: ${summary.captureFailed}`, '', '### Analysis', `- Qwen accepted: ${summary.qwenAccepted}`, `- Gemini judged: ${summary.geminiJudged}`, `- Needs review: ${summary.needsReview}`, `- Free provider deferred: ${summary.providerDeferred}`, '', '- Policy: FREE_ONLY=true; no paid provider was selected.', ''].join('\n');
   console.log(lines);
   if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `${lines}\n`);
 }
