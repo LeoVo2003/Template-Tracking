@@ -2,6 +2,7 @@ import sharp from 'sharp';
 import { activateLazyContent, collectUiSamples, hideMediaForPreview } from './extract-ui.mjs';
 import { validatePage, PageValidationError } from './validate-page.mjs';
 import { summarizeUiSamples } from './metrics.mjs';
+import { analyzeUiColor } from './color-engine.mjs';
 
 const bounded = (promise, timeoutMs, fallback) => Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(fallback), timeoutMs))]);
 
@@ -51,18 +52,19 @@ export async function captureRenderedPage(browser, requestedUrl, snapshotId, run
     await stabilize(page);
     const validation = await validatePage(page, response, requestedUrl);
     const samples = await collectUiSamples(page);
-    const metrics = summarizeUiSamples(samples);
     const pageHeight = await page.evaluate(() => Math.max(document.body?.scrollHeight || 0, document.documentElement?.scrollHeight || 0));
     const full = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 58 });
     await hideMediaForPreview(page);
     await page.waitForTimeout(140);
     const preview = await sharp(await page.screenshot({ fullPage: true, type: 'jpeg', quality: 64 })).resize({ width: 768, withoutEnlargement: true }).jpeg({ quality: 66 }).toBuffer();
+    const pixel = await analyzeUiColor(preview, samples);
+    const metrics = { ...summarizeUiSamples(samples), semantic_model: pixel, metrics_version: 4, scope: 'ui_only_oklch' };
     const capturedAt = new Date().toISOString();
     return {
       full,
       preview,
       bundle: {
-        version: 2,
+        version: 3,
         snapshot_id: snapshotId,
         run_id: runId,
         requested_url: requestedUrl,

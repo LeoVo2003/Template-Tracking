@@ -33,23 +33,29 @@ export async function collectUiSamples(page) {
     const excludedTags = new Set(['IMG', 'PICTURE', 'VIDEO', 'CANVAS', 'IFRAME', 'SOURCE', 'OBJECT', 'EMBED']);
     const roleFor = (element) => {
       const tag = element.tagName;
-      if ('BODY' === tag) return 'page';
-      if (structuralTags.has(tag)) return 'surface';
+      if ('BODY' === tag) return 'canvas';
+      if ('HEADER' === tag || 'NAV' === tag) return 'nav';
+      if (['MAIN', 'SECTION', 'ARTICLE', 'FOOTER'].includes(tag)) return 'section';
       if ('BUTTON' === tag || element.getAttribute('role') === 'button') return 'button';
-      if ('A' === tag) return 'link';
+      if ('A' === tag && /active|current|selected/i.test(`${element.className} ${element.getAttribute('aria-current') || ''}`)) return 'active';
+      if ('A' === tag) return 'cta';
       if (/^H[1-4]$/.test(tag)) return 'heading';
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)) return 'control';
       if ('SVG' === tag) return 'icon';
       if (['P', 'LI', 'LABEL', 'SPAN'].includes(tag)) return 'text';
-      return 'container';
+      if (/card|panel|tile/i.test(String(element.className || ''))) return 'card';
+      return 'unknown';
     };
     const roleWeight = {
-      page: 0.34,
-      surface: 1.65,
+      canvas: 0.34,
+      nav: 1.25,
+      section: 1.65,
       button: 2.10,
+      cta: 1.4,
+      active: 1.8,
+      card: 0.86,
       control: 1.20,
-      container: 0.86,
-      link: 0.72,
+      unknown: 0.30,
       heading: 0.36,
       text: 0.16,
       icon: 0.18,
@@ -73,6 +79,7 @@ export async function collectUiSamples(page) {
         weight: Number(weight.toFixed(6)),
         opacity: Number(effectiveOpacity.toFixed(3)),
         role,
+        importance: Number(Math.min(1, Math.max(0, weight * 6)).toFixed(4)),
         kind,
         structural: Boolean(structural),
         area_ratio: Number(Math.max(0, areaRatio).toFixed(6)),
@@ -102,8 +109,8 @@ export async function collectUiSamples(page) {
       // an explicit overlay color only when it is actually translucent.
       const differentBackground = style.backgroundColor !== parentBackground;
       if (ownBackground && (!hasBackgroundImage || ownBackground.alpha < 0.92) && (differentBackground || structural || 'button' === role || 'control' === role)) {
-        const roleFactor = roleWeight[role] || roleWeight.container;
-        add(style.backgroundColor, areaRatio * roleFactor, role, 'background', element, areaRatio, structural || 'button' === role, opacity);
+        const roleFactor = roleWeight[role] || roleWeight.unknown;
+        add(style.backgroundColor, areaRatio * roleFactor, role, 'background', element, areaRatio, structural || ['button', 'cta', 'active'].includes(role), opacity);
       }
       const hasOwnText = [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
       if (hasOwnText || /^H[1-4]$/.test(element.tagName) || ['A', 'BUTTON'].includes(element.tagName)) {
@@ -137,5 +144,12 @@ export async function collectUiSamples(page) {
 }
 
 export async function hideMediaForPreview(page) {
-  await page.addStyleTag({ content: `img,picture,video,canvas,iframe{visibility:hidden!important} *{background-image:none!important} *::before,*::after{background-image:none!important}` });
+  await page.evaluate(() => {
+    document.querySelectorAll('img,picture,video,canvas,iframe,object,embed').forEach((element) => element.style.setProperty('visibility', 'hidden', 'important'));
+    document.querySelectorAll('*').forEach((element) => {
+      const image = getComputedStyle(element).backgroundImage || '';
+      // Remove only photo URLs. CSS gradients and overlays remain visible.
+      if (/url\(/i.test(image)) element.style.setProperty('background-image', 'none', 'important');
+    });
+  });
 }
