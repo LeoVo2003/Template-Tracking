@@ -22,14 +22,6 @@ document.addEventListener('DOMContentLoaded',function(){
 	});
 
 document.addEventListener('DOMContentLoaded',function(){
- var work=document.querySelector('.mac-tracker-visual-work');if(!work)return;
- var tabs=[].slice.call(work.querySelectorAll('[data-visual-tab]')),cards=[].slice.call(work.querySelectorAll('[data-visual-card]'));
- var refresh=function(){cards.forEach(function(card){var tone=card.querySelector('.mac-tracker-tone'),label=tone&&tone.textContent.trim(),inFlight=card.querySelector('[data-visual-active]'),finalTone=tone&&!inFlight&&!tone.classList.contains('mac-tracker-tone--pending')&&label!=='Cần duyệt';card.dataset.visualStatus=finalTone?'classified':'pending';});tabs.forEach(function(tab){var state=tab.dataset.visualTab,count=cards.filter(function(card){return card.dataset.visualStatus===state;}).length,badge=tab.querySelector('span');if(badge)badge.textContent=String(count);});var active=work.querySelector('[data-visual-tab].is-active');if(active)cards.forEach(function(card){card.hidden=card.dataset.visualStatus!==active.dataset.visualTab;});};
- new MutationObserver(refresh).observe(work,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
- refresh();
-});
-
-document.addEventListener('DOMContentLoaded',function(){
  var colors=window.macTrackerColors;
  var tabs=[].slice.call(document.querySelectorAll('[data-color-tab]'));
  var cards=[].slice.call(document.querySelectorAll('[data-color-card]'));
