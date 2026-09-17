@@ -326,7 +326,7 @@ class MAC_Tracker_Admin {
 	/** Save Visual Tone controls. The scheduled worker reads this config before claiming work. */
 	public function handle_save_visual_mode() {
 		$this->require_request( 'mac_tracker_save_visual_mode' );
-		$mode = isset( $_POST['visual_mode'] ) && 'auto' === sanitize_key( wp_unslash( $_POST['visual_mode'] ) ) ? 'auto' : 'manual';
+		$mode = 'manual'; // AUTO is benchmark-gated for the V3.2 semantic rebuild.
 		$strategy = isset( $_POST['ai_strategy'] ) ? sanitize_key( wp_unslash( $_POST['ai_strategy'] ) ) : 'smart';
 		if ( ! in_array( $strategy, array( 'off', 'qwen', 'gemini', 'smart' ), true ) ) { $strategy = 'smart'; }
 		$auto_accept = isset( $_POST['auto_accept'] ) ? (float) wp_unslash( $_POST['auto_accept'] ) : 0.85;
