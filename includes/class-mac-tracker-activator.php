@@ -24,6 +24,11 @@ class MAC_Tracker_Activator {
 	private static function migrate() {
 		global $wpdb;
 		$previous_version = (string) get_option( 'mac_tracker_db_version', '' );
+		// V2 starts safely: no scheduled visual processing until a later phase
+		// explicitly enables and validates Auto mode.
+		if ( false === get_option( 'mac_tracker_visual_mode', false ) ) {
+			add_option( 'mac_tracker_visual_mode', 'manual', '', false );
+		}
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		$charset  = $wpdb->get_charset_collate();
 		$projects = $wpdb->prefix . 'mac_tracker_projects';

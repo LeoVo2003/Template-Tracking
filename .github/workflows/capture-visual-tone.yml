@@ -7,8 +7,6 @@ on:
         description: "Maximum screenshots and tone checks this run"
         required: false
         default: "10"
-  schedule:
-    - cron: "17,47 * * * *"
 
 permissions:
   contents: read
