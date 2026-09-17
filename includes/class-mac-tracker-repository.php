@@ -802,7 +802,36 @@ class MAC_Tracker_Repository {
 
 	/** A visual-model prompt change can safely reuse the stored screenshots. */
 	public function requeue_visual_tones() {
-		return (int) $this->wpdb->query( $this->wpdb->prepare( "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP()) AND pipeline_status NOT IN ('capturing', 'analyzing')", MAC_Tracker_Time::now_utc() ) );
+		return count( $this->requeue_visual_tones_with_ids() );
+	}
+
+	/** Queue every reusable stored capture and return the exact rows changed. */
+	public function requeue_visual_tones_with_ids() {
+		$ids = (array) $this->wpdb->get_col( "SELECT project_id FROM {$this->visuals} WHERE screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP()) AND pipeline_status NOT IN ('capturing', 'analyzing')" );
+		return $this->requeue_visual_analysis_targets( $ids );
+	}
+
+	/** Queue only exact analysis targets; no capture fallback is possible here. */
+	public function requeue_visual_analysis_targets( array $snapshot_ids ) {
+		$ids = array_values( array_unique( array_filter( array_map( 'absint', $snapshot_ids ) ) ) );
+		if ( empty( $ids ) ) { return array(); }
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$eligible_sql = "SELECT project_id FROM {$this->visuals} WHERE project_id IN ({$placeholders}) AND screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP()) AND pipeline_status NOT IN ('capturing', 'analyzing')";
+		$eligible = array_values( array_map( 'absint', (array) $this->wpdb->get_col( $this->wpdb->prepare( $eligible_sql, $ids ) ) ) );
+		if ( empty( $eligible ) ) { return array(); }
+		$eligible_placeholders = implode( ',', array_fill( 0, count( $eligible ), '%d' ) );
+		$sql = "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE project_id IN ({$eligible_placeholders})";
+		$result = $this->wpdb->query( $this->wpdb->prepare( $sql, array_merge( array( MAC_Tracker_Time::now_utc() ), $eligible ) ) );
+		return false === $result ? array() : $eligible;
+	}
+
+	/** A GitHub dispatch failure must not leave an analysis job looking runnable. */
+	public function recover_visual_analysis_dispatch( array $snapshot_ids, $message ) {
+		$ids = array_values( array_unique( array_filter( array_map( 'absint', $snapshot_ids ) ) ) );
+		if ( empty( $ids ) ) { return 0; }
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$sql = "UPDATE {$this->visuals} SET pipeline_status = 'retry_wait', tone_status = 'pending', next_retry_at = UTC_TIMESTAMP(), last_error_code = 'GITHUB_DISPATCH_FAILED', last_error_message = %s, last_error_at = UTC_TIMESTAMP(), updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'analysis_queued' AND project_id IN ({$placeholders})";
+		return (int) $this->wpdb->query( $this->wpdb->prepare( $sql, array_merge( array( sanitize_text_field( $message ) ), $ids ) ) );
 	}
 
 	/** Revisit only categories affected by a visual taxonomy adjustment. */
@@ -823,8 +852,7 @@ class MAC_Tracker_Repository {
 		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
 		$now = MAC_Tracker_Time::now_utc();
 		if ( 'reanalyze' === $mode ) {
-			$sql = "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP()) AND pipeline_status NOT IN ('capturing', 'analyzing') AND project_id IN ({$placeholders})";
-			$args = array_merge( array( $now ), $ids );
+			return count( $this->requeue_visual_analysis_targets( $ids ) );
 		} elseif ( 'recapture' === $mode ) {
 			// Keep the old capture until the new bundle is committed. This prevents a
 			// failed recapture from leaving a card with no usable image.

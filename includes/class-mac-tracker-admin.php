@@ -246,7 +246,7 @@ class MAC_Tracker_Admin {
 					<div class="mac-tracker-empty"><span class="dashicons dashicons-format-image"></span><strong>No screenshots yet</strong><p>Use a manual capture action when you are ready to create the first card.</p></div>
 				<?php else : foreach ( $rows as $row ) : $visual_status = ( 'classified' === (string) ( $row['tone_status'] ?? '' ) && in_array( (string) ( $row['tone'] ?? '' ), $this->tone_options(), true ) && 'Cần duyệt' !== (string) ( $row['tone'] ?? '' ) ) ? 'completed' : ( 'needs_review' === (string) ( $row['pipeline_status'] ?? '' ) ? 'review' : 'queue' ); ?>
 					<article class="mac-tracker-visual-card<?php echo $this->visual_is_manual( $row ) ? ' is-manual-tone' : ''; ?>" id="visual-<?php echo (int) $row['id']; ?>" data-visual-card="<?php echo (int) $row['id']; ?>" data-visual-status="<?php echo esc_attr( $visual_status ); ?>">
-						<label class="mac-tracker-visual-card__select"><input type="checkbox" name="snapshot_ids[]" value="<?php echo (int) $row['id']; ?>" data-visual-select><span>Select</span></label><a class="mac-tracker-visual-card__image" href="<?php echo esc_url( $row['screenshot_url'] ); ?>" target="_blank" rel="noopener"><img src="<?php echo esc_url( $row['screenshot_url'] ); ?>" alt="<?php echo esc_attr( $row['name'] . ' homepage screenshot' ); ?>" loading="lazy"><span>Open full capture <span class="dashicons dashicons-external"></span></span></a><div class="mac-tracker-visual-card__body"><p class="mac-tracker-eyebrow">#<?php echo esc_html( $row['wpm_project_id'] ); ?> · <?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></p><?php $this->project_link( $row ); ?><div class="mac-tracker-visual-card__tone"><?php $this->tone_cell( $row, false ); ?></div><?php $this->visual_status_cell( $row ); ?><?php if ( ! $this->visual_is_manual( $row ) ) : ?><p data-visual-reason><?php echo esc_html( $row['tone_reason'] ?: ( 'classified' === $row['tone_status'] ? 'AI classified the rendered UI.' : 'Awaiting a manual analysis action.' ) ); ?></p><?php endif; ?><?php $this->visual_debug_panel( $row ); ?><div class="mac-tracker-visual-card__actions"><?php if ( $this->visual_is_manual( $row ) ) : ?><button type="submit" class="button-link" name="visual_action" value="unlock_tone_<?php echo (int) $row['id']; ?>" title="Allow a future AI result to update this card">Unlock AI</button><?php else : ?><button type="submit" class="button-link" name="visual_action" value="reanalyze_one_<?php echo (int) $row['id']; ?>" title="Use this stored screenshot again">Analyze again</button><button type="submit" class="button-link" name="visual_action" value="recapture_one_<?php echo (int) $row['id']; ?>" title="Take a fresh full-page screenshot">Capture again</button><?php endif; ?></div></div>
+						<label class="mac-tracker-visual-card__select"><input type="checkbox" name="snapshot_ids[]" value="<?php echo (int) $row['id']; ?>" data-visual-select><span>Select</span></label><a class="mac-tracker-visual-card__image" href="<?php echo esc_url( $row['screenshot_url'] ); ?>" target="_blank" rel="noopener"><img src="<?php echo esc_url( $row['screenshot_url'] ); ?>" alt="<?php echo esc_attr( $row['name'] . ' homepage screenshot' ); ?>" loading="lazy"><span>Open full capture <span class="dashicons dashicons-external"></span></span></a><div class="mac-tracker-visual-card__body"><p class="mac-tracker-eyebrow">#<?php echo esc_html( $row['wpm_project_id'] ); ?> · <?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></p><?php $this->project_link( $row ); ?><div class="mac-tracker-visual-card__tone"><?php $this->tone_cell( $row, false ); ?></div><?php $this->visual_status_cell( $row ); ?><?php if ( ! $this->visual_is_manual( $row ) ) : ?><p data-visual-reason><?php echo esc_html( $row['tone_reason'] ?: ( 'analysis_queued' === $row['pipeline_status'] ? 'Queued for AI analysis.' : ( 'classified' === $row['tone_status'] ? 'AI classified the rendered UI.' : 'Awaiting a manual analysis action.' ) ) ); ?></p><?php endif; ?><?php $this->visual_debug_panel( $row ); ?><div class="mac-tracker-visual-card__actions"><?php if ( $this->visual_is_manual( $row ) ) : ?><button type="submit" class="button-link" name="visual_action" value="unlock_tone_<?php echo (int) $row['id']; ?>" title="Allow a future AI result to update this card">Unlock AI</button><?php else : ?><button type="submit" class="button-link" name="visual_action" value="reanalyze_one_<?php echo (int) $row['id']; ?>" title="Use this stored screenshot again">Analyze again</button><button type="submit" class="button-link" name="visual_action" value="recapture_one_<?php echo (int) $row['id']; ?>" title="Take a fresh full-page screenshot">Capture again</button><?php endif; ?></div></div>
 					</article>
 				<?php endforeach; endif; ?>
 			</section>
@@ -361,7 +361,7 @@ class MAC_Tracker_Admin {
 		if ( 'targeted' === $run_mode ) { $limit = min( $limit, count( $target_ids ) ); }
 		$token = MAC_Tracker_Crypto::decrypt( get_option( 'mac_tracker_github_dispatch_token', '' ) );
 		if ( '' === $token ) {
-			return new WP_Error( 'mac_tracker_github_token', 'Queued, but GitHub could not start because the manual Run now token is missing.' );
+			return new WP_Error( 'mac_tracker_github_token', 'GitHub could not start because the manual Run now token is missing.' );
 		}
 		$response = wp_remote_post(
 			'https://api.github.com/repos/LeoVo2003/Template-Tracking/actions/workflows/capture-visual-tone.yml/dispatches',
@@ -372,11 +372,11 @@ class MAC_Tracker_Admin {
 			)
 		);
 		if ( is_wp_error( $response ) ) {
-			return new WP_Error( 'mac_tracker_github_request', 'Queued, but GitHub could not start now: ' . $response->get_error_message() );
+			return new WP_Error( 'mac_tracker_github_request', 'GitHub could not start now: ' . $response->get_error_message() );
 		}
 		$status = (int) wp_remote_retrieve_response_code( $response );
 		if ( $status < 200 || $status >= 300 ) {
-			return new WP_Error( 'mac_tracker_github_response', 'Queued, but GitHub rejected the immediate run (HTTP ' . $status . '). Check Actions: Write.' );
+			return new WP_Error( 'mac_tracker_github_response', 'GitHub rejected the immediate run (HTTP ' . $status . '). Check Actions: Write.' );
 		}
 		return true;
 	}
@@ -396,7 +396,8 @@ class MAC_Tracker_Admin {
 			$ids = array( absint( $one_match[2] ) );
 		}
 		if ( 'reanalyze_all' === $action ) {
-			$result = $this->repository->requeue_visual_tones();
+			$queued_ids = $this->repository->requeue_visual_tones_with_ids();
+			$result = count( $queued_ids );
 			$message = sprintf( '%d stored screenshot(s) queued for AI analysis.', (int) $result );
 		} elseif ( 'retry_failed' === $action ) {
 			$retry = $this->repository->requeue_failed_visual_items_by_stage();
@@ -410,7 +411,12 @@ class MAC_Tracker_Admin {
 			return array( 'result' => $result, 'message' => $message, 'dispatch' => ! is_wp_error( $capture_dispatch ) && ! is_wp_error( $tone_dispatch ) );
 		} else {
 			$mode = in_array( $action, array( 'reanalyze_selected', 'reanalyze_one' ), true ) ? 'reanalyze' : ( in_array( $action, array( 'recapture_selected', 'recapture_one' ), true ) ? 'recapture' : '' );
-			$result = $this->repository->requeue_visual_items( $ids, $mode );
+			if ( 'reanalyze' === $mode ) {
+				$queued_ids = $this->repository->requeue_visual_analysis_targets( $ids );
+				$result = count( $queued_ids );
+			} else {
+				$result = $this->repository->requeue_visual_items( $ids, $mode );
+			}
 			$message = sprintf( '%d selected screenshot(s) queued to %s.', is_wp_error( $result ) ? 0 : (int) $result, 'recapture' === $mode ? 'capture again' : 'analyze again' );
 		}
 		if ( is_wp_error( $result ) || (int) $result <= 0 ) { return array( 'result' => $result, 'message' => is_wp_error( $result ) ? $result->get_error_message() : 'No eligible screenshot changed. Check the selected card status, then try again.', 'dispatch' => false ); }
@@ -420,7 +426,7 @@ class MAC_Tracker_Admin {
 		if ( in_array( $action, array( 'reanalyze_selected', 'reanalyze_one' ), true ) ) {
 			$run_mode = 'targeted';
 			$stage = 'tone';
-			$dispatch_ids = $ids;
+			$dispatch_ids = $queued_ids ?? array();
 		} elseif ( in_array( $action, array( 'recapture_selected', 'recapture_one' ), true ) ) {
 			$run_mode = 'targeted';
 			$stage = 'capture';
@@ -429,17 +435,23 @@ class MAC_Tracker_Admin {
 		$source = 'reanalyze_all' === $action ? 'analyze_all_stored' : ( 'tone' === $stage ? 'analyze_selected' : ( 'capture' === $stage ? 'capture_selected_again' : 'run_batch_now' ) );
 		if ( 'analyze_all_stored' === $source ) {
 			$dispatch = true;
-			// GitHub concurrency serializes these scopes; each remains tone-only and
-			// therefore cannot claim a new capture item.
-			for ( $remaining = (int) $result; $remaining > 0; $remaining -= 10 ) {
-				$dispatch = $this->dispatch_visual_workflow( min( 10, $remaining ), 'batch', 'tone', array(), $source );
-				if ( is_wp_error( $dispatch ) ) { break; }
+			$chunks = array_chunk( $queued_ids, 10 );
+			foreach ( $chunks as $index => $chunk ) {
+				$dispatch = $this->dispatch_visual_workflow( count( $chunk ), 'targeted', 'tone', $chunk, $source );
+				if ( is_wp_error( $dispatch ) ) {
+					$recover = array_merge( $chunk, ...array_slice( $chunks, $index + 1 ) );
+					$this->repository->recover_visual_analysis_dispatch( $recover, $dispatch->get_error_message() );
+					break;
+				}
 			}
 		} else {
 			$dispatch = $this->dispatch_visual_workflow( (int) $result, $run_mode, $stage, $dispatch_ids, $source );
+			if ( is_wp_error( $dispatch ) && 'tone' === $stage ) {
+				$this->repository->recover_visual_analysis_dispatch( $dispatch_ids, $dispatch->get_error_message() );
+			}
 		}
 		$message .= is_wp_error( $dispatch ) ? ' ' . $dispatch->get_error_message() : ' GitHub batch started now.';
-		return array( 'result' => $result, 'message' => $message, 'dispatch' => ! is_wp_error( $dispatch ) );
+		return array( 'result' => $result, 'message' => $message, 'dispatch' => ! is_wp_error( $dispatch ), 'dispatch_error' => is_wp_error( $dispatch ) );
 	}
 
 	public function handle_visual_action_ajax() {
@@ -449,7 +461,7 @@ class MAC_Tracker_Admin {
 		$ids = isset( $_POST['snapshot_ids'] ) && is_array( $_POST['snapshot_ids'] ) ? array_values( array_filter( array_map( 'absint', wp_unslash( $_POST['snapshot_ids'] ) ) ) ) : array();
 		$manual = isset( $_POST['manual_tone'] ) && is_array( $_POST['manual_tone'] ) ? wp_unslash( $_POST['manual_tone'] ) : array();
 		$processed = $this->process_visual_action( $action, $ids, $manual );
-		if ( is_wp_error( $processed['result'] ) || (int) $processed['result'] <= 0 ) { wp_send_json_error( array( 'message' => $processed['message'] ) ); }
+		if ( is_wp_error( $processed['result'] ) || (int) $processed['result'] <= 0 || ! empty( $processed['dispatch_error'] ) ) { wp_send_json_error( array( 'message' => $processed['message'] ) ); }
 		wp_send_json_success( array( 'message' => $processed['message'], 'ids' => $ids, 'stats' => $this->repository->visual_stats() ) );
 	}
 
@@ -779,7 +791,7 @@ class MAC_Tracker_Admin {
 			'capture_queued' => array( 'queued', 'dashicons-clock', 'Capture queued · chờ chạy batch' ),
 			'capturing'      => array( 'working', 'dashicons-camera', 'Capturing homepage · GitHub đang chạy' ),
 			'captured'       => array( 'queued', 'dashicons-format-image', 'Screenshot saved · chờ phân tích' ),
-			'analysis_queued'=> array( 'queued', 'dashicons-clock', 'Analysis queued · chờ chạy batch' ),
+			'analysis_queued'=> array( 'queued', 'dashicons-clock', 'Queued for AI analysis' ),
 			'analyzing'      => array( 'working', 'dashicons-admin-appearance', $provider ? 'Analyzing with ' . trim( $provider . ( $model ? ' · ' . $model : '' ) ) : 'Analyzing with Qwen 3.8' ),
 			'classified'     => array( 'complete', 'dashicons-yes-alt', 'Completed · đã phân loại' ),
 			'needs_review'   => array( 'queued', 'dashicons-visibility', 'Needs review · cần duyệt tone' ),
