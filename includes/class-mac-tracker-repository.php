@@ -770,6 +770,9 @@ class MAC_Tracker_Repository {
 		if ( ! in_array( $tone, $allowed, true ) ) {
 			return new WP_Error( 'mac_tracker_visual_manual_tone', 'Choose a valid visual tone first.' );
 		}
+		$previous = $this->wpdb->get_row( $this->wpdb->prepare( "SELECT tone, capture_bundle_json, ai_raw FROM {$this->visuals} WHERE project_id = %d", absint( $snapshot_id ) ), ARRAY_A );
+		$analysis = json_decode( (string) ( $previous['ai_raw'] ?? '' ), true );
+		if ( ! is_array( $analysis ) ) { $analysis = array(); }
 		return $this->save_visual( absint( $snapshot_id ), array(
 			'pipeline_status' => 'classified',
 			'tone'        => $tone,
@@ -777,7 +780,7 @@ class MAC_Tracker_Repository {
 			'tone_reason' => 'Manually reviewed in MAC Project Tracker.',
 			'tone_status' => 'classified',
 			'tone_token'  => '',
-			'ai_raw'      => wp_json_encode( array( 'manual' => true, 'user_id' => get_current_user_id() ) ),
+			'ai_raw'      => wp_json_encode( array( 'manual' => true, 'user_id' => get_current_user_id(), 'predicted_tone' => sanitize_text_field( (string) ( $previous['tone'] ?? '' ) ), 'manual_tone' => $tone, 'analysis_before_manual' => $analysis, 'capture_bundle_version' => 3 ) ),
 			'manual_locked' => 1,
 			'manual_tone' => $tone,
 			'manual_updated_at' => MAC_Tracker_Time::now_utc(),

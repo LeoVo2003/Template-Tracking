@@ -9,7 +9,7 @@ const goldPath = resolve(root, 'data/visual-tone-gold.json');
 const outputPath = resolve(root, process.env.BENCHMARK_OUTPUT || 'reports/visual-tone-benchmark.json');
 const requestedLimit = Math.max(1, Math.min(50, Number(process.env.BENCHMARK_LIMIT || 50)));
 const repeat = 'false' !== String(process.env.BENCHMARK_REPEAT || 'true').toLowerCase();
-const minimum = 30;
+const minimum = 40;
 const blockedCodes = new Set(['CF_CHALLENGE', 'CAPTCHA', 'PARKED_DOMAIN', 'MAINTENANCE', 'LOGIN_WALL', 'BAD_REDIRECT', 'EMPTY_PAGE']);
 
 const gold = JSON.parse(await readFile(goldPath, 'utf8'));
@@ -62,7 +62,7 @@ if (reviewed.length < baseReport.required_labels) {
           evidence: first.bundle.ui.metrics,
           groqApiKey: process.env.GROQ_API_KEY || '', geminiApiKey: process.env.GEMINI_API_KEY || '',
           cloudflareAccount: process.env.CLOUDFLARE_ACCOUNT_ID || '', cloudflareToken: process.env.CLOUDFLARE_API_TOKEN || '',
-          freeOnly: true, strategy: 'smart', autoAccept: Number(process.env.BENCHMARK_AUTO_ACCEPT || 0.85),
+          geminiApiKeys: [process.env.GEMINI_API_KEY_1 || process.env.GEMINI_API_KEY || '', process.env.GEMINI_API_KEY_2 || ''], freeOnly: true, autoAccept: Number(process.env.BENCHMARK_AUTO_ACCEPT || 0.85),
         });
         row.first = { state: primary.state, tone: primary.result?.tone || null, provider: primary.result?.provider || null, confidence: primary.result?.confidence ?? null };
         if (repeat && 'classified' === primary.state) {
@@ -71,7 +71,7 @@ if (reviewed.length < baseReport.required_labels) {
             previewBuffer: second.preview, evidence: second.bundle.ui.metrics,
             groqApiKey: process.env.GROQ_API_KEY || '', geminiApiKey: process.env.GEMINI_API_KEY || '',
             cloudflareAccount: process.env.CLOUDFLARE_ACCOUNT_ID || '', cloudflareToken: process.env.CLOUDFLARE_API_TOKEN || '',
-            freeOnly: true, strategy: 'smart', autoAccept: Number(process.env.BENCHMARK_AUTO_ACCEPT || 0.85),
+            geminiApiKeys: [process.env.GEMINI_API_KEY_1 || process.env.GEMINI_API_KEY || '', process.env.GEMINI_API_KEY_2 || ''], freeOnly: true, autoAccept: Number(process.env.BENCHMARK_AUTO_ACCEPT || 0.85),
           });
           row.repeat = { state: repeated.state, tone: repeated.result?.tone || null };
         }
@@ -97,6 +97,8 @@ if (reviewed.length < baseReport.required_labels) {
     false_page_classifications: falsePages,
     repeatability_percent: repeat ? percent(repeatable.filter((row) => row.first.tone === row.repeat.tone).length, repeatable.length) : null,
     tone_accuracy_percent: percent(correct.length, classified.length),
+    provider_usage: classified.reduce((counts, row) => { const provider = row.first?.provider || 'none'; counts[provider] = (counts[provider] || 0) + 1; return counts; }, {}),
+    confusion_matrix: classified.filter((row) => row.first.tone !== row.expected_tone).reduce((counts, row) => { const key = `${row.expected_tone}->${row.first.tone}`; counts[key] = (counts[key] || 0) + 1; return counts; }, {}),
   };
   const pass = metrics.capture_success_percent >= 95 && 0 === metrics.false_page_classifications && (!repeat || metrics.repeatability_percent >= 95) && metrics.tone_accuracy_percent >= 90;
   await saveReport({ ...baseReport, selected: selected.length, repeat, metrics, pass, results });
