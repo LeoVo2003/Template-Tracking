@@ -49,6 +49,8 @@ Before the first run, save an **Automation shared secret** in MAC Tracker → Se
 
 The workflow is hard-locked to `FREE_ONLY=true`: it tries Groq Qwen, then the Cloudflare Qwen fallback, then Gemini as the independent judge. A `429` or quota error advances only to the next configured free provider. If every free provider is exhausted or unavailable, the card moves to `retry_wait` (or `needs_review` when an answer is ambiguous); it never selects a paid model automatically.
 
+The workflow has a twice-hourly schedule, but every scheduled run first reads the private Visual Tone config from WordPress. It exits without claiming a single item unless the Visual Tone mode is **Auto**. A manual **Run batch now** dispatch works in either mode. Retries use bounded backoff (5 minutes, 30 minutes, then 6 hours); protected/error pages such as Cloudflare challenges are marked blocked instead of being sent to AI.
+
 ## Expected WPM response
 
 The plugin accepts a response with a `data` or `projects` array, or a raw JSON list. The preferred shape is:

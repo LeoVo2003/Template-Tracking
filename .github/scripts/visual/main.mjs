@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { mkdir, rm } from 'node:fs/promises';
+import { appendFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { captureRenderedPage } from './capture.mjs';
 import { classifyTone } from './classify.mjs';
@@ -13,15 +13,17 @@ const cloudflareToken = String(process.env.CLOUDFLARE_API_TOKEN || '');
 const groqApiKey = String(process.env.GROQ_API_KEY || '');
 const geminiApiKey = String(process.env.GEMINI_API_KEY || '');
 const freeOnly = 'false' !== String(process.env.FREE_ONLY || 'true').trim().toLowerCase();
+const workflowEvent = String(process.env.WORKFLOW_EVENT || 'workflow_dispatch');
 const apiBase = `${siteUrl}/wp-json/mac-tracker/v1/visual`;
 const workDir = join(process.cwd(), '.visual-capture');
+const summary = { captureSuccess: 0, captureBlocked: 0, captureFailed: 0, qwenAccepted: 0, geminiJudged: 0, needsReview: 0, providerDeferred: 0 };
 
 if (!siteUrl || !secret) throw new Error('MAC_TRACKER_SITE_URL and MAC_TRACKER_AUTOMATION_SECRET are required.');
 if (!freeOnly) throw new Error('FREE_ONLY must be true. This workflow is prohibited from selecting a paid provider.');
 
 const headers = {
   'X-MAC-Tracker-Automation': secret,
-  'User-Agent': 'MAC-Project-Tracker-GitHub-Action/0.16.0',
+  'User-Agent': 'MAC-Project-Tracker-GitHub-Action/0.17.0',
   Accept: 'application/json',
 };
 
@@ -36,6 +38,12 @@ async function queue(stage) {
   if (!response.ok) throw new Error(`Queue ${stage} failed: HTTP ${response.status} ${(await response.text()).replace(/\s+/g, ' ').slice(0, 700)}`);
   const payload = await response.json();
   return payload.items || [];
+}
+
+async function workerConfig() {
+  const response = await fetch(`${apiBase}/config`, { headers });
+  if (!response.ok) throw new Error(`Visual config failed: HTTP ${response.status} ${(await response.text()).replace(/\s+/g, ' ').slice(0, 500)}`);
+  return response.json();
 }
 
 async function ingest(form) {
@@ -78,9 +86,12 @@ async function captureBatch() {
       try {
         const captured = await captureRenderedPage(browser, item.website_url, item.id, item.job_token);
         await uploadCapture(item, captured);
+        summary.captureSuccess += 1;
         console.log(`Captured bundle #${item.id}: ${captured.bundle.http_status} ${captured.bundle.final_url}`);
       } catch (error) {
         await reportFailure('capture_failed', item, error);
+        if (['CF_CHALLENGE', 'CAPTCHA', 'PARKED_DOMAIN', 'MAINTENANCE', 'LOGIN_WALL', 'BAD_REDIRECT', 'EMPTY_PAGE'].includes(error.code)) summary.captureBlocked += 1;
+        else summary.captureFailed += 1;
         console.warn(`Capture failed #${item.id}: ${error.message}`);
       }
     }
@@ -100,25 +111,33 @@ async function downloadPreview(item) {
   return { bundle, preview: Buffer.from(await response.arrayBuffer()) };
 }
 
-async function classifyPendingBatch() {
+async function classifyPendingBatch(aiStrategy, autoAccept) {
+  if ('off' === aiStrategy) {
+    console.log('AI strategy is OFF; no saved screenshots were submitted for analysis.');
+    return 0;
+  }
   const items = await queue('tone');
   for (const item of items) {
     try {
       const { bundle, preview } = await downloadPreview(item);
       const evidence = bundle?.ui?.metrics || { text: 'Capture bundle has no deterministic UI metrics.' };
-      const outcome = await classifyTone({ previewBuffer: preview, evidence, groqApiKey, geminiApiKey, cloudflareAccount, cloudflareToken, freeOnly });
+      const outcome = await classifyTone({ previewBuffer: preview, evidence, groqApiKey, geminiApiKey, cloudflareAccount, cloudflareToken, freeOnly, strategy: aiStrategy, autoAccept });
       const rawJson = JSON.stringify({ phase: 4, ...outcome, deterministic: evidence });
       if ('classified' === outcome.state) {
         const result = outcome.result;
         await postJson({ mode: 'tone', snapshot_id: item.id, job_token: item.job_token, tone: result.tone, confidence: result.confidence, reason: result.reason, provider: result.provider, model: result.model, needs_review: result.needs_review, raw_json: rawJson });
+        if ('gemini' === result.provider) summary.geminiJudged += 1;
+        else summary.qwenAccepted += 1;
         console.log(`Classified #${item.id} with ${result.provider}/${result.model}: ${result.tone} @ ${result.confidence}`);
       } else if ('retry_wait' === outcome.state) {
         const quota = 'FREE_QUOTA_EXHAUSTED' === outcome.retry_code;
         await postJson({ mode: 'tone_retry', snapshot_id: item.id, job_token: item.job_token, error_code: outcome.retry_code, message: quota ? 'All configured free visual-tone providers are quota limited. No paid provider was used.' : 'All configured free visual-tone providers are temporarily unavailable. No paid provider was used.', raw_json: rawJson, retry_after_seconds: quota ? 1800 : 900 });
+        summary.providerDeferred += 1;
         console.warn(`Tone #${item.id} deferred: ${quota ? 'all free provider quotas exhausted' : 'all free providers temporarily unavailable'}.`);
       } else {
         const result = outcome.result;
         await postJson({ mode: 'tone_needs_review', snapshot_id: item.id, job_token: item.job_token, tone: result.tone, confidence: result.confidence, reason: result.reason, provider: result.provider, model: result.model, raw_json: rawJson });
+        summary.needsReview += 1;
         console.warn(`Tone #${item.id} requires review; no free provider result passed the confidence gate.`);
       }
     } catch (error) {
@@ -129,9 +148,26 @@ async function classifyPendingBatch() {
   return items.length;
 }
 
+async function writeSummary() {
+  const lines = [
+    '## Visual Tone Run', '',
+    '### Capture', `- Success: ${summary.captureSuccess}`, `- Blocked: ${summary.captureBlocked}`, `- Failed: ${summary.captureFailed}`, '',
+    '### Analysis', `- Qwen accepted: ${summary.qwenAccepted}`, `- Gemini judged: ${summary.geminiJudged}`, `- Needs review: ${summary.needsReview}`, `- Free provider deferred: ${summary.providerDeferred}`, '',
+    '- Policy: FREE_ONLY=true; no paid provider was selected.', '',
+  ].join('\n');
+  console.log(lines);
+  if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `${lines}\n`);
+}
+
 try {
-  await captureBatch();
-  await classifyPendingBatch();
+  const config = await workerConfig();
+  if ('schedule' === workflowEvent && 'auto' !== config.mode) {
+    console.log('Visual Tone is in MANUAL mode; scheduled run exited without claiming work.');
+  } else {
+    await captureBatch();
+    await classifyPendingBatch(config.ai_strategy || 'smart', Number(config.auto_accept_threshold || 0.85));
+  }
 } finally {
+  await writeSummary();
   await rm(workDir, { recursive: true, force: true });
 }

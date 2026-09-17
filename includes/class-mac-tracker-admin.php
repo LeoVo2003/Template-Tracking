@@ -214,29 +214,35 @@ class MAC_Tracker_Admin {
 		$stats = $this->repository->visual_stats();
 		$rows  = $this->repository->visual_review_rows();
 		$visual_mode = 'auto' === get_option( 'mac_tracker_visual_mode', 'manual' ) ? 'auto' : 'manual';
-		$pending_count = 0;
+		$ai_strategy = in_array( get_option( 'mac_tracker_visual_ai_strategy', 'smart' ), array( 'off', 'qwen', 'gemini', 'smart' ), true ) ? get_option( 'mac_tracker_visual_ai_strategy', 'smart' ) : 'smart';
+		$auto_accept = max( 0.75, min( 0.99, (float) get_option( 'mac_tracker_visual_auto_accept', 0.85 ) ) );
+		$max_retries = max( 0, min( 3, absint( get_option( 'mac_tracker_visual_max_capture_retries', 3 ) ) ) );
+		$queue_count = 0;
+		$review_count = 0;
 		$classified_count = 0;
 		foreach ( $rows as $visual_row ) {
 			$is_final_tone = 'classified' === (string) ( $visual_row['tone_status'] ?? '' ) && in_array( (string) ( $visual_row['tone'] ?? '' ), $this->tone_options(), true ) && 'Cần duyệt' !== (string) ( $visual_row['tone'] ?? '' );
 			if ( $is_final_tone ) {
 				++$classified_count;
+			} elseif ( 'needs_review' === (string) ( $visual_row['pipeline_status'] ?? '' ) ) {
+				++$review_count;
 			} else {
-				++$pending_count;
+				++$queue_count;
 			}
 		}
 		$this->page_start( 'Visual Tone', 'Manual review is active while Visual Tone V2 is rebuilt. Opening this page only reads saved data.', 'visuals' );
 		?>
-		<section class="mac-tracker-overview mac-tracker-visual-overview"><div class="mac-tracker-overview__lead"><p class="mac-tracker-eyebrow">Visual Tone V2 · Phase 3</p><h2>Area-weighted UI evidence</h2><p>Each capture now measures structural UI colors by visible area. Photos, text-heavy content and tiny icons cannot outweigh a large section background; the deterministic candidate is stored with its evidence.</p></div><div class="mac-tracker-summary-grid"><?php $this->stat_card( 'Captured', (int) ( $stats['captured'] ?? 0 ), 'dashicons-format-image' ); ?><?php $this->stat_card( 'Tone classified', (int) ( $stats['classified'] ?? 0 ), 'dashicons-admin-appearance' ); ?><?php $this->stat_card( 'Waiting for action', (int) ( $stats['capture_pending'] ?? 0 ) + (int) ( $stats['tone_pending'] ?? 0 ), 'dashicons-update' ); ?></div></section>
-		<section class="mac-tracker-visual-auto"><div><p class="mac-tracker-eyebrow">Visual Tone Automation</p><h2>Manual review first</h2><p>Current mode: <strong><?php echo 'auto' === $visual_mode ? 'AUTO' : 'MANUAL'; ?></strong>. Scheduled processing is disabled during the V2 rebuild; only buttons you press can start a batch.</p></div><div class="mac-tracker-visual-auto__actions"><form class="mac-tracker-visual-mode" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_save_visual_mode' ); ?><input type="hidden" name="action" value="mac_tracker_save_visual_mode"><fieldset><legend class="screen-reader-text">Visual Tone mode</legend><label><input type="radio" name="visual_mode" value="manual"<?php checked( 'manual', $visual_mode ); ?>> <span>Manual</span></label><label><input type="radio" name="visual_mode" value="auto"<?php checked( 'auto', $visual_mode ); ?>> <span>Auto</span></label></fieldset><button class="button" type="submit">Save mode</button></form><?php if ( get_option( 'mac_tracker_github_dispatch_token', '' ) ) : ?><form class="mac-tracker-visual-run" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_run_visual_workflow' ); ?><input type="hidden" name="action" value="mac_tracker_run_visual_workflow"><button class="button button-primary" type="submit"><span class="dashicons dashicons-controls-play"></span>Run manual batch</button></form><?php else : ?><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-settings#mac-tracker-github-dispatch' ) ); ?>">Enable manual run</a><?php endif; ?><span class="mac-tracker-visual-auto__signal is-manual"><i></i>Schedule disabled</span></div></section>
+		<section class="mac-tracker-overview mac-tracker-visual-overview"><div class="mac-tracker-overview__lead"><p class="mac-tracker-eyebrow">Visual Tone V2 · Control room</p><h2>Manual-first, evidence-led review</h2><p>Saved captures and deterministic UI evidence are reviewed by the free-only AI chain. Cards only poll while a live worker lease is active.</p></div><div class="mac-tracker-summary-grid"><?php $this->stat_card( 'Captured', (int) ( $stats['captured'] ?? 0 ), 'dashicons-format-image' ); ?><?php $this->stat_card( 'Completed', (int) ( $stats['classified'] ?? 0 ), 'dashicons-yes-alt' ); ?><?php $this->stat_card( 'Needs review', $review_count, 'dashicons-visibility' ); ?></div></section>
+		<section class="mac-tracker-visual-auto"><div><p class="mac-tracker-eyebrow">Visual Tone Automation</p><h2><?php echo 'auto' === $visual_mode ? 'Auto processing enabled' : 'Manual review first'; ?></h2><p>Mode: <strong><?php echo 'auto' === $visual_mode ? 'AUTO' : 'MANUAL'; ?></strong> · AI: <strong><?php echo esc_html( 'smart' === $ai_strategy ? 'Qwen → Gemini judge' : strtoupper( $ai_strategy ) ); ?></strong>. Manual buttons always remain available.</p></div><div class="mac-tracker-visual-auto__actions"><form class="mac-tracker-visual-mode" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_save_visual_mode' ); ?><input type="hidden" name="action" value="mac_tracker_save_visual_mode"><fieldset><legend class="screen-reader-text">Visual Tone mode</legend><label><input type="radio" name="visual_mode" value="manual"<?php checked( 'manual', $visual_mode ); ?>> <span>Manual</span></label><label><input type="radio" name="visual_mode" value="auto"<?php checked( 'auto', $visual_mode ); ?>> <span>Auto</span></label></fieldset><label class="screen-reader-text" for="mac-tracker-ai-strategy">AI strategy</label><select id="mac-tracker-ai-strategy" name="ai_strategy"><option value="off"<?php selected( 'off', $ai_strategy ); ?>>AI off</option><option value="qwen"<?php selected( 'qwen', $ai_strategy ); ?>>Qwen only</option><option value="gemini"<?php selected( 'gemini', $ai_strategy ); ?>>Gemini only</option><option value="smart"<?php selected( 'smart', $ai_strategy ); ?>>Smart auto</option></select><label>Accept ≥ <input type="number" name="auto_accept" min="0.75" max="0.99" step="0.01" value="<?php echo esc_attr( $auto_accept ); ?>"></label><label>Retries <input type="number" name="max_capture_retries" min="0" max="3" step="1" value="<?php echo esc_attr( $max_retries ); ?>"></label><button class="button" type="submit">Save controls</button></form><?php if ( get_option( 'mac_tracker_github_dispatch_token', '' ) ) : ?><form class="mac-tracker-visual-run" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_run_visual_workflow' ); ?><input type="hidden" name="action" value="mac_tracker_run_visual_workflow"><button class="button button-primary" type="submit"><span class="dashicons dashicons-controls-play"></span>Run batch now</button></form><?php else : ?><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-settings#mac-tracker-github-dispatch' ) ); ?>">Enable manual run</a><?php endif; ?><span class="mac-tracker-visual-auto__signal <?php echo 'auto' === $visual_mode ? '' : 'is-manual'; ?>"><i></i><?php echo 'auto' === $visual_mode ? 'Scheduled processing on' : 'Scheduled processing off'; ?></span></div></section>
 		<form class="mac-tracker-visual-work" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<?php wp_nonce_field( 'mac_tracker_requeue_visuals' ); ?>
 			<input type="hidden" name="action" value="mac_tracker_requeue_visuals">
 			<section class="mac-tracker-visual-tools" aria-label="Visual review actions"><div><p class="mac-tracker-eyebrow">Targeted retry</p><strong>Use saved screenshots first</strong><span>Analyze again costs no new capture. Capture again refreshes only sites whose design changed.</span></div><div class="mac-tracker-visual-tools__actions"><label class="mac-tracker-select-all"><input type="checkbox" data-visual-select-all><span>Select all in this tab</span></label><button class="button" type="submit" name="visual_action" value="reanalyze_selected">Analyze selected</button><button class="button" type="submit" name="visual_action" value="recapture_selected">Capture selected again</button><button class="button" type="submit" name="visual_action" value="retry_failed">Retry failed</button><button class="button" type="submit" name="visual_action" value="reanalyze_all">Analyze all stored</button></div></section>
-			<nav class="mac-tracker-visual-tabs" aria-label="Visual tone status"><button type="button" class="is-active" data-visual-tab="pending">Chưa duyệt <span><?php echo esc_html( $pending_count ); ?></span></button><button type="button" data-visual-tab="classified">Đã phân tích <span><?php echo esc_html( $classified_count ); ?></span></button></nav>
+			<nav class="mac-tracker-visual-tabs" aria-label="Visual tone status"><button type="button" class="is-active" data-visual-tab="queue">Queue &amp; processing <span><?php echo esc_html( $queue_count ); ?></span></button><button type="button" data-visual-tab="review">Cần duyệt <span><?php echo esc_html( $review_count ); ?></span></button><button type="button" data-visual-tab="completed">Completed <span><?php echo esc_html( $classified_count ); ?></span></button></nav>
 			<section class="mac-tracker-visual-gallery" aria-label="Visual tone gallery">
 				<?php if ( empty( $rows ) ) : ?>
 					<div class="mac-tracker-empty"><span class="dashicons dashicons-format-image"></span><strong>No screenshots yet</strong><p>Use a manual capture action when you are ready to create the first card.</p></div>
-				<?php else : foreach ( $rows as $row ) : $visual_status = ( 'classified' === (string) ( $row['tone_status'] ?? '' ) && in_array( (string) ( $row['tone'] ?? '' ), $this->tone_options(), true ) && 'Cần duyệt' !== (string) ( $row['tone'] ?? '' ) ) ? 'classified' : 'pending'; ?>
+				<?php else : foreach ( $rows as $row ) : $visual_status = ( 'classified' === (string) ( $row['tone_status'] ?? '' ) && in_array( (string) ( $row['tone'] ?? '' ), $this->tone_options(), true ) && 'Cần duyệt' !== (string) ( $row['tone'] ?? '' ) ) ? 'completed' : ( 'needs_review' === (string) ( $row['pipeline_status'] ?? '' ) ? 'review' : 'queue' ); ?>
 					<article class="mac-tracker-visual-card<?php echo $this->visual_is_manual( $row ) ? ' is-manual-tone' : ''; ?>" id="visual-<?php echo (int) $row['id']; ?>" data-visual-card="<?php echo (int) $row['id']; ?>" data-visual-status="<?php echo esc_attr( $visual_status ); ?>">
 						<label class="mac-tracker-visual-card__select"><input type="checkbox" name="snapshot_ids[]" value="<?php echo (int) $row['id']; ?>" data-visual-select><span>Select</span></label><a class="mac-tracker-visual-card__image" href="<?php echo esc_url( $row['screenshot_url'] ); ?>" target="_blank" rel="noopener"><img src="<?php echo esc_url( $row['screenshot_url'] ); ?>" alt="<?php echo esc_attr( $row['name'] . ' homepage screenshot' ); ?>" loading="lazy"><span>Open full capture <span class="dashicons dashicons-external"></span></span></a><div class="mac-tracker-visual-card__body"><p class="mac-tracker-eyebrow">#<?php echo esc_html( $row['wpm_project_id'] ); ?> · <?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></p><?php $this->project_link( $row ); ?><div class="mac-tracker-visual-card__tone"><?php $this->tone_cell( $row, false ); ?></div><?php $this->visual_status_cell( $row ); ?><?php if ( ! $this->visual_is_manual( $row ) ) : ?><p data-visual-reason><?php echo esc_html( $row['tone_reason'] ?: ( 'classified' === $row['tone_status'] ? 'AI classified the rendered UI.' : 'Awaiting a manual analysis action.' ) ); ?></p><?php endif; ?><div class="mac-tracker-visual-card__actions"><?php if ( $this->visual_is_manual( $row ) ) : ?><button type="submit" class="button-link" name="visual_action" value="unlock_tone_<?php echo (int) $row['id']; ?>" title="Allow a future AI result to update this card">Unlock AI</button><?php else : ?><button type="submit" class="button-link" name="visual_action" value="reanalyze_one_<?php echo (int) $row['id']; ?>" title="Use this stored screenshot again">Analyze again</button><button type="submit" class="button-link" name="visual_action" value="recapture_one_<?php echo (int) $row['id']; ?>" title="Take a fresh full-page screenshot">Capture again</button><?php endif; ?></div></div>
 					</article>
@@ -306,12 +312,20 @@ class MAC_Tracker_Admin {
 		$this->redirect( 'mac-project-tracker-visuals', 'Visual Tone workflow started. The gallery will update after GitHub finishes the batch.', 'success' );
 	}
 
-	/** Save intent only. Scheduling remains disabled until Phase 6. */
+	/** Save Visual Tone controls. The scheduled worker reads this config before claiming work. */
 	public function handle_save_visual_mode() {
 		$this->require_request( 'mac_tracker_save_visual_mode' );
 		$mode = isset( $_POST['visual_mode'] ) && 'auto' === sanitize_key( wp_unslash( $_POST['visual_mode'] ) ) ? 'auto' : 'manual';
+		$strategy = isset( $_POST['ai_strategy'] ) ? sanitize_key( wp_unslash( $_POST['ai_strategy'] ) ) : 'smart';
+		if ( ! in_array( $strategy, array( 'off', 'qwen', 'gemini', 'smart' ), true ) ) { $strategy = 'smart'; }
+		$auto_accept = isset( $_POST['auto_accept'] ) ? (float) wp_unslash( $_POST['auto_accept'] ) : 0.85;
+		$auto_accept = max( 0.75, min( 0.99, $auto_accept ) );
+		$max_retries = isset( $_POST['max_capture_retries'] ) ? max( 0, min( 3, absint( wp_unslash( $_POST['max_capture_retries'] ) ) ) ) : 3;
 		update_option( 'mac_tracker_visual_mode', $mode, false );
-		$this->redirect( 'mac-project-tracker-visuals', 'Visual Tone mode saved. Scheduled processing remains disabled during the V2 rebuild.', 'success' );
+		update_option( 'mac_tracker_visual_ai_strategy', $strategy, false );
+		update_option( 'mac_tracker_visual_auto_accept', $auto_accept, false );
+		update_option( 'mac_tracker_visual_max_capture_retries', $max_retries, false );
+		$this->redirect( 'mac-project-tracker-visuals', sprintf( 'Visual Tone controls saved: %s mode, %s AI strategy.', strtoupper( $mode ), strtoupper( $strategy ) ), 'success' );
 	}
 
 	public function handle_clear_visual_data() {
@@ -399,7 +413,7 @@ class MAC_Tracker_Admin {
 		foreach ( $this->repository->visual_review_rows( 300 ) as $row ) {
 			if ( $wanted && empty( $map[ (int) $row['id'] ] ) ) { continue; }
 			$manual = $this->visual_is_manual( $row );
-			$statuses[] = array( 'id' => (int) $row['id'], 'pipeline_status' => (string) ( $row['pipeline_status'] ?? 'idle' ), 'capture_status' => (string) ( $row['capture_status'] ?? '' ), 'tone_status' => (string) ( $row['tone_status'] ?? '' ), 'tone' => (string) ( $row['tone'] ?? '' ), 'tone_reason' => $manual ? '' : (string) ( $row['tone_reason'] ?? '' ), 'manual' => $manual, 'screenshot_url' => esc_url_raw( $row['screenshot_url'] ?? '' ), 'claimed_at' => (string) ( $row['claimed_at'] ?? '' ), 'lease_until' => (string) ( $row['lease_until'] ?? '' ) );
+			$statuses[] = array( 'id' => (int) $row['id'], 'pipeline_status' => (string) ( $row['pipeline_status'] ?? 'idle' ), 'capture_status' => (string) ( $row['capture_status'] ?? '' ), 'tone_status' => (string) ( $row['tone_status'] ?? '' ), 'tone' => (string) ( $row['tone'] ?? '' ), 'tone_reason' => $manual ? '' : (string) ( $row['tone_reason'] ?? '' ), 'manual' => $manual, 'provider' => (string) ( $row['ai_provider'] ?? '' ), 'model' => (string) ( $row['ai_model'] ?? '' ), 'last_error_code' => (string) ( $row['last_error_code'] ?? '' ), 'last_error_message' => (string) ( $row['last_error_message'] ?? '' ), 'next_retry_at' => (string) ( $row['next_retry_at'] ?? '' ), 'screenshot_url' => esc_url_raw( $row['screenshot_url'] ?? '' ), 'claimed_at' => (string) ( $row['claimed_at'] ?? '' ), 'lease_until' => (string) ( $row['lease_until'] ?? '' ) );
 		}
 		wp_send_json_success( array( 'statuses' => $statuses, 'stats' => $this->repository->visual_stats() ) );
 	}
@@ -707,6 +721,8 @@ class MAC_Tracker_Admin {
 
 	private function visual_status_cell( array $row ) {
 		$pipeline = (string) ( $row['pipeline_status'] ?? '' );
+		$provider = (string) ( $row['ai_provider'] ?? '' );
+		$model = (string) ( $row['ai_model'] ?? '' );
 		if ( in_array( $pipeline, array( 'capturing', 'analyzing' ), true ) && ! empty( $row['lease_until'] ) && strtotime( (string) $row['lease_until'] . ' UTC' ) < time() ) {
 			$pipeline = 'retry_wait';
 		}
@@ -716,12 +732,12 @@ class MAC_Tracker_Admin {
 			'capturing'      => array( 'working', 'dashicons-camera', 'Capturing homepage · GitHub đang chạy' ),
 			'captured'       => array( 'queued', 'dashicons-format-image', 'Screenshot saved · chờ phân tích' ),
 			'analysis_queued'=> array( 'queued', 'dashicons-clock', 'Analysis queued · chờ chạy batch' ),
-			'analyzing'      => array( 'working', 'dashicons-admin-appearance', 'Analyzing screenshot · AI đang chạy' ),
+			'analyzing'      => array( 'working', 'dashicons-admin-appearance', $provider ? 'Analyzing with ' . trim( $provider . ( $model ? ' · ' . $model : '' ) ) : 'Analyzing with Qwen 3.8' ),
 			'classified'     => array( 'complete', 'dashicons-yes-alt', 'Completed · đã phân loại' ),
 			'needs_review'   => array( 'queued', 'dashicons-visibility', 'Needs review · cần duyệt tone' ),
-			'retry_wait'     => array( 'queued', 'dashicons-update', 'Retry scheduled · chờ thử lại' ),
-			'blocked'        => array( 'failed', 'dashicons-lock', 'Blocked · cần xử lý thủ công' ),
-			'failed'         => array( 'failed', 'dashicons-warning', 'Failed · cần retry' ),
+			'retry_wait'     => array( 'queued', 'dashicons-update', 'Retry scheduled' . ( ! empty( $row['next_retry_at'] ) ? ' · ' . MAC_Tracker_Time::bangkok_label( $row['next_retry_at'] ) : '' ) ),
+			'blocked'        => array( 'failed', 'dashicons-lock', 'Blocked · ' . ( $row['last_error_message'] ?: 'cần xử lý thủ công' ) ),
+			'failed'         => array( 'failed', 'dashicons-warning', 'Failed · ' . ( $row['last_error_message'] ?: 'cần retry' ) ),
 		);
 		if ( isset( $canonical[ $pipeline ] ) ) {
 			$entry = $canonical[ $pipeline ];
@@ -749,7 +765,7 @@ class MAC_Tracker_Admin {
 			return;
 		}
 		if ( 'analyzing' === $tone ) {
-			echo '<p class="mac-tracker-visual-status mac-tracker-visual-status--working" data-visual-active><span class="dashicons dashicons-admin-appearance"></span>Llama Vision is analyzing this screenshot now</p>';
+			echo '<p class="mac-tracker-visual-status mac-tracker-visual-status--working" data-visual-active><span class="dashicons dashicons-admin-appearance"></span>Analyzing with ' . esc_html( $provider ?: 'Qwen 3.8' ) . '</p>';
 			return;
 		}
 		if ( 'classified' === $tone ) {

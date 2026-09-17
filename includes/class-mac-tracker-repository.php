@@ -553,7 +553,7 @@ class MAC_Tracker_Repository {
 	public function visual_review_rows( $limit = 120 ) {
 		$limit = max( 1, min( 300, absint( $limit ) ) );
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
-		$sql = "SELECT p.*, v.screenshot_url, v.tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.ai_raw, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND (v.screenshot_url <> '' OR v.pipeline_status IN ('idle', 'capture_queued', 'capturing', 'retry_wait', 'blocked', 'failed')) ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d";
+		$sql = "SELECT p.*, v.screenshot_url, v.tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND (v.screenshot_url <> '' OR v.pipeline_status IN ('idle', 'capture_queued', 'capturing', 'retry_wait', 'blocked', 'failed')) ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d";
 		return (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
 	}
 
@@ -575,6 +575,7 @@ class MAC_Tracker_Repository {
 				$this->wpdb->query( "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND tone_status = 'pending' AND screenshot_url <> '' AND manual_locked = 0 AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
 				$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.pipeline_status = 'analysis_queued' AND v.manual_locked = 0 AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()) AND v.screenshot_url <> '' ORDER BY v.updated_at ASC LIMIT %d";
 			} else {
+				$this->wpdb->query( "UPDATE {$this->visuals} SET pipeline_status = 'capture_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND capture_status = 'pending' AND screenshot_url = '' AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
 				$sql = "SELECT p.id, p.website_url, '' AS screenshot_url, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR (v.pipeline_status = 'capture_queued' AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()))) ORDER BY CASE WHEN v.id IS NULL THEN 0 ELSE 1 END, v.updated_at ASC, p.task_completed_at DESC, p.id DESC LIMIT %d";
 			}
 			$candidates = (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
@@ -620,9 +621,21 @@ class MAC_Tracker_Repository {
 
 	public function save_visual_failure( $snapshot_id, $stage, $message, $token, $error_code = '' ) {
 		$stage = 'tone' === $stage ? 'tone' : 'capture';
-		$data = 'tone' === $stage ? array( 'pipeline_status' => 'failed', 'tone_status' => 'failed' ) : array( 'pipeline_status' => 'failed', 'capture_status' => 'failed' );
+		$attempt_column = 'tone' === $stage ? 'analysis_attempts' : 'capture_attempts';
+		$attempts = (int) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT {$attempt_column} FROM {$this->visuals} WHERE project_id = %d", absint( $snapshot_id ) ) );
+		$blocked_codes = array( 'CF_CHALLENGE', 'CAPTCHA', 'PARKED_DOMAIN', 'MAINTENANCE', 'LOGIN_WALL', 'BAD_REDIRECT', 'EMPTY_PAGE' );
+		$code = strtoupper( sanitize_key( $error_code ) );
+		$max_retries = max( 0, min( 3, absint( get_option( 'mac_tracker_visual_max_capture_retries', 3 ) ) ) );
+		if ( in_array( $code, $blocked_codes, true ) || $attempts > $max_retries ) {
+			$data = 'tone' === $stage ? array( 'pipeline_status' => 'blocked', 'tone_status' => 'failed' ) : array( 'pipeline_status' => 'blocked', 'capture_status' => 'failed' );
+		} else {
+			$delays = array( 1 => 5 * MINUTE_IN_SECONDS, 2 => 30 * MINUTE_IN_SECONDS, 3 => 6 * HOUR_IN_SECONDS );
+			$delay = $delays[ min( 3, max( 1, $attempts ) ) ];
+			$data = 'tone' === $stage ? array( 'pipeline_status' => 'retry_wait', 'tone_status' => 'pending', 'tone_token' => '' ) : array( 'pipeline_status' => 'retry_wait', 'capture_status' => 'pending', 'capture_token' => '' );
+			$data['next_retry_at'] = gmdate( 'Y-m-d H:i:s', time() + $delay );
+		}
 		$data['ai_raw'] = wp_json_encode( array( 'stage' => $stage, 'error' => sanitize_text_field( $message ) ) );
-		$data['last_error_code'] = strtoupper( sanitize_key( $error_code ) ) ?: strtoupper( $stage ) . '_FAILED';
+		$data['last_error_code'] = $code ?: strtoupper( $stage ) . '_FAILED';
 		$data['last_error_message'] = sanitize_text_field( $message );
 		$data['last_error_at'] = MAC_Tracker_Time::now_utc();
 		$data['lease_until'] = null;

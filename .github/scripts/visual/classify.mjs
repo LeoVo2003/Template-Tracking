@@ -54,8 +54,8 @@ function conflictsWithEvidence(result, evidence) {
   return false;
 }
 
-function accepted(result, evidence) {
-  return !result.needs_review && result.confidence >= AUTO_ACCEPT && !conflictsWithEvidence(result, evidence);
+function accepted(result, evidence, autoAccept) {
+  return !result.needs_review && result.confidence >= autoAccept && !conflictsWithEvidence(result, evidence);
 }
 
 function serializableError(error) {
@@ -71,19 +71,27 @@ async function attempt(run, errors) {
  * result can only advance to another configured free provider; it never falls
  * back to a paid SKU.
  */
-export async function classifyTone({ previewBuffer, evidence, groqApiKey, geminiApiKey, cloudflareAccount, cloudflareToken, freeOnly = true, providers = {} }) {
-  if (!freeOnly) throw new ProviderError('FREE_ONLY_REQUIRED', 'Visual-tone classification is locked to FREE_ONLY=true.');
+export async function classifyTone({ previewBuffer, evidence, groqApiKey, geminiApiKey, cloudflareAccount, cloudflareToken, freeOnly = true, strategy = 'smart', autoAccept = AUTO_ACCEPT, providers = {} }) {
+	if (!freeOnly) throw new ProviderError('FREE_ONLY_REQUIRED', 'Visual-tone classification is locked to FREE_ONLY=true.');
+	if (!['qwen', 'gemini', 'smart'].includes(strategy)) throw new ProviderError('AI_STRATEGY_OFF', 'AI strategy is disabled for this Visual Tone run.');
+	autoAccept = Math.max(REVIEW_BELOW, Math.min(0.99, Number(autoAccept) || AUTO_ACCEPT));
   const prompt = tonePrompt(evidence);
   const errors = [];
   const options = { prompt, previewBuffer };
   const groq = providers.groq || classifyWithGroq;
   const cloudflare = providers.cloudflare || classifyWithCloudflareQwen;
   const geminiProvider = providers.gemini || classifyWithGemini;
-  let qwen = await attempt(() => groq({ ...options, apiKey: groqApiKey }), errors);
+  let qwen = null;
+  if ('gemini' !== strategy) qwen = await attempt(() => groq({ ...options, apiKey: groqApiKey }), errors);
 
   // Cloudflare is only an availability fallback for the same Qwen family.
-  if (!qwen) qwen = await attempt(() => cloudflare({ ...options, accountId: cloudflareAccount, apiToken: cloudflareToken }), errors);
-  if (qwen && accepted(qwen, evidence)) return { state: 'classified', result: qwen, attempts: [qwen], errors, free_only: Boolean(freeOnly) };
+  if (!qwen && 'gemini' !== strategy) qwen = await attempt(() => cloudflare({ ...options, accountId: cloudflareAccount, apiToken: cloudflareToken }), errors);
+  if (qwen && accepted(qwen, evidence, autoAccept)) return { state: 'classified', result: qwen, attempts: [qwen], errors, free_only: Boolean(freeOnly) };
+
+  if ('qwen' === strategy) {
+    if (errors.length && errors.every((error) => error.quota || error.retryable)) return { state: 'retry_wait', result: null, attempts: [qwen].filter(Boolean), errors, retry_code: errors.every((error) => error.quota) ? 'FREE_QUOTA_EXHAUSTED' : 'FREE_PROVIDER_UNAVAILABLE', free_only: Boolean(freeOnly) };
+    return { state: 'needs_review', result: qwen || { tone: 'Cần duyệt', confidence: 0, primary_family: 'neutral', secondary_family: 'neutral', surface: 'mixed', reason: 'Qwen result did not pass the confidence gate.', needs_review: true, provider: '', model: '' }, attempts: [qwen].filter(Boolean), errors, free_only: Boolean(freeOnly) };
+  }
 
   // Gemini is an independent judge for a low-confidence or conflicting Qwen
   // result, and also the final free provider if Qwen is unavailable.

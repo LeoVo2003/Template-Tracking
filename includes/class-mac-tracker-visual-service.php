@@ -19,6 +19,11 @@ class MAC_Tracker_Visual_Service {
 	}
 
 	public function register_routes() {
+		register_rest_route( self::NAMESPACE, '/visual/config', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'config' ),
+			'permission_callback' => '__return_true',
+		) );
 		register_rest_route( self::NAMESPACE, '/visual/queue', array(
 			'methods'             => WP_REST_Server::CREATABLE,
 			'callback'            => array( $this, 'queue' ),
@@ -29,6 +34,21 @@ class MAC_Tracker_Visual_Service {
 			'methods'             => WP_REST_Server::CREATABLE,
 			'callback'            => array( $this, 'ingest' ),
 			'permission_callback' => '__return_true',
+		) );
+	}
+
+	/** Read-only worker configuration. API secrets remain GitHub-only. */
+	public function config( WP_REST_Request $request ) {
+		if ( ! $this->authorized( $request ) ) { return new WP_Error( 'mac_tracker_visual_forbidden', 'Automation authorization failed.', array( 'status' => 401 ) ); }
+		$mode = 'auto' === get_option( 'mac_tracker_visual_mode', 'manual' ) ? 'auto' : 'manual';
+		$strategy = sanitize_key( (string) get_option( 'mac_tracker_visual_ai_strategy', 'smart' ) );
+		if ( ! in_array( $strategy, array( 'off', 'qwen', 'gemini', 'smart' ), true ) ) { $strategy = 'smart'; }
+		return rest_ensure_response( array(
+			'mode' => $mode,
+			'ai_strategy' => $strategy,
+			'pipeline_version' => 2,
+			'auto_accept_threshold' => (float) get_option( 'mac_tracker_visual_auto_accept', 0.85 ),
+			'max_capture_retries' => max( 0, min( 3, absint( get_option( 'mac_tracker_visual_max_capture_retries', 3 ) ) ) ),
 		) );
 	}
 

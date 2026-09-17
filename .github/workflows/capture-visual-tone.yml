@@ -7,6 +7,8 @@ on:
         description: "Maximum screenshots and tone checks this run"
         required: false
         default: "10"
+  schedule:
+    - cron: "17,47 * * * *"
 
 permissions:
   contents: read
@@ -30,6 +32,7 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       # Safety policy: this workflow never selects a paid provider/model.
       FREE_ONLY: "true"
+      WORKFLOW_EVENT: ${{ github.event_name }}
       BATCH_LIMIT: ${{ inputs.limit || '10' }}
     steps:
       - uses: actions/checkout@v4
