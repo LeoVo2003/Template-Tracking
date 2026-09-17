@@ -1,0 +1,46 @@
+name: Benchmark visual tone
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Reviewed gold sites to benchmark (maximum 50)"
+        required: false
+        default: "50"
+      repeat:
+        description: "Capture/classify every site twice for repeatability"
+        required: false
+        default: "true"
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      FREE_ONLY: "true"
+      BENCHMARK_LIMIT: ${{ inputs.limit || '50' }}
+      BENCHMARK_REPEAT: ${{ inputs.repeat || 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install benchmark dependencies
+        run: npm install --no-save playwright@1.57.0 sharp@0.34.5
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run manual gold benchmark
+        run: node tools/benchmark-visual-tone.mjs
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-tone-benchmark
+          path: reports/visual-tone-benchmark.json

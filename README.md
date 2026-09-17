@@ -51,6 +51,10 @@ The workflow is hard-locked to `FREE_ONLY=true`: it tries Groq Qwen, then the Cl
 
 The workflow has a twice-hourly schedule, but every scheduled run first reads the private Visual Tone config from WordPress. It exits without claiming a single item unless the Visual Tone mode is **Auto**. A manual **Run batch now** dispatch works in either mode. Retries use bounded backoff (5 minutes, 30 minutes, then 6 hours); protected/error pages such as Cloudflare challenges are marked blocked instead of being sent to AI.
 
+## Visual Tone benchmark gate
+
+`data/visual-tone-gold.json` is the manual gold set for the Visual Tone benchmark. It intentionally starts with only the screenshots already reviewed by a person; a null label is not counted. Review at least 30 varied entries before running **Benchmark visual tone** in GitHub Actions. The workflow captures and classifies each reviewed site twice, uploads a report artifact, and passes only when capture success is at least 95%, no blocked/error page is classified, repeatability is at least 95%, and gold-label accuracy is at least 90%. Until that report passes, keep Visual Tone in **Manual** mode.
+
 ## Expected WPM response
 
 The plugin accepts a response with a `data` or `projects` array, or a raw JSON list. The preferred shape is:

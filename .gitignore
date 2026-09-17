@@ -3,6 +3,9 @@
 /project WPM.json
 /sample json.json
 /data/
+!/data/
+/data/*
+!/data/visual-tone-gold.json
 
 # Internal planning and editor instructions.
 /.cursor/
