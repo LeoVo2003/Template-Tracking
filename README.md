@@ -42,10 +42,12 @@ Before the first run, save an **Automation shared secret** in MAC Tracker → Se
 
 - `MAC_TRACKER_SITE_URL` — the site root, for example `https://quan.macmarketing.us`
 - `MAC_TRACKER_AUTOMATION_SECRET` — exactly the same shared secret saved in the plugin
+- `GROQ_API_KEY` — free Groq access for the primary Qwen vision check
+- `GEMINI_API_KEY` — free Gemini access used only as an independent quality judge
 - `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN` — a token permitted to call Workers AI; accept the Meta Llama 3.2 Vision license in Cloudflare once before use
+- `CLOUDFLARE_API_TOKEN` — free Workers AI fallback for Qwen availability
 
-The scheduled workflow works in bounded batches. If Workers AI reaches its daily quota, captured screenshots remain stored and tone classification resumes on a later run.
+The workflow is hard-locked to `FREE_ONLY=true`: it tries Groq Qwen, then the Cloudflare Qwen fallback, then Gemini as the independent judge. A `429` or quota error advances only to the next configured free provider. If every free provider is exhausted or unavailable, the card moves to `retry_wait` (or `needs_review` when an answer is ambiguous); it never selects a paid model automatically.
 
 ## Expected WPM response
 

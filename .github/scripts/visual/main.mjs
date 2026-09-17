@@ -10,14 +10,18 @@ const secret = String(process.env.MAC_TRACKER_AUTOMATION_SECRET || '');
 const limit = Math.max(1, Math.min(25, Number(process.env.BATCH_LIMIT || 10)));
 const cloudflareAccount = String(process.env.CLOUDFLARE_ACCOUNT_ID || '');
 const cloudflareToken = String(process.env.CLOUDFLARE_API_TOKEN || '');
+const groqApiKey = String(process.env.GROQ_API_KEY || '');
+const geminiApiKey = String(process.env.GEMINI_API_KEY || '');
+const freeOnly = 'false' !== String(process.env.FREE_ONLY || 'true').trim().toLowerCase();
 const apiBase = `${siteUrl}/wp-json/mac-tracker/v1/visual`;
 const workDir = join(process.cwd(), '.visual-capture');
 
 if (!siteUrl || !secret) throw new Error('MAC_TRACKER_SITE_URL and MAC_TRACKER_AUTOMATION_SECRET are required.');
+if (!freeOnly) throw new Error('FREE_ONLY must be true. This workflow is prohibited from selecting a paid provider.');
 
 const headers = {
   'X-MAC-Tracker-Automation': secret,
-  'User-Agent': 'MAC-Project-Tracker-GitHub-Action/0.15.0',
+  'User-Agent': 'MAC-Project-Tracker-GitHub-Action/0.16.0',
   Accept: 'application/json',
 };
 
@@ -97,15 +101,26 @@ async function downloadPreview(item) {
 }
 
 async function classifyPendingBatch() {
-  if (!cloudflareAccount || !cloudflareToken) return 0;
   const items = await queue('tone');
   for (const item of items) {
     try {
       const { bundle, preview } = await downloadPreview(item);
       const evidence = bundle?.ui?.metrics || { text: 'Capture bundle has no deterministic UI metrics.' };
-      const result = await classifyTone({ snapshotId: item.id, previewBuffer: preview, evidence, jobToken: item.job_token, cloudflareAccount, cloudflareToken, postJson });
-      if (result.quota) { console.log('Workers AI daily quota reached; remaining tone jobs stay queued.'); break; }
-      console.log(`Classified #${item.id}: ${result.tone} — ${evidence.text}`);
+      const outcome = await classifyTone({ previewBuffer: preview, evidence, groqApiKey, geminiApiKey, cloudflareAccount, cloudflareToken, freeOnly });
+      const rawJson = JSON.stringify({ phase: 4, ...outcome, deterministic: evidence });
+      if ('classified' === outcome.state) {
+        const result = outcome.result;
+        await postJson({ mode: 'tone', snapshot_id: item.id, job_token: item.job_token, tone: result.tone, confidence: result.confidence, reason: result.reason, provider: result.provider, model: result.model, needs_review: result.needs_review, raw_json: rawJson });
+        console.log(`Classified #${item.id} with ${result.provider}/${result.model}: ${result.tone} @ ${result.confidence}`);
+      } else if ('retry_wait' === outcome.state) {
+        const quota = 'FREE_QUOTA_EXHAUSTED' === outcome.retry_code;
+        await postJson({ mode: 'tone_retry', snapshot_id: item.id, job_token: item.job_token, error_code: outcome.retry_code, message: quota ? 'All configured free visual-tone providers are quota limited. No paid provider was used.' : 'All configured free visual-tone providers are temporarily unavailable. No paid provider was used.', raw_json: rawJson, retry_after_seconds: quota ? 1800 : 900 });
+        console.warn(`Tone #${item.id} deferred: ${quota ? 'all free provider quotas exhausted' : 'all free providers temporarily unavailable'}.`);
+      } else {
+        const result = outcome.result;
+        await postJson({ mode: 'tone_needs_review', snapshot_id: item.id, job_token: item.job_token, tone: result.tone, confidence: result.confidence, reason: result.reason, provider: result.provider, model: result.model, raw_json: rawJson });
+        console.warn(`Tone #${item.id} requires review; no free provider result passed the confidence gate.`);
+      }
     } catch (error) {
       await reportFailure('tone_failed', item, error);
       console.warn(`Tone failed #${item.id}: ${error.message}`);

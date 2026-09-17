@@ -569,6 +569,10 @@ class MAC_Tracker_Repository {
 		try {
 			$this->reclaim_expired_visual_leases();
 			if ( 'tone' === $stage ) {
+				// A quota or transient provider failure parks a completed capture in
+				// retry_wait. Once its delay has elapsed, return it to the normal
+				// tone queue; no human click and no new capture are required.
+				$this->wpdb->query( "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND tone_status = 'pending' AND screenshot_url <> '' AND manual_locked = 0 AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
 				$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.pipeline_status = 'analysis_queued' AND v.manual_locked = 0 AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()) AND v.screenshot_url <> '' ORDER BY v.updated_at ASC LIMIT %d";
 			} else {
 				$sql = "SELECT p.id, p.website_url, '' AS screenshot_url, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR (v.pipeline_status = 'capture_queued' AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()))) ORDER BY CASE WHEN v.id IS NULL THEN 0 ELSE 1 END, v.updated_at ASC, p.task_completed_at DESC, p.id DESC LIMIT %d";
@@ -636,14 +640,39 @@ class MAC_Tracker_Repository {
 		return $this->save_claimed_visual( $snapshot_id, $stage, $token, $data );
 	}
 
-	public function save_visual_tone( $snapshot_id, $tone, $confidence, $reason, $raw, $token ) {
+	/** Release a provider-limited job without treating the site or capture as failed. */
+	public function save_visual_retry( $snapshot_id, $stage, $message, $token, $error_code = '', $retry_after_seconds = 1800, $raw = '' ) {
+		$stage = 'tone' === $stage ? 'tone' : 'capture';
+		$retry_after_seconds = max( 300, min( 6 * HOUR_IN_SECONDS, absint( $retry_after_seconds ) ?: 1800 ) );
+		$now = MAC_Tracker_Time::now_utc();
+		$data = 'tone' === $stage ? array( 'pipeline_status' => 'retry_wait', 'tone_status' => 'pending', 'tone_token' => '' ) : array( 'pipeline_status' => 'retry_wait', 'capture_status' => 'pending', 'capture_token' => '' );
+		$data['next_retry_at'] = gmdate( 'Y-m-d H:i:s', time() + $retry_after_seconds );
+		$data['last_error_code'] = strtoupper( sanitize_key( $error_code ) ) ?: strtoupper( $stage ) . '_RETRY';
+		$data['last_error_message'] = sanitize_text_field( $message );
+		$data['last_error_at'] = $now;
+		$data['ai_raw'] = (string) $raw ?: wp_json_encode( array( 'stage' => $stage, 'retry' => true, 'error' => sanitize_text_field( $message ) ) );
+		$data['lease_until'] = null;
+		$data['claimed_at'] = null;
+		$data['job_token'] = '';
+		return $this->save_claimed_visual( $snapshot_id, $stage, $token, $data );
+	}
+
+	public function save_visual_tone( $snapshot_id, $tone, $confidence, $reason, $raw, $token, $metadata = array() ) {
 		$allowed = $this->visual_tones();
 		$tone = in_array( $tone, $allowed, true ) ? $tone : 'Cần duyệt';
-		$confidence = in_array( $confidence, array( 'high', 'medium', 'low' ), true ) ? $confidence : 'low';
+		$numeric_confidence = is_numeric( $confidence ) ? max( 0, min( 1, (float) $confidence ) ) : ( isset( $metadata['ai_confidence'] ) ? max( 0, min( 1, (float) $metadata['ai_confidence'] ) ) : 0 );
+		if ( $numeric_confidence >= 0.85 ) {
+			$confidence = 'high';
+		} elseif ( $numeric_confidence >= 0.75 ) {
+			$confidence = 'medium';
+		} else {
+			$confidence = in_array( $confidence, array( 'high', 'medium', 'low' ), true ) ? $confidence : 'low';
+		}
 		if ( $this->visual_manual_locked( $snapshot_id ) ) {
 			return new WP_Error( 'mac_tracker_visual_manual_locked', 'A manual visual tone is locked and cannot be overwritten by AI.', array( 'status' => 409 ) );
 		}
-		return $this->save_claimed_visual( $snapshot_id, 'tone', $token, array( 'pipeline_status' => 'Cần duyệt' === $tone ? 'needs_review' : 'classified', 'tone' => $tone, 'confidence' => $confidence, 'tone_reason' => sanitize_text_field( $reason ), 'tone_status' => 'classified', 'ai_raw' => (string) $raw, 'analyzed_at' => MAC_Tracker_Time::now_utc(), 'lease_until' => null, 'claimed_at' => null, 'job_token' => '', 'last_error_code' => '', 'last_error_message' => null, 'last_error_at' => null ) );
+		$needs_review = ! empty( $metadata['needs_review'] ) || 'Cần duyệt' === $tone;
+		return $this->save_claimed_visual( $snapshot_id, 'tone', $token, array( 'pipeline_status' => $needs_review ? 'needs_review' : 'classified', 'tone' => $tone, 'confidence' => $confidence, 'tone_reason' => sanitize_text_field( $reason ), 'tone_status' => 'classified', 'ai_provider' => sanitize_key( (string) ( $metadata['provider'] ?? '' ) ), 'ai_model' => sanitize_text_field( (string) ( $metadata['model'] ?? '' ) ), 'ai_confidence' => $numeric_confidence ?: null, 'ai_raw' => (string) $raw, 'analyzed_at' => MAC_Tracker_Time::now_utc(), 'lease_until' => null, 'claimed_at' => null, 'job_token' => '', 'last_error_code' => '', 'last_error_message' => null, 'last_error_at' => null ) );
 	}
 
 	public function save_manual_visual_tone( $snapshot_id, $tone ) {

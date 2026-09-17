@@ -26,6 +26,10 @@ jobs:
       MAC_TRACKER_AUTOMATION_SECRET: ${{ secrets.MAC_TRACKER_AUTOMATION_SECRET }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # Safety policy: this workflow never selects a paid provider/model.
+      FREE_ONLY: "true"
       BATCH_LIMIT: ${{ inputs.limit || '10' }}
     steps:
       - uses: actions/checkout@v4

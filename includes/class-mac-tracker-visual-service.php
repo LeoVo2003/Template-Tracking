@@ -47,8 +47,21 @@ class MAC_Tracker_Visual_Service {
 		if ( 'capture' === $mode ) {
 			return $this->ingest_capture( $snapshot_id, $job_token );
 		}
+		$raw_json = (string) $request->get_param( 'raw_json' );
+		if ( strlen( $raw_json ) > 60000 ) { $raw_json = substr( $raw_json, 0, 60000 ); }
+		$metadata = array(
+			'provider'      => sanitize_key( (string) $request->get_param( 'provider' ) ),
+			'model'         => sanitize_text_field( (string) $request->get_param( 'model' ) ),
+			'ai_confidence' => (float) $request->get_param( 'confidence' ),
+			'needs_review'  => rest_sanitize_boolean( $request->get_param( 'needs_review' ) ),
+		);
 		if ( 'tone' === $mode ) {
-			$result = $this->repository->save_visual_tone( $snapshot_id, sanitize_text_field( $request->get_param( 'tone' ) ), sanitize_key( $request->get_param( 'confidence' ) ), sanitize_text_field( $request->get_param( 'reason' ) ), wp_json_encode( $request->get_json_params() ), $job_token );
+			$result = $this->repository->save_visual_tone( $snapshot_id, sanitize_text_field( $request->get_param( 'tone' ) ), sanitize_text_field( $request->get_param( 'confidence' ) ), sanitize_text_field( $request->get_param( 'reason' ) ), $raw_json, $job_token, $metadata );
+		} elseif ( 'tone_needs_review' === $mode ) {
+			$metadata['needs_review'] = true;
+			$result = $this->repository->save_visual_tone( $snapshot_id, sanitize_text_field( $request->get_param( 'tone' ) ), sanitize_text_field( $request->get_param( 'confidence' ) ), sanitize_text_field( $request->get_param( 'reason' ) ), $raw_json, $job_token, $metadata );
+		} elseif ( 'tone_retry' === $mode ) {
+			$result = $this->repository->save_visual_retry( $snapshot_id, 'tone', sanitize_text_field( $request->get_param( 'message' ) ), $job_token, sanitize_key( $request->get_param( 'error_code' ) ), absint( $request->get_param( 'retry_after_seconds' ) ), $raw_json );
 		} elseif ( 'capture_started' === $mode || 'tone_started' === $mode ) {
 			$result = $this->repository->mark_visual_stage( $snapshot_id, 'tone_started' === $mode ? 'tone' : 'capture', $job_token );
 		} elseif ( 'capture_failed' === $mode || 'tone_failed' === $mode ) {
