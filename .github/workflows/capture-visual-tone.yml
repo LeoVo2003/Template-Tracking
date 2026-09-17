@@ -3,8 +3,20 @@ name: Capture visual tone
 on:
   workflow_dispatch:
     inputs:
+      run_mode:
+        description: "targeted or batch"
+        required: false
+        default: "batch"
+      stage:
+        description: "capture, tone, full, or auto"
+        required: false
+        default: "full"
+      target_ids:
+        description: "JSON snapshot ID list for a targeted run"
+        required: false
+        default: "[]"
       limit:
-        description: "Maximum screenshots and tone checks this run"
+        description: "Maximum logical websites this run"
         required: false
         default: "10"
   schedule:
@@ -33,6 +45,9 @@ jobs:
       # Safety policy: this workflow never selects a paid provider/model.
       FREE_ONLY: "true"
       WORKFLOW_EVENT: ${{ github.event_name }}
+      RUN_MODE: ${{ inputs.run_mode || 'batch' }}
+      VISUAL_STAGE: ${{ inputs.stage || 'full' }}
+      TARGET_IDS: ${{ inputs.target_ids || '[]' }}
       BATCH_LIMIT: ${{ inputs.limit || '10' }}
     steps:
       - uses: actions/checkout@v4

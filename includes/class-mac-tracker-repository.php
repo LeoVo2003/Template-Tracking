@@ -576,7 +576,7 @@ class MAC_Tracker_Repository {
 				$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.pipeline_status = 'analysis_queued' AND v.manual_locked = 0 AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()) AND v.screenshot_url <> '' ORDER BY v.updated_at ASC LIMIT %d";
 			} else {
 				$this->wpdb->query( "UPDATE {$this->visuals} SET pipeline_status = 'capture_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND capture_status = 'pending' AND screenshot_url = '' AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
-				$sql = "SELECT p.id, p.website_url, '' AS screenshot_url, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR (v.pipeline_status = 'capture_queued' AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()))) ORDER BY CASE WHEN v.id IS NULL THEN 0 ELSE 1 END, v.updated_at ASC, p.task_completed_at DESC, p.id DESC LIMIT %d";
+				$sql = "SELECT p.id, p.website_url, '' AS screenshot_url, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR (v.pipeline_status = 'capture_queued' AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()))) ORDER BY CASE WHEN v.id IS NULL THEN 1 ELSE 0 END, v.updated_at ASC, p.task_completed_at DESC, p.id DESC LIMIT %d";
 			}
 			$candidates = (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
 			foreach ( $candidates as $item ) {
@@ -584,6 +584,82 @@ class MAC_Tracker_Repository {
 				$claim = $this->claim_visual_stage( (int) $item['id'], $stage, $token );
 				if ( is_wp_error( $claim ) ) { continue; }
 				$item['job_token'] = $token;
+				$items[] = $item;
+			}
+		} finally {
+			$this->wpdb->get_var( $this->wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
+		}
+		return $items;
+	}
+
+	/**
+	 * Claim one explicitly-scoped Visual Tone plan.
+	 *
+	 * A targeted plan never falls back to the shared queue. A batch plan spends its
+	 * limit on websites: analysis-ready records first, then new captures.
+	 */
+	public function visual_claim_jobs( $run_mode, $stage, array $target_ids = array(), $limit = 10 ) {
+		$run_mode = 'targeted' === $run_mode ? 'targeted' : 'batch';
+		$stage = in_array( $stage, array( 'capture', 'tone', 'full', 'auto' ), true ) ? $stage : 'full';
+		$limit = max( 1, min( 25, absint( $limit ) ) );
+		$target_ids = array_values( array_unique( array_filter( array_map( 'absint', $target_ids ) ) ) );
+		$target_ids = array_slice( $target_ids, 0, 25 );
+
+		if ( 'targeted' === $run_mode ) {
+			if ( empty( $target_ids ) ) {
+				return new WP_Error( 'mac_tracker_visual_targets', 'A targeted visual run requires at least one snapshot ID.' );
+			}
+			$items = $this->visual_queue_targeted( $stage, $target_ids, min( $limit, count( $target_ids ) ) );
+			return array(
+				'items'         => $items,
+				'run_mode'      => 'targeted',
+				'stage'         => $stage,
+				'requested_ids' => $target_ids,
+				'claimed_ids'   => array_values( array_map( 'absint', wp_list_pluck( $items, 'id' ) ) ),
+				'skipped_ids'   => array_values( array_diff( $target_ids, array_map( 'absint', wp_list_pluck( $items, 'id' ) ) ) ),
+			);
+		}
+
+		// Existing captures waiting for analysis are always served first. Their
+		// count and new captures share a single total website budget.
+		$items = array();
+		if ( ! in_array( $stage, array( 'capture' ), true ) ) {
+			foreach ( $this->visual_queue( 'tone', $limit ) as $item ) {
+				$item['stage'] = 'tone';
+				$items[] = $item;
+			}
+		}
+		$remaining = max( 0, $limit - count( $items ) );
+		if ( $remaining && ! in_array( $stage, array( 'tone' ), true ) ) {
+			foreach ( $this->visual_queue( 'capture', $remaining ) as $item ) {
+				$item['stage'] = 'capture';
+				$items[] = $item;
+			}
+		}
+		return array( 'items' => $items, 'run_mode' => 'batch', 'stage' => $stage, 'requested_ids' => array(), 'claimed_ids' => array_values( array_map( 'absint', wp_list_pluck( $items, 'id' ) ) ), 'skipped_ids' => array() );
+	}
+
+	/** Claim only records named by a manual action. There is deliberately no fallback query. */
+	private function visual_queue_targeted( $stage, array $target_ids, $limit ) {
+		$stage = in_array( $stage, array( 'capture', 'tone', 'full' ), true ) ? $stage : 'full';
+		$limit = max( 1, min( count( $target_ids ), absint( $limit ) ) );
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
+		$lock_name = 'mac_tracker_visual_' . md5( $this->visuals );
+		if ( 1 !== (int) $this->wpdb->get_var( $this->wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $lock_name ) ) ) { return array(); }
+		$items = array();
+		try {
+			$this->reclaim_expired_visual_leases();
+			$placeholders = implode( ',', array_fill( 0, count( $target_ids ), '%d' ) );
+			$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw, v.pipeline_status FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.id IN ({$placeholders}) AND v.manual_locked = 0 AND ((%s = 'tone' AND v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '') OR (%s = 'capture' AND v.pipeline_status = 'capture_queued') OR (%s = 'full' AND ((v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '') OR v.pipeline_status = 'capture_queued'))) ORDER BY FIELD(p.id, " . implode( ',', array_fill( 0, count( $target_ids ), '%d' ) ) . ')';
+			$args = array_merge( $target_ids, array( $stage, $stage, $stage ), $target_ids );
+			$candidates = (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $args ), ARRAY_A );
+			foreach ( array_slice( $candidates, 0, $limit ) as $item ) {
+				$item_stage = 'analysis_queued' === $item['pipeline_status'] ? 'tone' : 'capture';
+				$token = wp_generate_uuid4();
+				$claim = $this->claim_visual_stage( (int) $item['id'], $item_stage, $token );
+				if ( is_wp_error( $claim ) ) { continue; }
+				$item['job_token'] = $token;
+				$item['stage'] = $item_stage;
 				$items[] = $item;
 			}
 		} finally {

@@ -349,8 +349,16 @@ class MAC_Tracker_Admin {
 	}
 
 	/** Start one cloud batch for a manual visual action, without holding the browser open. */
-	private function dispatch_visual_workflow( $limit = 10 ) {
+	private function dispatch_visual_workflow( $limit = 10, $run_mode = 'batch', $stage = 'full', array $target_ids = array() ) {
 		$limit = max( 1, min( 25, absint( $limit ) ) );
+		$run_mode = 'targeted' === $run_mode ? 'targeted' : 'batch';
+		$stage = in_array( $stage, array( 'capture', 'tone', 'full', 'auto' ), true ) ? $stage : 'full';
+		$target_ids = array_values( array_unique( array_filter( array_map( 'absint', $target_ids ) ) ) );
+		$target_ids = array_slice( $target_ids, 0, 25 );
+		if ( 'targeted' === $run_mode && empty( $target_ids ) ) {
+			return new WP_Error( 'mac_tracker_visual_targets', 'A targeted Visual Tone action needs at least one valid selected card.' );
+		}
+		if ( 'targeted' === $run_mode ) { $limit = min( $limit, count( $target_ids ) ); }
 		$token = MAC_Tracker_Crypto::decrypt( get_option( 'mac_tracker_github_dispatch_token', '' ) );
 		if ( '' === $token ) {
 			return new WP_Error( 'mac_tracker_github_token', 'Queued, but GitHub could not start because the manual Run now token is missing.' );
@@ -360,7 +368,7 @@ class MAC_Tracker_Admin {
 			array(
 				'timeout' => 20,
 				'headers' => array( 'Authorization' => 'Bearer ' . $token, 'Accept' => 'application/vnd.github+json', 'X-GitHub-Api-Version' => '2026-03-10', 'User-Agent' => 'MAC-Project-Tracker/' . MAC_TRACKER_VERSION, 'Content-Type' => 'application/json' ),
-				'body'    => wp_json_encode( array( 'ref' => 'main', 'inputs' => array( 'limit' => (string) $limit ) ) ),
+				'body'    => wp_json_encode( array( 'ref' => 'main', 'inputs' => array( 'run_mode' => $run_mode, 'stage' => $stage, 'target_ids' => wp_json_encode( $target_ids ), 'limit' => (string) $limit ) ) ),
 			)
 		);
 		if ( is_wp_error( $response ) ) {
@@ -399,7 +407,19 @@ class MAC_Tracker_Admin {
 			$message = sprintf( '%d selected screenshot(s) queued to %s.', is_wp_error( $result ) ? 0 : (int) $result, 'recapture' === $mode ? 'capture again' : 'analyze again' );
 		}
 		if ( is_wp_error( $result ) || (int) $result <= 0 ) { return array( 'result' => $result, 'message' => is_wp_error( $result ) ? $result->get_error_message() : 'No eligible screenshot changed. Check the selected card status, then try again.', 'dispatch' => false ); }
-		$dispatch = $this->dispatch_visual_workflow( (int) $result );
+		$run_mode = 'batch';
+		$stage = 'full';
+		$dispatch_ids = array();
+		if ( in_array( $action, array( 'reanalyze_selected', 'reanalyze_one' ), true ) ) {
+			$run_mode = 'targeted';
+			$stage = 'tone';
+			$dispatch_ids = $ids;
+		} elseif ( in_array( $action, array( 'recapture_selected', 'recapture_one' ), true ) ) {
+			$run_mode = 'targeted';
+			$stage = 'capture';
+			$dispatch_ids = $ids;
+		}
+		$dispatch = $this->dispatch_visual_workflow( (int) $result, $run_mode, $stage, $dispatch_ids );
 		$message .= is_wp_error( $dispatch ) ? ' ' . $dispatch->get_error_message() : ' GitHub batch started now.';
 		return array( 'result' => $result, 'message' => $message, 'dispatch' => ! is_wp_error( $dispatch ) );
 	}
@@ -462,7 +482,19 @@ class MAC_Tracker_Admin {
 		}
 		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker-visuals', $result->get_error_message(), 'error' ); }
 		if ( (int) $result <= 0 ) { $this->redirect( 'mac-project-tracker-visuals', 'No eligible screenshot changed. Check the selected card status, then try again.', 'warning' ); }
-		$dispatch = $this->dispatch_visual_workflow( (int) $result );
+		$run_mode = 'batch';
+		$stage = 'full';
+		$dispatch_ids = array();
+		if ( in_array( $action, array( 'reanalyze_selected', 'reanalyze_one' ), true ) ) {
+			$run_mode = 'targeted';
+			$stage = 'tone';
+			$dispatch_ids = $ids;
+		} elseif ( in_array( $action, array( 'recapture_selected', 'recapture_one' ), true ) ) {
+			$run_mode = 'targeted';
+			$stage = 'capture';
+			$dispatch_ids = $ids;
+		}
+		$dispatch = $this->dispatch_visual_workflow( (int) $result, $run_mode, $stage, $dispatch_ids );
 		$message .= is_wp_error( $dispatch ) ? ' ' . $dispatch->get_error_message() : ' GitHub batch started now.';
 		$this->redirect( 'mac-project-tracker-visuals', $message, is_wp_error( $dispatch ) ? 'warning' : 'success' );
 	}

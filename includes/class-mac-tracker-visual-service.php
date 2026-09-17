@@ -24,6 +24,14 @@ class MAC_Tracker_Visual_Service {
 			'callback'            => array( $this, 'config' ),
 			'permission_callback' => '__return_true',
 		) );
+		register_rest_route( self::NAMESPACE, '/visual/jobs/claim', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'claim_jobs' ),
+			'permission_callback' => '__return_true',
+			'args'                => array( 'run_mode' => array( 'default' => 'batch' ), 'stage' => array( 'default' => 'full' ), 'target_ids' => array( 'default' => array() ), 'limit' => array( 'default' => 10 ) ),
+		) );
+		// Retained for a release so an older runner fails safely rather than exposing
+		// an unauthenticated queue. New runners must use scoped jobs/claim.
 		register_rest_route( self::NAMESPACE, '/visual/queue', array(
 			'methods'             => WP_REST_Server::CREATABLE,
 			'callback'            => array( $this, 'queue' ),
@@ -56,6 +64,20 @@ class MAC_Tracker_Visual_Service {
 		if ( ! $this->authorized( $request ) ) { return new WP_Error( 'mac_tracker_visual_forbidden', 'Automation authorization failed.', array( 'status' => 401 ) ); }
 		$stage = 'tone' === $request->get_param( 'stage' ) ? 'tone' : 'capture';
 		return rest_ensure_response( array( 'items' => $this->repository->visual_queue( $stage, $request->get_param( 'limit' ) ), 'stage' => $stage ) );
+	}
+
+	/** Claim a precise manual scope or a single logical-website batch plan. */
+	public function claim_jobs( WP_REST_Request $request ) {
+		if ( ! $this->authorized( $request ) ) { return new WP_Error( 'mac_tracker_visual_forbidden', 'Automation authorization failed.', array( 'status' => 401 ) ); }
+		$run_mode = 'targeted' === sanitize_key( (string) $request->get_param( 'run_mode' ) ) ? 'targeted' : 'batch';
+		$stage = sanitize_key( (string) $request->get_param( 'stage' ) );
+		if ( ! in_array( $stage, array( 'capture', 'tone', 'full', 'auto' ), true ) ) { return new WP_Error( 'mac_tracker_visual_scope', 'Invalid Visual Tone job stage.', array( 'status' => 400 ) ); }
+		$target_ids = $request->get_param( 'target_ids' );
+		if ( is_string( $target_ids ) ) { $target_ids = json_decode( $target_ids, true ); }
+		if ( ! is_array( $target_ids ) ) { return new WP_Error( 'mac_tracker_visual_targets', 'target_ids must be a JSON array.', array( 'status' => 400 ) ); }
+		$target_ids = array_values( array_unique( array_filter( array_map( 'absint', $target_ids ) ) ) );
+		$result = $this->repository->visual_claim_jobs( $run_mode, $stage, $target_ids, $request->get_param( 'limit' ) );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
 	}
 
 	public function ingest( WP_REST_Request $request ) {
