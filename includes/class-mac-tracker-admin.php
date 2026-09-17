@@ -35,6 +35,7 @@ class MAC_Tracker_Admin {
 		add_action( 'admin_post_mac_tracker_clear_visual_data', array( $this, 'handle_clear_visual_data' ) );
 		add_action( 'admin_post_mac_tracker_run_visual_workflow', array( $this, 'handle_run_visual_workflow' ) );
 		add_action( 'admin_post_mac_tracker_requeue_visuals', array( $this, 'handle_requeue_visuals' ) );
+		add_action( 'wp_ajax_mac_tracker_run_visual_workflow', array( $this, 'handle_run_visual_workflow_ajax' ) );
 		add_action( 'wp_ajax_mac_tracker_visual_action', array( $this, 'handle_visual_action_ajax' ) );
 		add_action( 'wp_ajax_mac_tracker_visual_status', array( $this, 'handle_visual_status_ajax' ) );
 	}
@@ -60,6 +61,7 @@ class MAC_Tracker_Admin {
 			'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
 			'actionNonce' => wp_create_nonce( 'mac_tracker_requeue_visuals' ),
 			'statusNonce' => wp_create_nonce( 'mac_tracker_visual_status' ),
+			'runNonce'    => wp_create_nonce( 'mac_tracker_run_visual_workflow' ),
 		) );
 		wp_localize_script( 'mac-project-tracker-admin', 'macTrackerColors', array(
 			'ajaxUrl' => admin_url( 'admin-ajax.php' ),
@@ -310,6 +312,15 @@ class MAC_Tracker_Admin {
 			$this->redirect( 'mac-project-tracker-visuals', $result->get_error_message(), 'error' );
 		}
 		$this->redirect( 'mac-project-tracker-visuals', 'Visual Tone workflow started. The gallery will update after GitHub finishes the batch.', 'success' );
+	}
+
+	/** Return the GitHub dispatch result directly to the in-page Run button. */
+	public function handle_run_visual_workflow_ajax() {
+		check_ajax_referer( 'mac_tracker_run_visual_workflow', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( array( 'message' => 'You are not allowed to start a Visual Tone workflow.' ), 403 ); }
+		$result = $this->dispatch_visual_workflow();
+		if ( is_wp_error( $result ) ) { wp_send_json_error( array( 'message' => $result->get_error_message(), 'code' => $result->get_error_code() ), 502 ); }
+		wp_send_json_success( array( 'message' => 'GitHub workflow dispatched. Queued cards will change only after a worker claims them.' ) );
 	}
 
 	/** Save Visual Tone controls. The scheduled worker reads this config before claiming work. */
