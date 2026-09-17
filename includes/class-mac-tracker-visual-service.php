@@ -52,7 +52,7 @@ class MAC_Tracker_Visual_Service {
 		} elseif ( 'capture_started' === $mode || 'tone_started' === $mode ) {
 			$result = $this->repository->mark_visual_stage( $snapshot_id, 'tone_started' === $mode ? 'tone' : 'capture', $job_token );
 		} elseif ( 'capture_failed' === $mode || 'tone_failed' === $mode ) {
-			$result = $this->repository->save_visual_failure( $snapshot_id, 'tone_failed' === $mode ? 'tone' : 'capture', sanitize_text_field( $request->get_param( 'message' ) ), $job_token );
+			$result = $this->repository->save_visual_failure( $snapshot_id, 'tone_failed' === $mode ? 'tone' : 'capture', sanitize_text_field( $request->get_param( 'message' ) ), $job_token, sanitize_key( $request->get_param( 'error_code' ) ) );
 		} elseif ( 'tone_deferred' === $mode ) {
 			$result = $this->repository->release_visual_claim( $snapshot_id, 'tone', $job_token );
 		} else {
@@ -63,6 +63,7 @@ class MAC_Tracker_Visual_Service {
 
 	private function ingest_capture( $snapshot_id, $job_token ) {
 		$files = $_FILES;
+		$old_attachment_ids = $this->repository->visual_attachment_ids( array( $snapshot_id ) );
 		if ( empty( $files['screenshot']['tmp_name'] ) ) { return new WP_Error( 'mac_tracker_visual_file', 'Screenshot file is required.', array( 'status' => 400 ) ); }
 		if ( (int) $files['screenshot']['size'] > 10 * MB_IN_BYTES ) { return new WP_Error( 'mac_tracker_visual_size', 'Screenshot must be 10 MB or smaller.', array( 'status' => 413 ) ); }
 		require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -71,9 +72,26 @@ class MAC_Tracker_Visual_Service {
 		$attachment_id = media_handle_upload( 'screenshot', 0, array( 'post_title' => 'MAC Tracker visual #' . $snapshot_id ) );
 		if ( is_wp_error( $attachment_id ) ) { return $attachment_id; }
 		$url = (string) wp_get_attachment_url( $attachment_id );
-		$result = $this->repository->save_visual_capture( $snapshot_id, $attachment_id, $url, $job_token );
-		if ( is_wp_error( $result ) ) { wp_delete_attachment( $attachment_id, true ); return $result; }
-		return rest_ensure_response( array( 'saved' => true, 'screenshot_url' => $url ) );
+		$preview_id = 0;
+		$preview_url = '';
+		if ( ! empty( $files['ai_preview']['tmp_name'] ) ) {
+			if ( (int) $files['ai_preview']['size'] > 5 * MB_IN_BYTES ) { wp_delete_attachment( $attachment_id, true ); return new WP_Error( 'mac_tracker_visual_preview_size', 'AI preview must be 5 MB or smaller.', array( 'status' => 413 ) ); }
+			$preview_id = media_handle_upload( 'ai_preview', 0, array( 'post_title' => 'MAC Tracker AI preview #' . $snapshot_id ) );
+			if ( is_wp_error( $preview_id ) ) { wp_delete_attachment( $attachment_id, true ); return $preview_id; }
+			$preview_url = (string) wp_get_attachment_url( $preview_id );
+		}
+		$raw_bundle = isset( $_POST['bundle_json'] ) ? wp_unslash( $_POST['bundle_json'] ) : '';
+		if ( strlen( (string) $raw_bundle ) > 400000 ) { wp_delete_attachment( $attachment_id, true ); if ( $preview_id ) { wp_delete_attachment( $preview_id, true ); } return new WP_Error( 'mac_tracker_visual_bundle_size', 'Capture bundle metadata is too large.', array( 'status' => 413 ) ); }
+		$bundle = json_decode( (string) $raw_bundle, true );
+		if ( ! is_array( $bundle ) ) { $bundle = array(); }
+		$bundle['version'] = 2;
+		$bundle['snapshot_id'] = $snapshot_id;
+		$result = $this->repository->save_visual_capture( $snapshot_id, $attachment_id, $url, $job_token, $bundle, $preview_url, $preview_id );
+		if ( is_wp_error( $result ) ) { wp_delete_attachment( $attachment_id, true ); if ( $preview_id ) { wp_delete_attachment( $preview_id, true ); } return $result; }
+		foreach ( $old_attachment_ids as $old_attachment_id ) {
+			if ( ! in_array( (int) $old_attachment_id, array( (int) $attachment_id, (int) $preview_id ), true ) ) { wp_delete_attachment( (int) $old_attachment_id, true ); }
+		}
+		return rest_ensure_response( array( 'saved' => true, 'screenshot_url' => $url, 'ai_preview_url' => $preview_url ) );
 	}
 
 	private function authorized( WP_REST_Request $request ) {

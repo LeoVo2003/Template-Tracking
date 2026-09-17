@@ -36,7 +36,7 @@ Installations on `0.2.0` have no updater; installations on older `0.7.x` may not
 
 ## Visual Tone automation
 
-The repository workflow **Capture visual tone** runs in GitHub Actions, not on the WordPress host or a local computer. It captures a homepage as a full-page JPEG and uploads it to the site's Media Library. Tone classification weighs rendered UI colors at 80% and full-screenshot image colors at 20%, so photos can add context without overriding a clear interface palette.
+The repository workflow **Capture visual tone** runs in GitHub Actions, not on the WordPress host or a local computer. It captures a homepage as a full-page JPEG and uploads it to the site's Media Library. Phase 3 stores deterministic, area-weighted UI evidence from that same render: large structural surfaces (sections, header/footer, panels and buttons) carry the signal while photos/media, body text and tiny icons are excluded or down-weighted. The evidence includes direct color coverage, light/dark/cream ratios, saturation, luminance, warm/cool tendency, contrast, dominant structural colors and a candidate tone. AI can use this candidate as a review signal, but it is not treated as ground truth.
 
 Before the first run, save an **Automation shared secret** in MAC Tracker → Settings and add these GitHub repository Secrets:
 

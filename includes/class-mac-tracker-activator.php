@@ -82,9 +82,34 @@ class MAC_Tracker_Activator {
 			"CREATE TABLE {$visuals} (
 				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
 				project_id bigint(20) unsigned NOT NULL,
+				pipeline_version smallint(5) unsigned NOT NULL DEFAULT 2,
+				pipeline_status varchar(32) NOT NULL DEFAULT 'idle',
+				run_id varchar(64) NOT NULL DEFAULT '',
+				job_token varchar(64) NOT NULL DEFAULT '',
+				claimed_at datetime NULL,
+				lease_until datetime NULL,
+				capture_attempts int(10) unsigned NOT NULL DEFAULT 0,
+				analysis_attempts int(10) unsigned NOT NULL DEFAULT 0,
+				next_retry_at datetime NULL,
+				final_url varchar(2048) NOT NULL DEFAULT '',
+				http_status smallint(5) unsigned NOT NULL DEFAULT 0,
+				page_title text NULL,
+				last_error_code varchar(64) NOT NULL DEFAULT '',
+				last_error_message text NULL,
+				last_error_at datetime NULL,
+				capture_bundle_json longtext NULL,
+				metrics_json longtext NULL,
+				ai_provider varchar(64) NOT NULL DEFAULT '',
+				ai_model varchar(128) NOT NULL DEFAULT '',
+				ai_confidence decimal(4,3) NULL,
+				analyzed_at datetime NULL,
+				manual_locked tinyint(1) NOT NULL DEFAULT 0,
+				manual_tone varchar(64) NOT NULL DEFAULT '',
+				manual_updated_at datetime NULL,
 				capture_status varchar(32) NOT NULL DEFAULT 'pending',
 				capture_token varchar(64) NOT NULL DEFAULT '',
 				attachment_id bigint(20) unsigned NOT NULL DEFAULT 0,
+				preview_attachment_id bigint(20) unsigned NOT NULL DEFAULT 0,
 				screenshot_url varchar(2048) NOT NULL DEFAULT '',
 				tone varchar(64) NOT NULL DEFAULT '',
 				confidence varchar(16) NOT NULL DEFAULT '',
@@ -97,6 +122,9 @@ class MAC_Tracker_Activator {
 				updated_at datetime NOT NULL,
 				PRIMARY KEY  (id),
 				UNIQUE KEY project_id (project_id),
+				KEY pipeline_status (pipeline_status),
+				KEY lease_until (lease_until),
+				KEY manual_locked (manual_locked),
 				KEY capture_status (capture_status),
 				KEY tone_status (tone_status)
 			) {$charset};",
@@ -163,6 +191,10 @@ class MAC_Tracker_Activator {
 		if ( version_compare( $previous_version, '0.13.19', '<' ) ) {
 			// Pair taxonomy and prompt calibration changed; keep manual reviews locked.
 			( new MAC_Tracker_Repository() )->requeue_visual_tones();
+		}
+		if ( version_compare( $previous_version, '0.15.0', '<' ) ) {
+			// Establish one canonical V2 state before a later phase changes capture transport.
+			( new MAC_Tracker_Repository() )->migrate_visual_pipeline_v2();
 		}
 		update_option( 'mac_tracker_db_version', MAC_TRACKER_VERSION, false );
 	}
