@@ -12,7 +12,7 @@ export async function classifyWithGroq({ apiKey, prompt, previewBuffer, fetchImp
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: MODEL,
-        reasoning_effort: 'none',
+        reasoning_effort: 'low',
         temperature: 0,
         max_completion_tokens: 260,
         messages: [{ role: 'user', content: [

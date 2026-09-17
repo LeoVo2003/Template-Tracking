@@ -1,114 +1,58 @@
 import { classifyWithGroq } from './providers/groq-qwen.mjs';
-import { classifyWithGemini } from './providers/gemini.mjs';
 import { classifyWithCloudflareQwen } from './providers/cloudflare-qwen.mjs';
-import { ProviderError, TONES } from './providers/common.mjs';
+import { classifyWithLlamaScout } from './providers/cloudflare-llama-scout.mjs';
+import { classifyWithGemini } from './providers/gemini.mjs';
+import { ProviderError } from './providers/common.mjs';
+import { mapVietnameseTone } from './tone-map.mjs';
 
-export const tones = TONES;
 export const AUTO_ACCEPT = 0.85;
-export const REVIEW_BELOW = 0.75;
-export const JUDGE_ACCEPT = 0.80;
+const JUDGE_ACCEPT = 0.8;
+const GEMINI_DAILY_BUDGET = Math.max(1, Number.parseInt(process.env.GEMINI_DAILY_BUDGET_PER_KEY || '8', 10) || 8);
+const geminiPool = new Map();
+const schemaPrompt = `Return JSON: canvas_mode(light|dark|mixed), canvas_family(white|cream|gray|black), primary_family(red|pink|orange|yellow_gold|brown|green|teal|blue|purple|neutral), secondary_family(same enum), style_tone(light_minimal|corporate_clean|dark_modern|vibrant_bold|warm_earthy|soft_pastel), confidence(0..1), reason, needs_review.`;
 
-function compactEvidence(evidence) {
-  return {
-    metrics_version: evidence.metrics_version || 0,
-    candidate: evidence.candidate || 'Cần duyệt',
-    candidate_confidence: evidence.candidate_confidence ?? null,
-    primary_family: evidence.primary_family || 'neutral',
-    secondary_family: evidence.secondary_family || 'neutral',
-    surface: evidence.surface || 'mixed',
-    coverage: evidence.coverage || {},
-    average_saturation: evidence.average_saturation ?? null,
-    average_luminance: evidence.average_luminance ?? null,
-    warm_cool_tendency: evidence.warm_cool_tendency || 'balanced',
-    contrast_level: evidence.contrast_level || 'low',
-    dominant_structural_colors: (evidence.dominant_structural_colors || []).slice(0, 6),
-  };
+function evidenceForAi(evidence) {
+  const semantic = evidence.semantic_model || {};
+  return { canvas: semantic.canvas, palette: semantic.palette, families: semantic.families, primary_accent: semantic.primary_accent, secondary_accent: semantic.secondary_accent, role_evidence: semantic.role_evidence, ambiguous: semantic.ambiguous };
 }
-
 export function tonePrompt(evidence) {
-  const deterministic = compactEvidence(evidence);
-  return `Classify exactly one visual tone. The attached preview and deterministic UI metrics come from the same stored capture bundle. Judge structural UI only: repeated section backgrounds, header/footer bars, navigation, panels, buttons and large accents. Ignore photos, nail/skin/product/flower imagery, logo detail, body text, tiny icons, 1px borders and one-off decorative artifacts.
-
-The deterministic metrics are 80% of this decision. The preview is a 20% tie-breaker only. Pale rose is pink. Beige/taupe/nude is brown or cream. Warm gold is yellow/gold, never red or pink. Red requires repeated, saturated true-red UI surfaces. Dark/black requires substantial dark UI area, never body text alone. If evidence is mixed or unclear, set tone to Cần duyệt and needs_review to true.
-
-Area-weighted deterministic evidence: ${JSON.stringify(deterministic)}
-Human-readable evidence: ${evidence.text || 'No reliable metric summary.'}
-
-Allowed tones: ${tones.join(', ')}.
-Return only the required JSON schema. Do not add markdown or extra fields.`;
+  return `You are a Lead UI/UX Color System Auditor. Analyze the WEBSITE DESIGN SYSTEM, not content imagery. Ignore photos, skin, nails, products, flowers, model clothing and illustrations. Identify canvas separately from the repeated UI accent used in CTA, active nav, buttons, headings and structural accents. The measured palette and semantic-role evidence are factual; do not invent colors. Carefully distinguish pale pink/cream, peach/orange/pink, beige/taupe/brown, gold/yellow_gold, navy/black, teal/blue/green. If ambiguous set needs_review=true. Do not output a Vietnamese final label. ${schemaPrompt}\nEvidence: ${JSON.stringify(evidenceForAi(evidence))}`;
 }
+function llamaPrompt(evidence, qwen) { return `You are an independent UI color-system judge. Pixel/DOM evidence and a visual auditor disagree or are uncertain. Ignore media photography; decide canvas and repeated interface accents from raw evidence. Do not blindly trust either source. ${schemaPrompt}\nPixel/DOM: ${JSON.stringify(evidenceForAi(evidence))}\nSeparate auditor: ${JSON.stringify(qwen)}`; }
+function agrees(a, b) { return a && b && a.canvas_family === b.canvas_family && a.primary_family === b.primary_family; }
+function resultFrom(semantic, reason) { const tone = mapVietnameseTone(semantic); return { ...semantic, tone, reason: reason || semantic.reason, needs_review: semantic.needs_review || 'Cần duyệt' === tone }; }
+function serial(error) { return { provider: error.provider || 'unknown', code: error.code || 'PROVIDER_ERROR', status: error.status || 0, quota: !!error.quota, retryable: !!error.retryable, message: String(error.message || '').slice(0, 300) }; }
+async function tryProvider(fn, errors) { try { return await fn(); } catch (error) { errors.push(serial(error)); return null; } }
 
-function isStrongDeterministicCandidate(evidence) {
-  return evidence?.candidate && 'Cần duyệt' !== evidence.candidate && Number(evidence.candidate_confidence || 0) >= REVIEW_BELOW;
-}
-
-function conflictsWithEvidence(result, evidence) {
-  if (!isStrongDeterministicCandidate(evidence)) return false;
-  if (result.tone !== evidence.candidate) return true;
-  const coverage = evidence.coverage || {};
-  const familyCoverage = {
-    red: Number(coverage.red || 0), pink: Number(coverage.pink || 0), brown: Number(coverage.brown || 0), yellow: Number(coverage.yellow || 0),
-    green: Number(coverage.green || 0), blue: Number(coverage.blue || 0), purple: Number(coverage.purple || 0),
-  };
-  if (['red', 'pink', 'brown', 'yellow', 'green', 'blue', 'purple'].includes(result.primary_family) && familyCoverage[result.primary_family] < 0.018) return true;
-  return false;
-}
-
-function accepted(result, evidence, autoAccept) {
-  return !result.needs_review && result.confidence >= autoAccept && !conflictsWithEvidence(result, evidence);
-}
-
-function serializableError(error) {
-  return { provider: error.provider || 'unknown', code: error.code || 'PROVIDER_ERROR', message: String(error.message || 'Provider failed.').slice(0, 500), quota: Boolean(error.quota), retryable: Boolean(error.retryable) };
-}
-
-async function attempt(run, errors) {
-  try { return await run(); } catch (error) { errors.push(serializableError(error)); return null; }
-}
-
-/**
- * Free-only provider chain. No paid provider/model is configured here. A quota
- * result can only advance to another configured free provider; it never falls
- * back to a paid SKU.
- */
-export async function classifyTone({ previewBuffer, evidence, groqApiKey, geminiApiKey, cloudflareAccount, cloudflareToken, freeOnly = true, strategy = 'smart', autoAccept = AUTO_ACCEPT, providers = {} }) {
-	if (!freeOnly) throw new ProviderError('FREE_ONLY_REQUIRED', 'Visual-tone classification is locked to FREE_ONLY=true.');
-	if (!['qwen', 'gemini', 'smart'].includes(strategy)) throw new ProviderError('AI_STRATEGY_OFF', 'AI strategy is disabled for this Visual Tone run.');
-	autoAccept = Math.max(REVIEW_BELOW, Math.min(0.99, Number(autoAccept) || AUTO_ACCEPT));
-  const prompt = tonePrompt(evidence);
-  const errors = [];
-  const options = { prompt, previewBuffer };
-  const groq = providers.groq || classifyWithGroq;
-  const cloudflare = providers.cloudflare || classifyWithCloudflareQwen;
-  const geminiProvider = providers.gemini || classifyWithGemini;
-  let qwen = null;
-  if ('gemini' !== strategy) qwen = await attempt(() => groq({ ...options, apiKey: groqApiKey }), errors);
-
-  // Cloudflare is only an availability fallback for the same Qwen family.
-  if (!qwen && 'gemini' !== strategy) qwen = await attempt(() => cloudflare({ ...options, accountId: cloudflareAccount, apiToken: cloudflareToken }), errors);
-  if (qwen && accepted(qwen, evidence, autoAccept)) return { state: 'classified', result: qwen, attempts: [qwen], errors, free_only: Boolean(freeOnly) };
-
-  if ('qwen' === strategy) {
-    if (errors.length && errors.every((error) => error.quota || error.retryable)) return { state: 'retry_wait', result: null, attempts: [qwen].filter(Boolean), errors, retry_code: errors.every((error) => error.quota) ? 'FREE_QUOTA_EXHAUSTED' : 'FREE_PROVIDER_UNAVAILABLE', free_only: Boolean(freeOnly) };
-    return { state: 'needs_review', result: qwen || { tone: 'Cần duyệt', confidence: 0, primary_family: 'neutral', secondary_family: 'neutral', surface: 'mixed', reason: 'Qwen result did not pass the confidence gate.', needs_review: true, provider: '', model: '' }, attempts: [qwen].filter(Boolean), errors, free_only: Boolean(freeOnly) };
+export async function classifyTone({ previewBuffer, evidence, groqApiKey, geminiApiKey, geminiApiKeys = [], geminiDailyBudgetPerKey = GEMINI_DAILY_BUDGET, cloudflareAccount, cloudflareToken, freeOnly = true, autoAccept = AUTO_ACCEPT, providers = {} }) {
+  if (!freeOnly) throw new ProviderError('FREE_ONLY_REQUIRED', 'Visual-tone classification is locked to FREE_ONLY=true.');
+  const errors = [], prompt = tonePrompt(evidence), options = { previewBuffer, prompt };
+  const groq = providers.groq || classifyWithGroq, cfQwen = providers.cloudflare || classifyWithCloudflareQwen, llama = providers.llama || classifyWithLlamaScout, gemini = providers.gemini || classifyWithGemini;
+  let qwen = await tryProvider(() => groq({ ...options, apiKey: groqApiKey }), errors);
+  if (!qwen) qwen = await tryProvider(() => cfQwen({ ...options, accountId: cloudflareAccount, apiToken: cloudflareToken }), errors);
+  const pixel = evidence.semantic_model || {};
+  const deterministic = { canvas_family: pixel.canvas?.family, primary_family: pixel.primary_accent?.family, secondary_family: pixel.secondary_accent?.family, confidence: pixel.canvas?.confidence || 0 };
+  if (qwen && agrees(qwen, deterministic) && qwen.confidence >= autoAccept && !qwen.needs_review) return { state: 'classified', result: resultFrom(qwen, 'Pixel/DOM and Qwen agreement.'), attempts: [qwen], errors };
+  const scout = await tryProvider(() => llama({ previewBuffer, prompt: llamaPrompt(evidence, qwen), accountId: cloudflareAccount, apiToken: cloudflareToken }), errors);
+  if (scout && scout.confidence >= JUDGE_ACCEPT && !scout.needs_review && (agrees(scout, qwen) || agrees(scout, deterministic))) return { state: 'classified', result: resultFrom(scout, 'Llama Scout resolved the disagreement.'), attempts: [qwen, scout].filter(Boolean), errors };
+  const today = new Date().toISOString().slice(0, 10);
+  const keys = [...geminiApiKeys, geminiApiKey].filter((key, index, values) => key && values.indexOf(key) === index).slice(0, 2).map((key, index) => ({ key, slot: index + 1 }));
+  let finalJudge = null;
+  const eligible = keys.map((entry) => {
+    const state = geminiPool.get(entry.slot) || { date: today, calls: 0, cooldown: false };
+    if (state.date !== today) { state.date = today; state.calls = 0; state.cooldown = false; }
+    geminiPool.set(entry.slot, state); return { ...entry, state };
+  }).filter((entry) => !entry.state.cooldown && entry.state.calls < geminiDailyBudgetPerKey).sort((a, b) => a.state.calls - b.state.calls);
+  for (const entry of eligible) {
+    const before = errors.length;
+    finalJudge = await tryProvider(() => gemini({ previewBuffer, prompt: llamaPrompt(evidence, scout || qwen), apiKey: entry.key }), errors);
+    if (finalJudge) { entry.state.calls += 1; finalJudge.gemini_slot = entry.slot; break; }
+    const failure = errors.slice(before)[0];
+    if (failure?.quota || failure?.retryable) entry.state.cooldown = true;
   }
-
-  // Gemini is an independent judge for a low-confidence or conflicting Qwen
-  // result, and also the final free provider if Qwen is unavailable.
-  const gemini = await attempt(() => geminiProvider({ ...options, apiKey: geminiApiKey }), errors);
-  if (gemini && !gemini.needs_review && gemini.confidence >= JUDGE_ACCEPT && !conflictsWithEvidence(gemini, evidence)) return { state: 'classified', result: gemini, attempts: [qwen, gemini].filter(Boolean), errors, free_only: Boolean(freeOnly) };
-
-  const attempts = [qwen, gemini].filter(Boolean);
-  const allQuota = errors.length > 0 && errors.every((error) => error.quota);
-  const allRetryable = errors.length > 0 && errors.every((error) => error.retryable);
-  if (allQuota || allRetryable) return { state: 'retry_wait', result: null, attempts, errors, retry_code: allQuota ? 'FREE_QUOTA_EXHAUSTED' : 'FREE_PROVIDER_UNAVAILABLE', free_only: Boolean(freeOnly) };
-  return {
-    state: 'needs_review',
-    result: gemini || qwen || { tone: 'Cần duyệt', confidence: 0, primary_family: 'neutral', secondary_family: 'neutral', surface: 'mixed', reason: 'Không có provider miễn phí nào trả kết quả hợp lệ.', needs_review: true, provider: '', model: '' },
-    attempts,
-    errors,
-    free_only: Boolean(freeOnly),
-  };
+  if (finalJudge && finalJudge.confidence >= JUDGE_ACCEPT && !finalJudge.needs_review) return { state: 'classified', result: resultFrom(finalJudge, 'Gemini final judge resolved the hard disagreement.'), attempts: [qwen, scout, finalJudge].filter(Boolean), errors };
+  const temporary = errors.length && errors.every((error) => error.retryable || error.quota);
+  if (temporary && !qwen && !scout) return { state: 'retry_wait', result: null, attempts: [], errors, retry_code: errors.every((error) => error.quota) ? 'FREE_QUOTA_EXHAUSTED' : 'FREE_PROVIDER_UNAVAILABLE' };
+  return { state: 'needs_review', result: resultFrom(finalJudge || scout || qwen || { ...deterministic, needs_review: true, confidence: 0, provider: '', model: '', reason: 'No confident independent resolution.' }), attempts: [qwen, scout, finalJudge].filter(Boolean), errors };
 }
-
 export { ProviderError };

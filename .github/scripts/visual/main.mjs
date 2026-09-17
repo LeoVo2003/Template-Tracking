@@ -13,6 +13,7 @@ const cloudflareAccount = String(process.env.CLOUDFLARE_ACCOUNT_ID || '');
 const cloudflareToken = String(process.env.CLOUDFLARE_API_TOKEN || '');
 const groqApiKey = String(process.env.GROQ_API_KEY || '');
 const geminiApiKey = String(process.env.GEMINI_API_KEY || '');
+const geminiApiKeys = [String(process.env.GEMINI_API_KEY_1 || geminiApiKey || ''), String(process.env.GEMINI_API_KEY_2 || '')].filter(Boolean);
 const freeOnly = 'false' !== String(process.env.FREE_ONLY || 'true').trim().toLowerCase();
 const workflowEvent = String(process.env.WORKFLOW_EVENT || 'workflow_dispatch');
 const apiBase = `${siteUrl}/wp-json/mac-tracker/v1/visual`;
@@ -107,7 +108,7 @@ async function processToneItems(items, aiStrategy, autoAccept) {
     try {
       const { bundle, preview } = await downloadPreview(item);
       const evidence = bundle?.ui?.metrics || { text: 'Capture bundle has no deterministic UI metrics.' };
-      const outcome = await classifyTone({ previewBuffer: preview, evidence, groqApiKey, geminiApiKey, cloudflareAccount, cloudflareToken, freeOnly, strategy: aiStrategy, autoAccept });
+      const outcome = await classifyTone({ previewBuffer: preview, evidence, groqApiKey, geminiApiKey, geminiApiKeys, geminiDailyBudgetPerKey: Number(config.gemini_daily_budget_per_key || 8), cloudflareAccount, cloudflareToken, freeOnly, autoAccept });
       const rawJson = JSON.stringify({ phase: 4, ...outcome, deterministic: evidence });
       if ('classified' === outcome.state) {
         const result = outcome.result;
