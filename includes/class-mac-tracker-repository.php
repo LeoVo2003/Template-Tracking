@@ -321,6 +321,20 @@ class MAC_Tracker_Repository {
 		return true;
 	}
 
+	/** Reset only Visual Tone data while preserving projects, pins, colors and sync history. */
+	public function clear_visual_data() {
+		$attachments = array_values( array_unique( array_filter( array_map( 'absint', (array) $this->wpdb->get_col( "SELECT attachment_id FROM {$this->visuals} WHERE attachment_id > 0" ) ) ) ) );
+		$deleted = $this->wpdb->query( "DELETE FROM {$this->visuals}" );
+		if ( false === $deleted ) {
+			return new WP_Error( 'mac_tracker_visual_clear_failed', $this->wpdb->last_error ?: 'Unable to clear Visual Tone data.' );
+		}
+		foreach ( $attachments as $attachment_id ) {
+			wp_delete_attachment( $attachment_id, true );
+		}
+		update_option( 'mac_tracker_visual_mode', 'manual', false );
+		return (int) $deleted;
+	}
+
 	/** One bulk query for the Projects screen; no WPM/API call and no N+1. */
 	public function project_page( array $filters = array() ) {
 		$per_page = isset( $filters['per_page'] ) ? (int) $filters['per_page'] : 150;

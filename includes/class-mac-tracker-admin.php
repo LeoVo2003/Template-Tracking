@@ -32,6 +32,7 @@ class MAC_Tracker_Admin {
 		add_action( 'wp_ajax_mac_tracker_extract_all_colors', array( $this, 'handle_extract_all_colors_ajax' ) );
 		add_action( 'wp_ajax_mac_tracker_approve_colors', array( $this, 'handle_approve_colors_ajax' ) );
 		add_action( 'admin_post_mac_tracker_save_visual_mode', array( $this, 'handle_save_visual_mode' ) );
+		add_action( 'admin_post_mac_tracker_clear_visual_data', array( $this, 'handle_clear_visual_data' ) );
 		add_action( 'admin_post_mac_tracker_run_visual_workflow', array( $this, 'handle_run_visual_workflow' ) );
 		add_action( 'admin_post_mac_tracker_requeue_visuals', array( $this, 'handle_requeue_visuals' ) );
 		add_action( 'wp_ajax_mac_tracker_visual_action', array( $this, 'handle_visual_action_ajax' ) );
@@ -242,6 +243,7 @@ class MAC_Tracker_Admin {
 				<?php endforeach; endif; ?>
 			</section>
 		</form>
+		<section class="mac-tracker-danger-zone" aria-label="Reset Visual Tone data"><div><p class="mac-tracker-eyebrow">Reset Visual Tone</p><h2>Clear all Visual Tone data</h2><p>Deletes every Visual Tone capture, tone result, queue state and stored screenshot. Projects, pins, Color Review and WPM sync data are kept. Mode returns to Manual.</p></div><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return window.confirm('Clear all Visual Tone data and screenshots? This cannot be undone.');"><?php wp_nonce_field( 'mac_tracker_clear_visual_data' ); ?><input type="hidden" name="action" value="mac_tracker_clear_visual_data"><button class="button mac-tracker-button--danger" type="submit">Clear Visual Tone data</button></form></section>
 		<?php $this->page_end();
 	}
 
@@ -310,6 +312,15 @@ class MAC_Tracker_Admin {
 		$mode = isset( $_POST['visual_mode'] ) && 'auto' === sanitize_key( wp_unslash( $_POST['visual_mode'] ) ) ? 'auto' : 'manual';
 		update_option( 'mac_tracker_visual_mode', $mode, false );
 		$this->redirect( 'mac-project-tracker-visuals', 'Visual Tone mode saved. Scheduled processing remains disabled during the V2 rebuild.', 'success' );
+	}
+
+	public function handle_clear_visual_data() {
+		$this->require_request( 'mac_tracker_clear_visual_data' );
+		$result = $this->repository->clear_visual_data();
+		if ( is_wp_error( $result ) ) {
+			$this->redirect( 'mac-project-tracker-visuals', $result->get_error_message(), 'error' );
+		}
+		$this->redirect( 'mac-project-tracker-visuals', sprintf( 'Visual Tone reset complete. %d record(s) and their stored screenshots were removed.', (int) $result ), 'success' );
 	}
 
 	/** Start one cloud batch for a manual visual action, without holding the browser open. */
