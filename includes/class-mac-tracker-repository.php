@@ -573,7 +573,7 @@ class MAC_Tracker_Repository {
 				// retry_wait. Once its delay has elapsed, return it to the normal
 				// tone queue; no human click and no new capture are required.
 				$this->wpdb->query( "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND tone_status = 'pending' AND screenshot_url <> '' AND manual_locked = 0 AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
-				$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.pipeline_status = 'analysis_queued' AND v.manual_locked = 0 AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()) AND v.screenshot_url <> '' ORDER BY v.updated_at ASC LIMIT %d";
+				$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.pipeline_status = 'analysis_queued' AND v.manual_locked = 0 AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()) AND v.screenshot_url <> '' AND v.capture_bundle_json <> '' ORDER BY v.updated_at ASC LIMIT %d";
 			} else {
 				$this->wpdb->query( "UPDATE {$this->visuals} SET pipeline_status = 'capture_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND capture_status = 'pending' AND screenshot_url = '' AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
 				$sql = "SELECT p.id, p.website_url, '' AS screenshot_url, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR (v.pipeline_status = 'capture_queued' AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()))) ORDER BY CASE WHEN v.id IS NULL THEN 1 ELSE 0 END, v.updated_at ASC, p.task_completed_at DESC, p.id DESC LIMIT %d";
@@ -650,7 +650,7 @@ class MAC_Tracker_Repository {
 		try {
 			$this->reclaim_expired_visual_leases();
 			$placeholders = implode( ',', array_fill( 0, count( $target_ids ), '%d' ) );
-			$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw, v.pipeline_status FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.id IN ({$placeholders}) AND v.manual_locked = 0 AND ((%s = 'tone' AND v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '') OR (%s = 'capture' AND v.pipeline_status = 'capture_queued') OR (%s = 'full' AND ((v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '') OR v.pipeline_status = 'capture_queued'))) ORDER BY FIELD(p.id, " . implode( ',', array_fill( 0, count( $target_ids ), '%d' ) ) . ')';
+			$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw, v.pipeline_status FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.id IN ({$placeholders}) AND v.manual_locked = 0 AND ((%s = 'tone' AND v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '' AND v.capture_bundle_json <> '') OR (%s = 'capture' AND v.pipeline_status = 'capture_queued') OR (%s = 'full' AND ((v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '' AND v.capture_bundle_json <> '') OR v.pipeline_status = 'capture_queued'))) ORDER BY FIELD(p.id, " . implode( ',', array_fill( 0, count( $target_ids ), '%d' ) ) . ')';
 			$args = array_merge( $target_ids, array( $stage, $stage, $stage ), $target_ids );
 			$candidates = (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $args ), ARRAY_A );
 			foreach ( array_slice( $candidates, 0, $limit ) as $item ) {
@@ -802,7 +802,7 @@ class MAC_Tracker_Repository {
 
 	/** A visual-model prompt change can safely reuse the stored screenshots. */
 	public function requeue_visual_tones() {
-		return (int) $this->wpdb->query( $this->wpdb->prepare( "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE pipeline_status IN ('captured', 'classified', 'needs_review') AND screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0", MAC_Tracker_Time::now_utc() ) );
+		return (int) $this->wpdb->query( $this->wpdb->prepare( "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP()) AND pipeline_status NOT IN ('capturing', 'analyzing')", MAC_Tracker_Time::now_utc() ) );
 	}
 
 	/** Revisit only categories affected by a visual taxonomy adjustment. */
@@ -823,7 +823,7 @@ class MAC_Tracker_Repository {
 		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
 		$now = MAC_Tracker_Time::now_utc();
 		if ( 'reanalyze' === $mode ) {
-			$sql = "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE pipeline_status IN ('captured', 'classified', 'needs_review') AND screenshot_url <> '' AND manual_locked = 0 AND project_id IN ({$placeholders})";
+			$sql = "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP()) AND pipeline_status NOT IN ('capturing', 'analyzing') AND project_id IN ({$placeholders})";
 			$args = array_merge( array( $now ), $ids );
 		} elseif ( 'recapture' === $mode ) {
 			// Keep the old capture until the new bundle is committed. This prevents a

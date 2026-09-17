@@ -103,13 +103,13 @@ async function downloadPreview(item) {
   return { bundle, preview: Buffer.from(await response.arrayBuffer()) };
 }
 
-async function processToneItems(items, aiStrategy, autoAccept) {
+async function processToneItems(items, aiStrategy, autoAccept, geminiDailyBudgetPerKey) {
   if ('off' === aiStrategy) { console.log('AI strategy is OFF; no saved screenshots were submitted for analysis.'); return; }
   for (const item of items) {
     try {
       const { bundle, preview } = await downloadPreview(item);
       const evidence = bundle?.ui?.metrics || { text: 'Capture bundle has no deterministic UI metrics.' };
-      const outcome = await classifyTone({ previewBuffer: preview, evidence, groqApiKey, geminiApiKey, geminiApiKeys, geminiDailyBudgetPerKey: Number(config.gemini_daily_budget_per_key || 8), cloudflareAccount, cloudflareToken, freeOnly, autoAccept });
+      const outcome = await classifyTone({ previewBuffer: preview, evidence, groqApiKey, geminiApiKey, geminiApiKeys, geminiDailyBudgetPerKey, cloudflareAccount, cloudflareToken, freeOnly, autoAccept });
       const rawJson = JSON.stringify({ phase: 4, ...outcome, deterministic: evidence });
       if ('classified' === outcome.state) {
         const result = outcome.result;
@@ -141,13 +141,14 @@ try {
     console.log('Visual Tone is in MANUAL mode; scheduled run exited without claiming work.');
   } else {
     const jobs = await claimJobs(scope);
-    await processToneItems(jobs.filter((item) => item.stage === 'tone'), config.ai_strategy || 'smart', Number(config.auto_accept_threshold || 0.85));
+    const geminiDailyBudgetPerKey = Number(config.gemini_daily_budget_per_key || 8);
+    await processToneItems(jobs.filter((item) => item.stage === 'tone'), config.ai_strategy || 'smart', Number(config.auto_accept_threshold || 0.85), geminiDailyBudgetPerKey);
     const capturedIds = await processCaptureItems(jobs.filter((item) => item.stage === 'capture'));
     // A full batch may analyze its own fresh capture, but never any other queue
     // item and never as a second logical website slot.
     if (capturedIds.length && (scope.run_mode === 'batch' || scope.stage === 'full')) {
       const freshToneJobs = await claimJobs({ run_mode: 'targeted', stage: 'tone', target_ids: capturedIds, limit: capturedIds.length });
-      await processToneItems(freshToneJobs, config.ai_strategy || 'smart', Number(config.auto_accept_threshold || 0.85));
+      await processToneItems(freshToneJobs, config.ai_strategy || 'smart', Number(config.auto_accept_threshold || 0.85), geminiDailyBudgetPerKey);
     }
   }
 } finally {
