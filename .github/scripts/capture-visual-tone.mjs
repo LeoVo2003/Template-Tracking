@@ -10,7 +10,7 @@ const cloudflareAccount = String(process.env.CLOUDFLARE_ACCOUNT_ID || '');
 const cloudflareToken = String(process.env.CLOUDFLARE_API_TOKEN || '');
 const apiBase = `${siteUrl}/wp-json/mac-tracker/v1/visual`;
 const workDir = join(process.cwd(), '.visual-capture');
-const tones = ['Vàng kem sáng', 'Vàng đen', 'Vàng trắng', 'Đen vàng', 'Hồng xanh trắng', 'Hồng trắng', 'Hồng đen', 'Đỏ trắng', 'Đỏ hồng', 'Nâu kem', 'Nâu trắng', 'Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Đen trắng', 'Trắng kem', 'Tím hồng', 'Cần duyệt'];
+const tones = ['Vàng kem sáng', 'Vàng đen', 'Vàng trắng', 'Đen vàng', 'Hồng xanh trắng', 'Hồng trắng', 'Hồng đen', 'Đỏ trắng', 'Đỏ hồng', 'Đỏ đen', 'Nâu kem', 'Nâu trắng', 'Nâu vàng', 'Nâu đen', 'Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem', 'Đen trắng', 'Trắng kem', 'Tím hồng', 'Tím trắng', 'Tím đen', 'Cam trắng', 'Cam đen', 'Cần duyệt'];
 
 if (!siteUrl || !secret) throw new Error('MAC_TRACKER_SITE_URL and MAC_TRACKER_AUTOMATION_SECRET are required.');
 
@@ -50,7 +50,16 @@ async function postJson(payload) {
 }
 
 function tonePrompt(evidence) {
-  return `Classify the website into one fixed visual tone. Weight rendered UI palette about 80%: section backgrounds, header/footer bars, buttons, borders, navigation and repeated typography accents. Full-page screenshot colors are only 20% secondary context; photos of nails, skin, flowers, lipstick and products must never override a clear UI palette. The supplied model image hides photo/media content. Important: the evidence percentages are absolute visible UI coverage, not percentages within only saturated pixels; never call a site red or pink from one small button, logo, photo, or accent. Weighted evidence: ${evidence.text}. Choose exactly one label: ${tones.join(', ')}. Key meanings: Vàng kem sáng = light cream/yellow UI; Vàng đen = yellow/gold with black UI; Vàng trắng = yellow/gold with white UI; Đen vàng = dark UI with gold/yellow accents; Hồng xanh trắng = pink and green UI accents on a light page; Hồng trắng = pink UI on a light page; Hồng đen = pink UI with black sections; Đỏ trắng = repeated true red UI on a light page; Đỏ hồng = repeated true red and pink UI; Nâu kem = brown/taupe UI with cream UI; Nâu trắng = brown/taupe with white UI; Xanh vàng = green/blue UI with yellow accents; Xanh trắng = green/blue UI on a light page; Xanh đen = green/blue UI on a dark page; Đen trắng = neutral black/white UI; Trắng kem = mostly white and cream UI; Tím hồng = purple and pink UI. If the UI is genuinely ambiguous, choose Cần duyệt. Return JSON only: {"tone":"one allowed label","confidence":"high|medium|low","reason":"one short Vietnamese sentence about the weighted palette"}.`;
+  return `Classify the website into one fixed visual tone. The supplied image has photos/media and CSS background images hidden, so judge the rendered UI only. Use this decision order: (1) identify the repeated structural hue across sections, header/footer bars, buttons, borders and navigation; (2) pair it with the repeated structural surface—white, cream, gold, or dark; (3) only then use the supplied 20% screenshot context as a tie-breaker. UI palette is 80% of the decision.
+
+The evidence percentages are absolute visible UI coverage, not shares inside only saturated pixels. A minor logo, one button, border, icon, black body text, or any nail/skin/flower/lipstick/product photo must not decide the label. Do not call a site red unless true saturated red is repeated across meaningful UI surfaces (normally about 5% or more of the measured UI). Pale rose is pink; beige/taupe/nude is brown or cream; warm gold is yellow/gold—not red or pink. Do not call a site dark/black from text alone: require substantial dark UI sections.
+
+Weighted evidence: ${evidence.text}
+
+Choose exactly one label: ${tones.join(', ')}.
+Pair meanings: Vàng kem sáng = light cream/yellow UI; Vàng đen = yellow/gold with black UI; Vàng trắng = yellow/gold with white UI; Đen vàng = dark UI with gold/yellow accents. Hồng xanh trắng = pink and green accents on a light UI; Hồng trắng = pink/rose UI on a light surface; Hồng đen = pink with substantial black sections. Đỏ trắng/Đỏ hồng/Đỏ đen require repeated true red, paired with white, pink, or black. Nâu kem/Nâu trắng/Nâu vàng/Nâu đen cover taupe, beige, nude and brown paired with cream, white, gold, or black. Xanh vàng/Xanh trắng/Xanh đen/Xanh kem cover green or blue paired with gold, white, black, or cream. Đen trắng = neutral black/white UI; Trắng kem = mostly white and cream UI. Tím hồng/Tím trắng/Tím đen and Cam trắng/Cam đen follow the same structural pair rule. If two labels remain plausible, the leading hue is small, or the UI is neutral without a clear pair, choose Cần duyệt.
+
+Return JSON only: {"tone":"one allowed label","confidence":"high|medium|low","reason":"one short Vietnamese sentence about the measured UI palette"}.`;
 }
 
 function parseRgb(value) {
@@ -104,13 +113,19 @@ function inferTone(c, dark, light, chromaRatio, cream = 0, coverage = {}) {
   if (yellow >= 0.06 && dark >= 0.38) return 'Vàng đen';
   if (pink >= 0.06 && dark >= 0.32) return 'Hồng đen';
   if (pink >= 0.045 && share('green') >= 0.028) return 'Hồng xanh trắng';
-  if (brown >= 0.065 && c.brown >= 0.30) return light >= 0.44 ? 'Nâu trắng' : 'Nâu kem';
-  if (red >= 0.05 && c.red >= 0.38) return 'Đỏ trắng';
+  if (brown >= 0.065 && c.brown >= 0.30) {
+    if (dark >= 0.34) return 'Nâu đen';
+    if (yellow >= 0.035) return 'Nâu vàng';
+    return light >= 0.44 ? 'Nâu trắng' : 'Nâu kem';
+  }
+  if (red >= 0.05 && c.red >= 0.38) return dark >= 0.32 ? 'Đỏ đen' : 'Đỏ trắng';
   if (pink >= 0.04 && c.pink >= 0.30) return 'Hồng trắng';
   if (red >= 0.025 && pink >= 0.03) return 'Đỏ hồng';
+  if (share('purple') >= 0.045 && dark >= 0.34) return 'Tím đen';
+  if (share('purple') >= 0.045 && light >= 0.45) return 'Tím trắng';
   if (share('purple') >= 0.035 && pink >= 0.025) return 'Tím hồng';
   if (greenBlue >= 0.05 && yellow >= 0.025) return 'Xanh vàng';
-  if (greenBlue >= 0.06) return light >= 0.34 ? 'Xanh trắng' : 'Xanh đen';
+  if (greenBlue >= 0.06) return cream >= 0.20 ? 'Xanh kem' : (light >= 0.34 ? 'Xanh trắng' : 'Xanh đen');
   if (yellow >= 0.055) return light >= 0.42 ? 'Vàng trắng' : 'Vàng kem sáng';
   if (cream >= 0.28) return 'Trắng kem';
   return 'Cần duyệt';
@@ -257,6 +272,13 @@ function parseTone(response, evidence) {
     [/\b(red|đỏ)\b[\s\S]{0,180}\b(pink|hồng)\b|\b(pink|hồng)\b[\s\S]{0,180}\b(red|đỏ)\b/, 'Đỏ hồng'],
     [/\b(purple|tím)\b[\s\S]{0,180}\b(pink|hồng)\b|\b(pink|hồng)\b[\s\S]{0,180}\b(purple|tím)\b/, 'Tím hồng'],
     [/\b(brown|nâu)\b[\s\S]{0,180}\b(cream|kem)\b|\b(cream|kem)\b[\s\S]{0,180}\b(brown|nâu)\b/, 'Nâu kem'],
+    [/\b(brown|nâu)\b[\s\S]{0,180}\b(white|trắng)\b|\b(white|trắng)\b[\s\S]{0,180}\b(brown|nâu)\b/, 'Nâu trắng'],
+    [/\b(brown|nâu)\b[\s\S]{0,180}\b(yellow|gold|vàng)\b|\b(yellow|gold|vàng)\b[\s\S]{0,180}\b(brown|nâu)\b/, 'Nâu vàng'],
+    [/\b(brown|nâu)\b[\s\S]{0,180}\b(black|dark|đen)\b|\b(black|dark|đen)\b[\s\S]{0,180}\b(brown|nâu)\b/, 'Nâu đen'],
+    [/\b(purple|tím)\b[\s\S]{0,180}\b(white|trắng)\b|\b(white|trắng)\b[\s\S]{0,180}\b(purple|tím)\b/, 'Tím trắng'],
+    [/\b(purple|tím)\b[\s\S]{0,180}\b(black|dark|đen)\b|\b(black|dark|đen)\b[\s\S]{0,180}\b(purple|tím)\b/, 'Tím đen'],
+    [/\b(orange|cam)\b[\s\S]{0,180}\b(white|trắng)\b|\b(white|trắng)\b[\s\S]{0,180}\b(orange|cam)\b/, 'Cam trắng'],
+    [/\b(orange|cam)\b[\s\S]{0,180}\b(black|dark|đen)\b|\b(black|dark|đen)\b[\s\S]{0,180}\b(orange|cam)\b/, 'Cam đen'],
   ].find(([pattern]) => pattern.test(normalized))?.[1];
   const candidateTone = tones.includes(parsed.tone) ? parsed.tone : (explicitTone || englishTone || '');
   // Strong measured UI evidence wins. For a borderline palette, let the

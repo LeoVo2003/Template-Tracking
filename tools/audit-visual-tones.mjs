@@ -7,16 +7,26 @@ import { dirname, resolve } from 'node:path';
 const { chromium } = await import(process.env.MAC_TRACKER_PLAYWRIGHT_MODULE || 'playwright');
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const projects = JSON.parse(await readFile(resolve(root, 'data/all_projects.json'), 'utf8'));
-const sampleSize = Math.max(1, Math.min(100, Number(process.env.SAMPLE_SIZE || 100)));
+const sampleSize = Math.max(1, Math.min(300, Number(process.env.SAMPLE_SIZE || 300)));
 const workers = Math.max(1, Math.min(8, Number(process.env.SAMPLE_WORKERS || 5)));
 
-const urls = [...new Set(projects.flatMap((project) => [project.domain_url, project.web_layout])
-  .filter((url) => /^https?:\/\//i.test(url || '') && !/sharepoint|docs\.google|mailserver/i.test(url)))];
-for (let index = urls.length - 1; index > 0; index -= 1) {
+const cleanUrl = (value) => (String(value || '').match(/https?:\/\/[^\s<>()]+/i) || [])[0] || '';
+const sourceTasks = projects.flatMap((project) => (project.tasks || [])
+  .filter((task) => task.title === '[Website] Action Design')
+  .map((task) => ({
+    url: cleanUrl(task.extra_data?.web_demo_url),
+    taskId: task.id,
+    projectId: project.id,
+    projectName: project.full_name || project.name || '',
+  })))
+  .filter((task) => /^https?:\/\//i.test(task.url) && !/sharepoint|docs\.google|mailserver/i.test(task.url));
+const byUrl = new Map(sourceTasks.map((task) => [task.url, task]));
+const sources = [...byUrl.values()];
+for (let index = sources.length - 1; index > 0; index -= 1) {
   const pick = Math.floor(Math.random() * (index + 1));
-  [urls[index], urls[pick]] = [urls[pick], urls[index]];
+  [sources[index], sources[pick]] = [sources[pick], sources[index]];
 }
-const selected = urls.slice(0, sampleSize);
+const selected = sources.slice(0, sampleSize);
 
 function hsl({ r, g, b }) {
   r /= 255; g /= 255; b /= 255;
@@ -58,19 +68,22 @@ function classify(buckets) {
   else if (coverage.yellow >= 0.06 && dark >= 0.38) tone = 'Vàng đen';
   else if (coverage.pink >= 0.06 && dark >= 0.32) tone = 'Hồng đen';
   else if (coverage.pink >= 0.045 && coverage.green >= 0.028) tone = 'Hồng xanh trắng';
-  else if (coverage.brown >= 0.065 && mix.brown >= 0.30) tone = light >= 0.44 ? 'Nâu trắng' : 'Nâu kem';
-  else if (coverage.red >= 0.05 && mix.red >= 0.38) tone = 'Đỏ trắng';
+  else if (coverage.brown >= 0.065 && mix.brown >= 0.30) tone = dark >= 0.34 ? 'Nâu đen' : (coverage.yellow >= 0.035 ? 'Nâu vàng' : (light >= 0.44 ? 'Nâu trắng' : 'Nâu kem'));
+  else if (coverage.red >= 0.05 && mix.red >= 0.38) tone = dark >= 0.32 ? 'Đỏ đen' : 'Đỏ trắng';
   else if (coverage.pink >= 0.04 && mix.pink >= 0.30) tone = 'Hồng trắng';
   else if (coverage.red >= 0.025 && coverage.pink >= 0.03) tone = 'Đỏ hồng';
+  else if (coverage.purple >= 0.045 && dark >= 0.34) tone = 'Tím đen';
+  else if (coverage.purple >= 0.045 && light >= 0.45) tone = 'Tím trắng';
   else if (coverage.purple >= 0.035 && coverage.pink >= 0.025) tone = 'Tím hồng';
   else if (greenBlue >= 0.05 && coverage.yellow >= 0.025) tone = 'Xanh vàng';
-  else if (greenBlue >= 0.06) tone = light >= 0.34 ? 'Xanh trắng' : 'Xanh đen';
+  else if (greenBlue >= 0.06) tone = cream >= 0.20 ? 'Xanh kem' : (light >= 0.34 ? 'Xanh trắng' : 'Xanh đen');
   else if (coverage.yellow >= 0.055) tone = light >= 0.42 ? 'Vàng trắng' : 'Vàng kem sáng';
   else if (cream >= 0.28) tone = 'Trắng kem';
   return { tone, coverage: Object.fromEntries(Object.entries(coverage).map(([key, value]) => [key, Math.round(value * 100)])) };
 }
 
-async function inspect(browser, url) {
+async function inspect(browser, source) {
+  const { url } = source;
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 16000 });
@@ -99,12 +112,12 @@ async function inspect(browser, url) {
       }
       return { samples: result };
     });
-    if (samples.challenge) return { url, status: 'challenge' };
+    if (samples.challenge) return { ...source, status: 'challenge' };
     const buckets = { red: 0, pink: 0, brown: 0, yellow: 0, green: 0, blue: 0, purple: 0, dark: 0, light: 0, cream: 0, neutral: 0, total: 0 };
     for (const [r, g, b, weight] of samples.samples) { buckets[category({ r, g, b })] += weight; buckets.total += weight; }
-    return { url, status: 'ok', ...classify(buckets) };
+    return { ...source, status: 'ok', ...classify(buckets) };
   } catch (error) {
-    return { url, status: 'failed', reason: error.message.replace(/\s+/g, ' ').slice(0, 180) };
+    return { ...source, status: 'failed', reason: error.message.replace(/\s+/g, ' ').slice(0, 180) };
   } finally { await page.close(); }
 }
 
@@ -114,6 +127,6 @@ const results = [];
 await Promise.all(Array.from({ length: workers }, async () => { while (next < selected.length) results.push(await inspect(browser, selected[next++])); }));
 await browser.close();
 const completed = results.filter((result) => 'ok' === result.status);
-const report = { selected: selected.length, analyzed: completed.length, challenged: results.filter((result) => 'challenge' === result.status).length, failed: results.filter((result) => 'failed' === result.status).length, tones: completed.reduce((count, result) => ({ ...count, [result.tone]: (count[result.tone] || 0) + 1 }), {}), results };
+const report = { source: 'task.extra_data.web_demo_url from [Website] Action Design', sourceTasks: sourceTasks.length, uniqueUrls: sources.length, selected: selected.length, analyzed: completed.length, challenged: results.filter((result) => 'challenge' === result.status).length, failed: results.filter((result) => 'failed' === result.status).length, tones: completed.reduce((count, result) => ({ ...count, [result.tone]: (count[result.tone] || 0) + 1 }), {}), results };
 if (process.env.SAMPLE_OUTPUT) await writeFile(process.env.SAMPLE_OUTPUT, JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));

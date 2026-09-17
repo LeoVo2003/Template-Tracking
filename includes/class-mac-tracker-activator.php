@@ -152,39 +152,11 @@ class MAC_Tracker_Activator {
 		if ( version_compare( $previous_version, '0.11.2', '<' ) ) {
 			( new MAC_Tracker_Repository() )->purge_unapproved_color_records();
 		}
-		if ( version_compare( $previous_version, '0.12.7', '<' ) ) {
-			( new MAC_Tracker_Repository() )->requeue_visual_tones();
-		}
-		if ( version_compare( $previous_version, '0.13.5', '<' ) ) {
-			( new MAC_Tracker_Repository() )->requeue_visual_tones_by_labels( array( 'Hồng trắng', 'Đỏ hồng' ) );
-		}
-		if ( version_compare( $previous_version, '0.13.6', '<' ) ) {
-			( new MAC_Tracker_Repository() )->requeue_visual_tones_by_labels( array( 'Hồng trắng', 'Hồng xanh trắng', 'Đỏ trắng', 'Đỏ hồng' ) );
-		}
 		if ( version_compare( $previous_version, '0.13.7', '<' ) ) {
 			( new MAC_Tracker_Repository() )->repair_legacy_visual_claims();
 		}
-		if ( version_compare( $previous_version, '0.13.12', '<' ) ) {
-			// The classifier now measures rendered UI colors with media removed.
-			// Revisit prior AI results once, while preserving manual reviews.
-			( new MAC_Tracker_Repository() )->requeue_visual_tones();
-		}
-		if ( version_compare( $previous_version, '0.13.13', '<' ) ) {
-			// UI remains primary, while full screenshot colors contribute 20%.
-			// Revisit prior AI results once, while preserving manual reviews.
-			( new MAC_Tracker_Repository() )->requeue_visual_tones();
-		}
-		if ( version_compare( $previous_version, '0.13.14', '<' ) ) {
-			// Revisit AI tones after changing the UI/image weighting; manual reviews stay locked.
-			( new MAC_Tracker_Repository() )->requeue_visual_tones();
-		}
-		if ( version_compare( $previous_version, '0.13.16', '<' ) ) {
-			// Expand the tone taxonomy; recalculate AI results while preserving manual reviews.
-			( new MAC_Tracker_Repository() )->requeue_visual_tones();
-		}
-		if ( version_compare( $previous_version, '0.13.17', '<' ) ) {
-			// Prevent small UI accents and black body text from deciding a whole tone.
-			// Existing manual selections remain locked while AI results are revisited.
+		if ( version_compare( $previous_version, '0.13.19', '<' ) ) {
+			// Pair taxonomy and prompt calibration changed; keep manual reviews locked.
 			( new MAC_Tracker_Repository() )->requeue_visual_tones();
 		}
 		update_option( 'mac_tracker_db_version', MAC_TRACKER_VERSION, false );
