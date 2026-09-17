@@ -474,7 +474,7 @@ class MAC_Tracker_Admin {
 		foreach ( $this->repository->visual_review_rows( 300 ) as $row ) {
 			if ( $wanted && empty( $map[ (int) $row['id'] ] ) ) { continue; }
 			$manual = $this->visual_is_manual( $row );
-			$statuses[] = array( 'id' => (int) $row['id'], 'pipeline_status' => (string) ( $row['pipeline_status'] ?? 'idle' ), 'capture_status' => (string) ( $row['capture_status'] ?? '' ), 'tone_status' => (string) ( $row['tone_status'] ?? '' ), 'tone' => (string) ( $row['tone'] ?? '' ), 'tone_reason' => $manual ? '' : (string) ( $row['tone_reason'] ?? '' ), 'manual' => $manual, 'provider' => (string) ( $row['ai_provider'] ?? '' ), 'model' => (string) ( $row['ai_model'] ?? '' ), 'last_error_code' => (string) ( $row['last_error_code'] ?? '' ), 'last_error_message' => (string) ( $row['last_error_message'] ?? '' ), 'next_retry_at' => (string) ( $row['next_retry_at'] ?? '' ), 'screenshot_url' => esc_url_raw( $row['screenshot_url'] ?? '' ), 'claimed_at' => (string) ( $row['claimed_at'] ?? '' ), 'lease_until' => (string) ( $row['lease_until'] ?? '' ) );
+			$statuses[] = array( 'id' => (int) $row['id'], 'pipeline_status' => (string) ( $row['pipeline_status'] ?? 'idle' ), 'capture_status' => (string) ( $row['capture_status'] ?? '' ), 'tone_status' => (string) ( $row['tone_status'] ?? '' ), 'tone' => (string) ( $row['tone'] ?? '' ), 'tone_group' => (string) ( $row['tone_group'] ?? '' ), 'precise_tone' => (string) ( $row['precise_tone'] ?? '' ), 'tone_reason' => $manual ? '' : (string) ( $row['tone_reason'] ?? '' ), 'manual' => $manual, 'provider' => (string) ( $row['ai_provider'] ?? '' ), 'model' => (string) ( $row['ai_model'] ?? '' ), 'last_error_code' => (string) ( $row['last_error_code'] ?? '' ), 'last_error_message' => (string) ( $row['last_error_message'] ?? '' ), 'next_retry_at' => (string) ( $row['next_retry_at'] ?? '' ), 'screenshot_url' => esc_url_raw( $row['screenshot_url'] ?? '' ), 'claimed_at' => (string) ( $row['claimed_at'] ?? '' ), 'lease_until' => (string) ( $row['lease_until'] ?? '' ) );
 		}
 		wp_send_json_success( array( 'statuses' => $statuses, 'stats' => $this->repository->visual_stats() ) );
 	}
@@ -754,6 +754,8 @@ class MAC_Tracker_Admin {
 		$manual = $this->visual_is_manual( $row );
 		echo '<span class="' . esc_attr( $classes ) . '" title="' . esc_attr( $title ) . '">' . $content . '</span>';
 		if ( $manual ) { echo '<span class="mac-tracker-tone-manual">Đã sửa tay</span>'; }
+		$precise = trim( (string) ( $row['precise_tone'] ?? '' ) );
+		if ( '' !== $precise && $precise !== $tone ) { echo '<span class="mac-tracker-tone-precise">Precise: ' . esc_html( $precise ) . '</span>'; }
 		$snapshot_id = (int) $row['id'];
 		$open = 'Cần duyệt' === $tone ? ' open' : '';
 		$summary = 'Cần duyệt' === $tone ? 'Chọn tone đúng' : 'Sửa tone';
@@ -773,7 +775,7 @@ class MAC_Tracker_Admin {
 		$accent = (array) ( $deterministic['primary_accent'] ?? array() );
 		$outcome = (array) ( $raw['result'] ?? array() );
 		echo '<details class="mac-tracker-visual-debug"><summary>Evidence &amp; provider trace</summary><dl>';
-		echo '<dt>Canvas</dt><dd>' . esc_html( trim( (string) ( $canvas['family'] ?? '' ) . ' / ' . (string) ( $canvas['mode'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
+		echo '<dt>Canvas</dt><dd>' . esc_html( trim( (string) ( $canvas['primary_surface'] ?? $canvas['family'] ?? '' ) . ' / ' . (string) ( $canvas['secondary_surface'] ?? '' ) . ' / ' . (string) ( $canvas['mode'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
 		echo '<dt>Primary accent</dt><dd>' . esc_html( trim( (string) ( $accent['family'] ?? '' ) . ' ' . (string) ( $accent['hex'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
 		echo '<dt>Final resolver</dt><dd>' . esc_html( (string) ( $outcome['result']['reason'] ?? $row['tone_reason'] ?? 'Pending' ) ) . '</dd>';
 		echo '<dt>Provider errors</dt><dd>' . esc_html( wp_json_encode( (array) ( $raw['errors'] ?? array() ) ) ) . '</dd></dl></details>';

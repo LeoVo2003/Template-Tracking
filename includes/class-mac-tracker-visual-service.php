@@ -99,6 +99,8 @@ class MAC_Tracker_Visual_Service {
 			'model'         => sanitize_text_field( (string) $request->get_param( 'model' ) ),
 			'ai_confidence' => (float) $request->get_param( 'confidence' ),
 			'needs_review'  => rest_sanitize_boolean( $request->get_param( 'needs_review' ) ),
+			'tone_group'    => sanitize_text_field( (string) $request->get_param( 'tone_group' ) ),
+			'precise_tone'  => sanitize_text_field( (string) $request->get_param( 'precise_tone' ) ),
 		);
 		if ( 'tone' === $mode ) {
 			$result = $this->repository->save_visual_tone( $snapshot_id, sanitize_text_field( $request->get_param( 'tone' ) ), sanitize_text_field( $request->get_param( 'confidence' ) ), sanitize_text_field( $request->get_param( 'reason' ) ), $raw_json, $job_token, $metadata );

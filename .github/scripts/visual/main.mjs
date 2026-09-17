@@ -113,7 +113,7 @@ async function processToneItems(items, aiStrategy, autoAccept, geminiDailyBudget
       const rawJson = JSON.stringify({ phase: 4, ...outcome, deterministic: evidence });
       if ('classified' === outcome.state) {
         const result = outcome.result;
-        await postJson({ mode: 'tone', snapshot_id: item.id, job_token: item.job_token, tone: result.tone, confidence: result.confidence, reason: result.reason, provider: result.provider, model: result.model, needs_review: result.needs_review, raw_json: rawJson });
+        await postJson({ mode: 'tone', snapshot_id: item.id, job_token: item.job_token, tone: result.tone_group, precise_tone: result.precise_tone, tone_group: result.tone_group, confidence: result.confidence, reason: result.reason, provider: result.provider, model: result.model, needs_review: result.needs_review, raw_json: rawJson });
         if ('gemini' === result.provider) summary.geminiJudged += 1; else summary.qwenAccepted += 1;
         console.log(`Classified #${item.id} with ${result.provider}/${result.model}: ${result.tone} @ ${result.confidence}`);
       } else if ('retry_wait' === outcome.state) {
@@ -122,7 +122,7 @@ async function processToneItems(items, aiStrategy, autoAccept, geminiDailyBudget
         summary.providerDeferred += 1;
       } else {
         const result = outcome.result;
-        await postJson({ mode: 'tone_needs_review', snapshot_id: item.id, job_token: item.job_token, tone: result.tone, confidence: result.confidence, reason: result.reason, provider: result.provider, model: result.model, raw_json: rawJson });
+        await postJson({ mode: 'tone_needs_review', snapshot_id: item.id, job_token: item.job_token, tone: result.tone_group, precise_tone: result.precise_tone, tone_group: result.tone_group, confidence: result.confidence, reason: result.reason, provider: result.provider, model: result.model, raw_json: rawJson });
         summary.needsReview += 1;
       }
     } catch (error) { await reportFailure('tone_failed', item, error); console.warn(`Tone failed #${item.id}: ${error.message}`); }

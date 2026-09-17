@@ -1,7 +1,11 @@
 {
-  "version": 1,
+  "version": 2,
   "minimum_reviewed_labels": 30,
-  "notes": "Expected tones are manual gold labels. Null means the site is a candidate awaiting human review and is never used to approve Auto mode.",
+  "notes": "Expected tones are manual gold labels. Null means the site is a candidate awaiting human review and is never used to approve Auto mode. V3.15 fixture expectations are unit-regression cases until their source screenshots are attached to the gold capture set.",
+  "v315_regression_fixtures": [
+    { "id": "reported-navy-white", "expected_tone_group": "Xanh trắng", "expected_precise_tone": "Navy trắng", "expected_primary_family": "navy", "expected_canvas_mode": "mixed", "expected_primary_surface": "white", "notes": "Reported dark-navy hero/footer with large white structural sections; never group as Xanh đen." },
+    { "id": "reported-gray-cream", "expected_tone_group": "Xám kem", "expected_precise_tone": "Greige kem", "expected_primary_family": "greige", "expected_canvas_mode": "light", "expected_primary_surface": "cream", "notes": "Reported light gray/greige cards on a cream structural canvas; neutral is valid." }
+  ],
   "entries": [
     { "id": "ginelle", "name": "Ginelle Nail & Spa", "url": "https://ginellenailspa.com/home", "expected_tone": "Hồng trắng", "reviewed": true, "notes": "White structural base with repeated pink UI accents." },
     { "id": "azure", "name": "Azure Nail Lounge", "url": "https://azurenaillounge.com/home", "expected_tone": "Xanh trắng", "reviewed": true, "notes": "Light blue/cyan structural palette." },

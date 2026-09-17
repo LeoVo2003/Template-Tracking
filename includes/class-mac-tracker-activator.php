@@ -115,6 +115,8 @@ class MAC_Tracker_Activator {
 				preview_attachment_id bigint(20) unsigned NOT NULL DEFAULT 0,
 				screenshot_url varchar(2048) NOT NULL DEFAULT '',
 				tone varchar(64) NOT NULL DEFAULT '',
+				tone_group varchar(64) NOT NULL DEFAULT '',
+				precise_tone varchar(128) NOT NULL DEFAULT '',
 				confidence varchar(16) NOT NULL DEFAULT '',
 				tone_reason text NULL,
 				tone_status varchar(32) NOT NULL DEFAULT 'pending',

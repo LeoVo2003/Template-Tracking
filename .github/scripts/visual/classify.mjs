@@ -2,25 +2,25 @@ import { classifyWithGroq } from './providers/groq-qwen.mjs';
 import { classifyWithCloudflareQwen } from './providers/cloudflare-qwen.mjs';
 import { classifyWithLlamaScout } from './providers/cloudflare-llama-scout.mjs';
 import { classifyWithGemini } from './providers/gemini.mjs';
-import { ProviderError } from './providers/common.mjs';
-import { mapVietnameseTone } from './tone-map.mjs';
+import { ProviderError, FAMILIES, CANVAS_FAMILIES } from './providers/common.mjs';
+import { resolveTone } from './tone-map.mjs';
 
 export const AUTO_ACCEPT = 0.85;
 const JUDGE_ACCEPT = 0.8;
 const GEMINI_DAILY_BUDGET = Math.max(1, Number.parseInt(process.env.GEMINI_DAILY_BUDGET_PER_KEY || '8', 10) || 8);
 const geminiPool = new Map();
-const schemaPrompt = `Return JSON: canvas_mode(light|dark|mixed), canvas_family(white|cream|gray|black), primary_family(red|pink|orange|yellow_gold|brown|green|teal|blue|purple|neutral), secondary_family(same enum), style_tone(light_minimal|corporate_clean|dark_modern|vibrant_bold|warm_earthy|soft_pastel), confidence(0..1), reason, needs_review.`;
+const schemaPrompt = `Return JSON only: canvas_mode(light|dark|mixed), canvas_family, primary_surface, secondary_surface (${CANVAS_FAMILIES.join('|')}), primary_family and secondary_family (${FAMILIES.join('|')}), style_tone(light_minimal|corporate_clean|dark_modern|vibrant_bold|warm_earthy|soft_pastel), confidence(0..1), reason, needs_review. Do not output a Vietnamese label.`;
 
 function evidenceForAi(evidence) {
   const semantic = evidence.semantic_model || {};
-  return { canvas: semantic.canvas, palette: semantic.palette, families: semantic.families, primary_accent: semantic.primary_accent, secondary_accent: semantic.secondary_accent, role_evidence: semantic.role_evidence, ambiguous: semantic.ambiguous };
+  return { canvas: semantic.canvas, palette: semantic.palette, families: semantic.families, primary_accent: semantic.primary_accent, secondary_accent: semantic.secondary_accent, role_evidence: semantic.role_evidence, structural_evidence: semantic.structural_evidence, ambiguous: semantic.ambiguous };
 }
 export function tonePrompt(evidence) {
   return `You are a Lead UI/UX Color System Auditor. Analyze the WEBSITE DESIGN SYSTEM, not content imagery. Ignore photos, skin, nails, products, flowers, model clothing and illustrations. Identify canvas separately from the repeated UI accent used in CTA, active nav, buttons, headings and structural accents. The measured palette and semantic-role evidence are factual; do not invent colors. Carefully distinguish pale pink/cream, peach/orange/pink, beige/taupe/brown, gold/yellow_gold, navy/black, teal/blue/green. If ambiguous set needs_review=true. Do not output a Vietnamese final label. ${schemaPrompt}\nEvidence: ${JSON.stringify(evidenceForAi(evidence))}`;
 }
 function llamaPrompt(evidence, qwen) { return `You are an independent UI color-system judge. Pixel/DOM evidence and a visual auditor disagree or are uncertain. Ignore media photography; decide canvas and repeated interface accents from raw evidence. Do not blindly trust either source. ${schemaPrompt}\nPixel/DOM: ${JSON.stringify(evidenceForAi(evidence))}\nSeparate auditor: ${JSON.stringify(qwen)}`; }
-function agrees(a, b) { return a && b && a.canvas_family === b.canvas_family && a.primary_family === b.primary_family; }
-function resultFrom(semantic, reason) { const tone = mapVietnameseTone(semantic); return { ...semantic, tone, reason: reason || semantic.reason, needs_review: semantic.needs_review || 'Cần duyệt' === tone }; }
+function agrees(a, b) { return a && b && a.primary_surface === b.primary_surface && a.primary_family === b.primary_family; }
+function resultFrom(semantic, reason) { const resolved = resolveTone(semantic); return { ...semantic, ...resolved, tone: resolved.tone_group, reason: reason || semantic.reason, needs_review: semantic.needs_review || 'Cần duyệt' === resolved.tone_group }; }
 function serial(error) { return { provider: error.provider || 'unknown', code: error.code || 'PROVIDER_ERROR', status: error.status || 0, quota: !!error.quota, retryable: !!error.retryable, message: String(error.message || '').slice(0, 300) }; }
 async function tryProvider(fn, errors) { try { return await fn(); } catch (error) { errors.push(serial(error)); return null; } }
 
@@ -31,7 +31,7 @@ export async function classifyTone({ previewBuffer, evidence, groqApiKey, gemini
   let qwen = await tryProvider(() => groq({ ...options, apiKey: groqApiKey }), errors);
   if (!qwen) qwen = await tryProvider(() => cfQwen({ ...options, accountId: cloudflareAccount, apiToken: cloudflareToken }), errors);
   const pixel = evidence.semantic_model || {};
-  const deterministic = { canvas_family: pixel.canvas?.family, primary_family: pixel.primary_accent?.family, secondary_family: pixel.secondary_accent?.family, confidence: pixel.canvas?.confidence || 0 };
+  const deterministic = { canvas_mode: pixel.canvas?.mode || 'light', canvas_family: pixel.canvas?.family || 'white', primary_surface: pixel.canvas?.primary_surface || pixel.canvas?.family || 'white', secondary_surface: pixel.canvas?.secondary_surface || 'other', primary_family: pixel.primary_accent?.family || 'neutral', secondary_family: pixel.secondary_accent?.family || 'neutral', confidence: pixel.canvas?.confidence || 0 };
   if (qwen && agrees(qwen, deterministic) && qwen.confidence >= autoAccept && !qwen.needs_review) return { state: 'classified', result: resultFrom(qwen, 'Pixel/DOM and Qwen agreement.'), attempts: [qwen], errors };
   const scout = await tryProvider(() => llama({ previewBuffer, prompt: llamaPrompt(evidence, qwen), accountId: cloudflareAccount, apiToken: cloudflareToken }), errors);
   if (scout && scout.confidence >= JUDGE_ACCEPT && !scout.needs_review && (agrees(scout, qwen) || agrees(scout, deterministic))) return { state: 'classified', result: resultFrom(scout, 'Llama Scout resolved the disagreement.'), attempts: [qwen, scout].filter(Boolean), errors };

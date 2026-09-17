@@ -34,7 +34,9 @@ async function saveReport(report) {
     `- Capture success: ${report.metrics?.capture_success_percent ?? 'n/a'}%`,
     `- False challenge/error classifications: ${report.metrics?.false_page_classifications ?? 'n/a'}`,
     `- Repeatability: ${report.metrics?.repeatability_percent ?? 'n/a'}%`,
-    `- Tone accuracy: ${report.metrics?.tone_accuracy_percent ?? 'n/a'}%`,
+    `- Tone-group accuracy: ${report.metrics?.tone_group_accuracy_percent ?? 'n/a'}%`,
+    `- Precise-tone accuracy: ${report.metrics?.precise_tone_accuracy_percent ?? 'n/a'}%`,
+    `- Family / canvas-mode accuracy: ${report.metrics?.family_accuracy_percent ?? 'n/a'}% / ${report.metrics?.canvas_mode_accuracy_percent ?? 'n/a'}%`,
     `- AUTO eligible: ${report.pass ? 'YES' : 'NO'}`, '',
   ].join('\n');
   console.log(summary);
@@ -52,7 +54,7 @@ if (reviewed.length < baseReport.required_labels) {
   const results = [];
   try {
     for (const [index, entry] of selected.entries()) {
-      const row = { id: entry.id, name: entry.name, url: entry.url, expected_tone: entry.expected_tone };
+      const row = { id: entry.id, name: entry.name, url: entry.url, expected_tone: entry.expected_tone, expected_precise_tone: entry.expected_precise_tone || null, expected_primary_family: entry.expected_primary_family || null, expected_canvas_mode: entry.expected_canvas_mode || null, expected_primary_surface: entry.expected_primary_surface || null };
       try {
         const first = await captureRenderedPage(browser, entry.url, index + 1, `benchmark-${Date.now()}-${index}`);
         row.capture = 'ok';
@@ -64,7 +66,7 @@ if (reviewed.length < baseReport.required_labels) {
           cloudflareAccount: process.env.CLOUDFLARE_ACCOUNT_ID || '', cloudflareToken: process.env.CLOUDFLARE_API_TOKEN || '',
           geminiApiKeys: [process.env.GEMINI_API_KEY_1 || process.env.GEMINI_API_KEY || '', process.env.GEMINI_API_KEY_2 || ''], freeOnly: true, autoAccept: Number(process.env.BENCHMARK_AUTO_ACCEPT || 0.85),
         });
-        row.first = { state: primary.state, tone: primary.result?.tone || null, provider: primary.result?.provider || null, confidence: primary.result?.confidence ?? null };
+        row.first = { state: primary.state, tone: primary.result?.tone_group || primary.result?.tone || null, precise_tone: primary.result?.precise_tone || null, primary_family: primary.result?.primary_family || null, canvas_mode: primary.result?.canvas_mode || null, primary_surface: primary.result?.primary_surface || null, provider: primary.result?.provider || null, confidence: primary.result?.confidence ?? null };
         if (repeat && 'classified' === primary.state) {
           const second = await captureRenderedPage(browser, entry.url, index + 1, `benchmark-repeat-${Date.now()}-${index}`);
           const repeated = await classifyTone({
@@ -73,7 +75,7 @@ if (reviewed.length < baseReport.required_labels) {
             cloudflareAccount: process.env.CLOUDFLARE_ACCOUNT_ID || '', cloudflareToken: process.env.CLOUDFLARE_API_TOKEN || '',
             geminiApiKeys: [process.env.GEMINI_API_KEY_1 || process.env.GEMINI_API_KEY || '', process.env.GEMINI_API_KEY_2 || ''], freeOnly: true, autoAccept: Number(process.env.BENCHMARK_AUTO_ACCEPT || 0.85),
           });
-          row.repeat = { state: repeated.state, tone: repeated.result?.tone || null };
+          row.repeat = { state: repeated.state, tone: repeated.result?.tone_group || repeated.result?.tone || null, precise_tone: repeated.result?.precise_tone || null };
         }
       } catch (error) {
         row.capture = blockedCodes.has(error.code) ? 'blocked' : 'failed';
@@ -90,17 +92,26 @@ if (reviewed.length < baseReport.required_labels) {
   const classified = captured.filter((row) => 'classified' === row.first?.state);
   const repeatable = classified.filter((row) => row.repeat && 'classified' === row.repeat.state);
   const correct = classified.filter((row) => row.first.tone === row.expected_tone);
+  const preciseLabeled = classified.filter((row) => row.expected_precise_tone);
+  const familyLabeled = classified.filter((row) => row.expected_primary_family);
+  const canvasModeLabeled = classified.filter((row) => row.expected_canvas_mode);
+  const surfaceLabeled = classified.filter((row) => row.expected_primary_surface);
   const falsePages = results.filter((row) => 'blocked' === row.capture && row.first?.tone).length;
   const percent = (part, total) => total ? Number((part * 100 / total).toFixed(1)) : 0;
   const metrics = {
     capture_success_percent: percent(captured.length, eligible.length),
     false_page_classifications: falsePages,
     repeatability_percent: repeat ? percent(repeatable.filter((row) => row.first.tone === row.repeat.tone).length, repeatable.length) : null,
-    tone_accuracy_percent: percent(correct.length, classified.length),
+    tone_group_accuracy_percent: percent(correct.length, classified.length),
+    precise_tone_accuracy_percent: preciseLabeled.length ? percent(preciseLabeled.filter((row) => row.first.precise_tone === row.expected_precise_tone).length, preciseLabeled.length) : null,
+    family_accuracy_percent: familyLabeled.length ? percent(familyLabeled.filter((row) => row.first.primary_family === row.expected_primary_family).length, familyLabeled.length) : null,
+    canvas_mode_accuracy_percent: canvasModeLabeled.length ? percent(canvasModeLabeled.filter((row) => row.first.canvas_mode === row.expected_canvas_mode).length, canvasModeLabeled.length) : null,
+    canvas_surface_accuracy_percent: surfaceLabeled.length ? percent(surfaceLabeled.filter((row) => row.first.primary_surface === row.expected_primary_surface).length, surfaceLabeled.length) : null,
     provider_usage: classified.reduce((counts, row) => { const provider = row.first?.provider || 'none'; counts[provider] = (counts[provider] || 0) + 1; return counts; }, {}),
     confusion_matrix: classified.filter((row) => row.first.tone !== row.expected_tone).reduce((counts, row) => { const key = `${row.expected_tone}->${row.first.tone}`; counts[key] = (counts[key] || 0) + 1; return counts; }, {}),
+    confusion_counters: familyLabeled.reduce((counts, row) => { const key = `${row.expected_primary_family}_to_${row.first.primary_family}`; if (row.expected_primary_family !== row.first.primary_family) counts[key] = (counts[key] || 0) + 1; return counts; }, { navy_to_black: 0, gray_to_white: 0, greige_to_cream: 0, beige_to_brown: 0, pink_to_cream: 0, gold_to_brown: 0, orange_to_brown: 0 }),
   };
-  const pass = metrics.capture_success_percent >= 95 && 0 === metrics.false_page_classifications && (!repeat || metrics.repeatability_percent >= 95) && metrics.tone_accuracy_percent >= 90;
+  const pass = metrics.capture_success_percent >= 95 && 0 === metrics.false_page_classifications && (!repeat || metrics.repeatability_percent >= 95) && metrics.tone_group_accuracy_percent >= 90;
   await saveReport({ ...baseReport, selected: selected.length, repeat, metrics, pass, results });
   if (!pass) process.exitCode = 1;
 }

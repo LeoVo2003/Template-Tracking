@@ -400,7 +400,7 @@
 .mac-tracker-palette-link--empty { color: var(--text-muted); }
 .mac-tracker-tone { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 3px 7px 3px 5px; color: var(--tone-ink, var(--text)); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 700; line-height: 1; text-decoration: none; background: var(--tone-soft, var(--mist-light)); border: 1px solid var(--tone-line, var(--line)); border-radius: 999px; white-space: nowrap; }
 .mac-tracker-tone:hover { color: var(--tone-ink, var(--text)); filter: brightness(.97); }
-.mac-tracker-tone i { display: block; width: 12px; height: 12px; background: linear-gradient(135deg, var(--tone-a), var(--tone-a) 49%, var(--tone-b) 51%, var(--tone-b)); border: 1px solid rgba(47, 59, 52, .18); border-radius: 50%; }
+.mac-tracker-tone i { display: block; width: 12px; height: 12px; background: linear-gradient(135deg, var(--tone-a, var(--willow)), var(--tone-a, var(--willow)) 49%, var(--tone-b, var(--mist)) 51%, var(--tone-b, var(--mist))); border: 1px solid rgba(47, 59, 52, .18); border-radius: 50%; }
 .mac-tracker-tone--vang-kem-sang { --tone-a: #d9b758; --tone-b: #fbf3d5; --tone-soft: #fff9e8; --tone-line: #eedda9; --tone-ink: #806126; }
 .mac-tracker-tone--den-vang { --tone-a: #1f2824; --tone-b: #c9a046; --tone-soft: #f4f1e8; --tone-line: #ded2b4; --tone-ink: #5f4b21; }
 .mac-tracker-tone--hong-xanh-trang { --tone-a: #c66c96; --tone-b: #4f8768; --tone-soft: #fff6f8; --tone-line: #e8d3dc; --tone-ink: #7d4764; }
@@ -487,6 +487,7 @@
 .mac-tracker-tone-review[open] > div { margin-top: var(--space-2); }
 .mac-tracker-tone-review select { min-width: 0; max-width: 170px; height: 30px; font-size: var(--text-xs); }
 .mac-tracker-tone-manual { display: inline-flex; margin-left: var(--space-2); padding: 3px 6px; color: var(--ok); font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 700; background: var(--ok-soft); border: 1px solid rgba(61, 139, 122, .22); border-radius: 999px; vertical-align: middle; }
+.mac-tracker-tone-precise { display: block; margin-top: var(--space-1); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 1.35; }
 .mac-tracker-visual-card.is-manual-tone [data-visual-reason] { display: none; }
 .mac-tracker-visual-status { display: flex; align-items: flex-start; gap: 4px; margin: var(--space-3) 0 0; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); line-height: 1.45; }
 .mac-tracker-visual-status .dashicons { width: 14px; height: 14px; margin-top: 1px; font-size: 14px; flex: 0 0 auto; }
