@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (leave blank to use the plugin version)"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -15,16 +21,33 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Resolve release tag
+        shell: bash
+        env:
+          REQUESTED_TAG: ${{ inputs.tag || '' }}
+        run: |
+          set -euo pipefail
+          plugin_version="$(sed -n 's/^[[:space:]]*\* Version: \([^[:space:]]*\).*/\1/p' mac-project-tracker.php | head -n 1)"
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            release_tag="$GITHUB_REF_NAME"
+          elif [ -n "$REQUESTED_TAG" ]; then
+            release_tag="$REQUESTED_TAG"
+          else
+            release_tag="v$plugin_version"
+          fi
+          release_tag="v${release_tag#v}"
+          echo "PLUGIN_VERSION=$plugin_version" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
+
       - name: Validate tag and plugin version
         shell: bash
         run: |
           set -euo pipefail
-          plugin_version="$(sed -n 's/^[[:space:]]*\* Version: \([^[:space:]]*\).*/\1/p' mac-project-tracker.php | head -n 1)"
           constant_version="$(sed -n "s/^define( 'MAC_TRACKER_VERSION', '\([^']*\)' );/\1/p" mac-project-tracker.php | head -n 1)"
-          tag_version="${GITHUB_REF_NAME#v}"
-          test -n "$plugin_version"
-          test "$plugin_version" = "$constant_version"
-          test "$tag_version" = "$plugin_version"
+          tag_version="${RELEASE_TAG#v}"
+          test -n "$PLUGIN_VERSION"
+          test "$PLUGIN_VERSION" = "$constant_version"
+          test "$tag_version" = "$PLUGIN_VERSION"
 
       - name: PHP syntax check
         shell: bash
@@ -38,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           root="build/mac-project-tracker"
-          asset="mac-project-tracker-${GITHUB_REF_NAME}.zip"
+          asset="mac-project-tracker-${RELEASE_TAG}.zip"
           mkdir -p "$root"
           cp mac-project-tracker.php README.md "$root/"
           cp -R assets includes "$root/"
@@ -50,4 +73,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "$ASSET" --title "MAC Project Tracker ${GITHUB_REF_NAME#v}" --generate-notes
+          gh release create "$RELEASE_TAG" "$ASSET" --target "$GITHUB_SHA" --title "MAC Project Tracker ${RELEASE_TAG#v}" --generate-notes
