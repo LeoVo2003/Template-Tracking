@@ -34,6 +34,8 @@ class MAC_Tracker_Activator {
 		$projects = $wpdb->prefix . 'mac_tracker_projects';
 		$colors   = $wpdb->prefix . 'mac_tracker_color_records';
 		$visuals  = $wpdb->prefix . 'mac_tracker_visual_reviews';
+		$visual_runs = $wpdb->prefix . 'mac_tracker_visual_runs';
+		$visual_run_events = $wpdb->prefix . 'mac_tracker_visual_run_events';
 		$pins     = $wpdb->prefix . 'mac_tracker_pinned_projects';
 		$logs     = $wpdb->prefix . 'mac_tracker_sync_logs';
 
@@ -132,6 +134,57 @@ class MAC_Tracker_Activator {
 				KEY manual_locked (manual_locked),
 				KEY capture_status (capture_status),
 				KEY tone_status (tone_status)
+			) {$charset};",
+			"CREATE TABLE {$visual_runs} (
+				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+				github_run_id bigint(20) unsigned NOT NULL,
+				github_run_number int(10) unsigned NOT NULL DEFAULT 0,
+				github_run_attempt int(10) unsigned NOT NULL DEFAULT 1,
+				source_action varchar(64) NOT NULL DEFAULT 'run_batch_now',
+				run_mode varchar(16) NOT NULL DEFAULT 'batch',
+				stage varchar(16) NOT NULL DEFAULT 'full',
+				target_count int(10) unsigned NOT NULL DEFAULT 0,
+				target_ids_json longtext NULL,
+				status varchar(32) NOT NULL DEFAULT 'queued',
+				conclusion varchar(32) NOT NULL DEFAULT '',
+				current_snapshot_id bigint(20) unsigned NOT NULL DEFAULT 0,
+				current_project_label varchar(255) NOT NULL DEFAULT '',
+				current_step varchar(64) NOT NULL DEFAULT '',
+				current_provider varchar(64) NOT NULL DEFAULT '',
+				processed_count int(10) unsigned NOT NULL DEFAULT 0,
+				success_count int(10) unsigned NOT NULL DEFAULT 0,
+				failed_count int(10) unsigned NOT NULL DEFAULT 0,
+				needs_review_count int(10) unsigned NOT NULL DEFAULT 0,
+				skipped_count int(10) unsigned NOT NULL DEFAULT 0,
+				capture_count int(10) unsigned NOT NULL DEFAULT 0,
+				analysis_count int(10) unsigned NOT NULL DEFAULT 0,
+				provider_counts_json longtext NULL,
+				last_message text NULL,
+				github_html_url varchar(2048) NOT NULL DEFAULT '',
+				started_at datetime NULL,
+				heartbeat_at datetime NULL,
+				completed_at datetime NULL,
+				created_at datetime NOT NULL,
+				updated_at datetime NOT NULL,
+				PRIMARY KEY  (id),
+				UNIQUE KEY github_run_id (github_run_id),
+				KEY status (status),
+				KEY updated_at (updated_at),
+				KEY created_at (created_at)
+			) {$charset};",
+			"CREATE TABLE {$visual_run_events} (
+				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+				github_run_id bigint(20) unsigned NOT NULL,
+				snapshot_id bigint(20) unsigned NOT NULL DEFAULT 0,
+				event_type varchar(64) NOT NULL DEFAULT '',
+				stage varchar(16) NOT NULL DEFAULT '',
+				provider varchar(64) NOT NULL DEFAULT '',
+				message text NULL,
+				metadata_json longtext NULL,
+				created_at datetime NOT NULL,
+				PRIMARY KEY  (id),
+				KEY github_run_id (github_run_id),
+				KEY created_at (created_at)
 			) {$charset};",
 			"CREATE TABLE {$pins} (
 				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,

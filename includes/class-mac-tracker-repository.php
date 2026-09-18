@@ -11,6 +11,8 @@ class MAC_Tracker_Repository {
 	private $visuals;
 	private $pins;
 	private $logs;
+	private $visual_runs;
+	private $visual_run_events;
 
 	public function __construct() {
 		global $wpdb;
@@ -20,6 +22,8 @@ class MAC_Tracker_Repository {
 		$this->visuals  = $wpdb->prefix . 'mac_tracker_visual_reviews';
 		$this->pins     = $wpdb->prefix . 'mac_tracker_pinned_projects';
 		$this->logs     = $wpdb->prefix . 'mac_tracker_sync_logs';
+		$this->visual_runs = $wpdb->prefix . 'mac_tracker_visual_runs';
+		$this->visual_run_events = $wpdb->prefix . 'mac_tracker_visual_run_events';
 	}
 
 	/** Create a snapshot once. Existing payloads never change. */
@@ -548,6 +552,111 @@ class MAC_Tracker_Repository {
 	public function visual_stats() {
 		return (array) $this->wpdb->get_row( "SELECT COUNT(*) AS total, SUM(pipeline_status IN ('captured', 'analysis_queued', 'analyzing', 'classified', 'needs_review')) AS captured, SUM(pipeline_status = 'classified') AS classified, SUM(pipeline_status = 'failed') AS failed, SUM(pipeline_status IN ('idle', 'capture_queued', 'capturing', 'retry_wait', 'blocked')) AS capture_pending, SUM(pipeline_status IN ('captured', 'analysis_queued', 'analyzing', 'needs_review')) AS tone_pending FROM {$this->visuals}", ARRAY_A );
 	}
+
+	/** Store worker telemetry. GitHub status/conclusion is reconciled separately. */
+	public function visual_run_heartbeat( array $payload ) {
+		$run_id = absint( $payload['github_run_id'] ?? 0 );
+		if ( $run_id <= 0 ) { return new WP_Error( 'mac_tracker_visual_run_id', 'A GitHub workflow run ID is required.' ); }
+		$now = MAC_Tracker_Time::now_utc();
+		$snapshot_id = absint( $payload['current_snapshot_id'] ?? 0 );
+		$target_ids = array_values( array_unique( array_filter( array_map( 'absint', (array) ( $payload['target_ids'] ?? array() ) ) ) ) );
+		$existing = $this->visual_run_row( $run_id );
+		$label = sanitize_text_field( (string) ( $payload['current_project_label'] ?? '' ) );
+		if ( '' === $label && $snapshot_id ) { $label = (string) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT CONCAT('#', wpm_project_id, ' · ', name) FROM {$this->projects} WHERE id = %d", $snapshot_id ) ); }
+		$data = array(
+			'github_run_id' => $run_id,
+			'github_run_number' => max( 0, absint( $payload['github_run_number'] ?? ( $existing['github_run_number'] ?? 0 ) ) ),
+			'github_run_attempt' => max( 1, absint( $payload['github_run_attempt'] ?? ( $existing['github_run_attempt'] ?? 1 ) ) ),
+			'source_action' => $this->visual_source_action( $payload['source_action'] ?? ( $existing['source_action'] ?? 'run_batch_now' ) ),
+			'run_mode' => in_array( $payload['run_mode'] ?? '', array( 'targeted', 'batch' ), true ) ? $payload['run_mode'] : ( $existing['run_mode'] ?? 'batch' ),
+			'stage' => in_array( $payload['stage'] ?? '', array( 'capture', 'tone', 'full', 'auto' ), true ) ? $payload['stage'] : ( $existing['stage'] ?? 'full' ),
+			'target_count' => max( 0, absint( $payload['target_count'] ?? ( $existing['target_count'] ?? count( $target_ids ) ) ) ),
+			'target_ids_json' => ! empty( $target_ids ) ? $this->encode_json( $target_ids ) : ( $existing['target_ids_json'] ?? '[]' ),
+			'current_snapshot_id' => $snapshot_id,
+			'current_project_label' => $label,
+			'current_step' => $this->visual_run_step( $payload['current_step'] ?? '' ),
+			'current_provider' => sanitize_key( (string) ( $payload['current_provider'] ?? '' ) ),
+			'processed_count' => max( 0, absint( $payload['processed_count'] ?? ( $existing['processed_count'] ?? 0 ) ) ),
+			'success_count' => max( 0, absint( $payload['success_count'] ?? ( $existing['success_count'] ?? 0 ) ) ),
+			'failed_count' => max( 0, absint( $payload['failed_count'] ?? ( $existing['failed_count'] ?? 0 ) ) ),
+			'needs_review_count' => max( 0, absint( $payload['needs_review_count'] ?? ( $existing['needs_review_count'] ?? 0 ) ) ),
+			'skipped_count' => max( 0, absint( $payload['skipped_count'] ?? ( $existing['skipped_count'] ?? 0 ) ) ),
+			'capture_count' => max( 0, absint( $payload['capture_count'] ?? ( $existing['capture_count'] ?? 0 ) ) ),
+			'analysis_count' => max( 0, absint( $payload['analysis_count'] ?? ( $existing['analysis_count'] ?? 0 ) ) ),
+			'provider_counts_json' => ! empty( $payload['provider_counts'] ) ? $this->encode_json( (array) $payload['provider_counts'] ) : ( $existing['provider_counts_json'] ?? '{}' ),
+			'last_message' => sanitize_text_field( (string) ( $payload['message'] ?? '' ) ),
+			'github_html_url' => esc_url_raw( (string) ( $payload['github_html_url'] ?? ( $existing['github_html_url'] ?? '' ) ) ),
+			'heartbeat_at' => $now,
+			'updated_at' => $now,
+		);
+		if ( isset( $payload['status'] ) && in_array( $payload['status'], array( 'queued', 'in_progress', 'completed', 'cancelling' ), true ) ) { $data['status'] = $payload['status']; }
+		if ( empty( $existing ) ) { $data['status'] = $data['status'] ?? 'in_progress'; $data['created_at'] = $now; $data['started_at'] = $now; $result = $this->wpdb->insert( $this->visual_runs, $data ); }
+		else { $result = $this->wpdb->update( $this->visual_runs, $data, array( 'github_run_id' => $run_id ) ); }
+		if ( false === $result ) { return new WP_Error( 'mac_tracker_visual_run_save', $this->wpdb->last_error ?: 'Unable to save workflow heartbeat.' ); }
+		$this->append_visual_run_event( $run_id, array( 'snapshot_id' => $snapshot_id, 'event_type' => sanitize_key( (string) ( $payload['event_type'] ?? 'heartbeat' ) ), 'stage' => $data['stage'], 'provider' => $data['current_provider'], 'message' => $data['last_message'], 'metadata' => array( 'step' => $data['current_step'], 'processed' => $data['processed_count'], 'target_count' => $data['target_count'] ) ) );
+		return true;
+	}
+
+	public function complete_visual_run( array $payload ) {
+		// The worker has finished its local work, but GitHub alone decides whether
+		// the workflow is completed/success/cancelled after all action steps end.
+		unset( $payload['status'], $payload['conclusion'] );
+		$payload['current_step'] = (string) ( $payload['current_step'] ?? 'completed' );
+		$result = $this->visual_run_heartbeat( $payload );
+		if ( is_wp_error( $result ) ) { return $result; }
+		$run_id = absint( $payload['github_run_id'] );
+		$updated = $this->wpdb->update( $this->visual_runs, array( 'updated_at' => MAC_Tracker_Time::now_utc() ), array( 'github_run_id' => $run_id ) );
+		if ( false === $updated ) { return new WP_Error( 'mac_tracker_visual_run_complete', $this->wpdb->last_error ?: 'Unable to complete workflow run.' ); }
+		$this->append_visual_run_event( $run_id, array( 'event_type' => 'run_completed', 'stage' => sanitize_key( (string) ( $payload['stage'] ?? '' ) ), 'message' => sanitize_text_field( (string) ( $payload['message'] ?? 'Visual Tone run completed.' ) ) ) );
+		$this->cleanup_visual_run_history();
+		return true;
+	}
+
+	public function append_visual_run_event( $run_id, array $event ) {
+		$run_id = absint( $run_id );
+		if ( $run_id <= 0 ) { return false; }
+		return false !== $this->wpdb->insert( $this->visual_run_events, array( 'github_run_id' => $run_id, 'snapshot_id' => absint( $event['snapshot_id'] ?? 0 ), 'event_type' => sanitize_key( (string) ( $event['event_type'] ?? '' ) ), 'stage' => sanitize_key( (string) ( $event['stage'] ?? '' ) ), 'provider' => sanitize_key( (string) ( $event['provider'] ?? '' ) ), 'message' => sanitize_text_field( (string) ( $event['message'] ?? '' ) ), 'metadata_json' => $this->encode_json( (array) ( $event['metadata'] ?? array() ) ), 'created_at' => MAC_Tracker_Time::now_utc() ) );
+	}
+
+	/** GitHub owns execution state; local telemetry fields remain untouched. */
+	public function reconcile_visual_runs( array $runs ) {
+		foreach ( $runs as $run ) {
+			$run_id = absint( $run['id'] ?? 0 ); if ( $run_id <= 0 ) { continue; }
+			$existing = $this->visual_run_row( $run_id );
+			$data = array( 'github_run_number' => max( 0, absint( $run['run_number'] ?? 0 ) ), 'github_run_attempt' => max( 1, absint( $run['run_attempt'] ?? 1 ) ), 'status' => sanitize_key( (string) ( $run['status'] ?? 'queued' ) ), 'conclusion' => sanitize_key( (string) ( $run['conclusion'] ?? '' ) ), 'github_html_url' => esc_url_raw( (string) ( $run['html_url'] ?? '' ) ), 'started_at' => $this->visual_run_time( $run['run_started_at'] ?? '' ), 'updated_at' => MAC_Tracker_Time::now_utc() );
+			if ( 'completed' === $data['status'] ) { $data['completed_at'] = $this->visual_run_time( $run['updated_at'] ?? '' ); }
+			if ( $existing ) { $this->wpdb->update( $this->visual_runs, $data, array( 'github_run_id' => $run_id ) ); }
+			else { $data = array_merge( array( 'github_run_id' => $run_id, 'source_action' => 'run_batch_now', 'run_mode' => 'batch', 'stage' => 'full', 'target_count' => 0, 'target_ids_json' => '[]', 'created_at' => $this->visual_run_time( $run['created_at'] ?? '' ) ?: MAC_Tracker_Time::now_utc() ), $data ); $this->wpdb->insert( $this->visual_runs, $data ); }
+		}
+	}
+
+	public function visual_runs( $limit = 10 ) {
+		return (array) $this->wpdb->get_results( $this->wpdb->prepare( "SELECT * FROM {$this->visual_runs} ORDER BY CASE WHEN status IN ('queued','in_progress','cancelling') THEN 0 ELSE 1 END, updated_at DESC LIMIT %d", max( 1, min( 20, absint( $limit ) ) ) ), ARRAY_A );
+	}
+
+	public function visual_run_detail( $run_id ) {
+		$run = $this->visual_run_row( $run_id );
+		if ( ! $run ) { return null; }
+		$events = (array) $this->wpdb->get_results( $this->wpdb->prepare( "SELECT * FROM {$this->visual_run_events} WHERE github_run_id = %d ORDER BY id DESC LIMIT 80", absint( $run_id ) ), ARRAY_A );
+		$targets = json_decode( (string) ( $run['target_ids_json'] ?? '[]' ), true );
+		$target_states = array();
+		if ( is_array( $targets ) && ! empty( $targets ) ) {
+			$ids = array_values( array_filter( array_map( 'absint', $targets ) ) );
+			$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+			$target_states = (array) $this->wpdb->get_results( $this->wpdb->prepare( "SELECT p.id, p.wpm_project_id, p.name, v.pipeline_status, v.tone FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id WHERE p.id IN ({$placeholders})", $ids ), ARRAY_A );
+		}
+		return array( 'run' => $run, 'events' => array_reverse( $events ), 'targets' => $target_states );
+	}
+
+	public function mark_visual_run_cancelling( $run_id ) {
+		return false !== $this->wpdb->update( $this->visual_runs, array( 'status' => 'cancelling', 'updated_at' => MAC_Tracker_Time::now_utc() ), array( 'github_run_id' => absint( $run_id ) ) );
+	}
+
+	private function visual_run_row( $run_id ) { return $this->wpdb->get_row( $this->wpdb->prepare( "SELECT * FROM {$this->visual_runs} WHERE github_run_id = %d", absint( $run_id ) ), ARRAY_A ); }
+	private function visual_source_action( $value ) { $value = sanitize_key( (string) $value ); return in_array( $value, array( 'analyze_selected', 'capture_selected_again', 'retry_failed_capture', 'retry_failed_analysis', 'analyze_all_stored', 'run_batch_now', 'scheduled_auto' ), true ) ? $value : 'run_batch_now'; }
+	private function visual_run_step( $value ) { $value = sanitize_key( (string) $value ); return in_array( $value, array( 'starting', 'claiming_targets', 'capturing', 'capture_uploading', 'analysis_preparing', 'pixel_analyzing', 'qwen_analyzing', 'llama_judging', 'gemini_judging', 'resolving_tone', 'saving_result', 'waiting_provider', 'retry_wait', 'completed', 'failed', 'cancelled' ), true ) ? $value : ''; }
+	private function visual_run_time( $value ) { $time = strtotime( (string) $value ); return $time ? gmdate( 'Y-m-d H:i:s', $time ) : null; }
+	private function cleanup_visual_run_history() { $this->wpdb->query( "DELETE FROM {$this->visual_run_events} WHERE created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)" ); $this->wpdb->query( "DELETE FROM {$this->visual_runs} WHERE created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 DAY)" ); }
 
 	/** Current snapshot rows with their locally stored visual review. */
 	public function visual_review_rows( $limit = 120 ) {

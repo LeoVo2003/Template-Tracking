@@ -43,6 +43,16 @@ class MAC_Tracker_Visual_Service {
 			'callback'            => array( $this, 'ingest' ),
 			'permission_callback' => '__return_true',
 		) );
+		register_rest_route( self::NAMESPACE, '/visual/run-heartbeat', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'run_heartbeat' ),
+			'permission_callback' => '__return_true',
+		) );
+		register_rest_route( self::NAMESPACE, '/visual/run-complete', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'run_complete' ),
+			'permission_callback' => '__return_true',
+		) );
 	}
 
 	/** Read-only worker configuration. API secrets remain GitHub-only. */
@@ -118,6 +128,24 @@ class MAC_Tracker_Visual_Service {
 		} else {
 			return new WP_Error( 'mac_tracker_visual_mode', 'Unsupported visual ingest mode.', array( 'status' => 400 ) );
 		}
+		return is_wp_error( $result ) ? $result : rest_ensure_response( array( 'saved' => true ) );
+	}
+
+	/** Telemetry only: an unavailable heartbeat must never make the worker fail. */
+	public function run_heartbeat( WP_REST_Request $request ) {
+		if ( ! $this->authorized( $request ) ) { return new WP_Error( 'mac_tracker_visual_forbidden', 'Automation authorization failed.', array( 'status' => 401 ) ); }
+		$payload = $request->get_json_params();
+		if ( ! is_array( $payload ) || empty( $payload ) ) { $payload = $request->get_params(); }
+		if ( isset( $payload['target_ids'] ) && is_string( $payload['target_ids'] ) ) { $payload['target_ids'] = json_decode( $payload['target_ids'], true ); }
+		$result = $this->repository->visual_run_heartbeat( (array) $payload );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( array( 'saved' => true ) );
+	}
+
+	public function run_complete( WP_REST_Request $request ) {
+		if ( ! $this->authorized( $request ) ) { return new WP_Error( 'mac_tracker_visual_forbidden', 'Automation authorization failed.', array( 'status' => 401 ) ); }
+		$payload = $request->get_json_params();
+		if ( ! is_array( $payload ) || empty( $payload ) ) { $payload = $request->get_params(); }
+		$result = $this->repository->complete_visual_run( (array) $payload );
 		return is_wp_error( $result ) ? $result : rest_ensure_response( array( 'saved' => true ) );
 	}
 

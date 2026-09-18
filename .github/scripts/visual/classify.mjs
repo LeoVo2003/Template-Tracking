@@ -24,15 +24,18 @@ function resultFrom(semantic, reason) { const resolved = resolveTone(semantic); 
 function serial(error) { return { provider: error.provider || 'unknown', code: error.code || 'PROVIDER_ERROR', status: error.status || 0, quota: !!error.quota, retryable: !!error.retryable, message: String(error.message || '').slice(0, 300) }; }
 async function tryProvider(fn, errors) { try { return await fn(); } catch (error) { errors.push(serial(error)); return null; } }
 
-export async function classifyTone({ previewBuffer, evidence, groqApiKey, geminiApiKey, geminiApiKeys = [], geminiDailyBudgetPerKey = GEMINI_DAILY_BUDGET, cloudflareAccount, cloudflareToken, freeOnly = true, autoAccept = AUTO_ACCEPT, providers = {} }) {
+export async function classifyTone({ previewBuffer, evidence, groqApiKey, geminiApiKey, geminiApiKeys = [], geminiDailyBudgetPerKey = GEMINI_DAILY_BUDGET, cloudflareAccount, cloudflareToken, freeOnly = true, autoAccept = AUTO_ACCEPT, providers = {}, onProviderStep = null }) {
   if (!freeOnly) throw new ProviderError('FREE_ONLY_REQUIRED', 'Visual-tone classification is locked to FREE_ONLY=true.');
   const errors = [], prompt = tonePrompt(evidence), options = { previewBuffer, prompt };
   const groq = providers.groq || classifyWithGroq, cfQwen = providers.cloudflare || classifyWithCloudflareQwen, llama = providers.llama || classifyWithLlamaScout, gemini = providers.gemini || classifyWithGemini;
+  const reportStep = async (step, provider) => { try { if (onProviderStep) await onProviderStep({ step, provider }); } catch { /* Telemetry is non-critical. */ } };
+  await reportStep('qwen_analyzing', 'qwen');
   let qwen = await tryProvider(() => groq({ ...options, apiKey: groqApiKey }), errors);
-  if (!qwen) qwen = await tryProvider(() => cfQwen({ ...options, accountId: cloudflareAccount, apiToken: cloudflareToken }), errors);
+  if (!qwen) { await reportStep('qwen_analyzing', 'cloudflare_qwen'); qwen = await tryProvider(() => cfQwen({ ...options, accountId: cloudflareAccount, apiToken: cloudflareToken }), errors); }
   const pixel = evidence.semantic_model || {};
   const deterministic = { canvas_mode: pixel.canvas?.mode || 'light', canvas_family: pixel.canvas?.family || 'white', primary_surface: pixel.canvas?.primary_surface || pixel.canvas?.family || 'white', secondary_surface: pixel.canvas?.secondary_surface || 'other', primary_family: pixel.primary_accent?.family || 'neutral', secondary_family: pixel.secondary_accent?.family || 'neutral', confidence: pixel.canvas?.confidence || 0 };
   if (qwen && agrees(qwen, deterministic) && qwen.confidence >= autoAccept && !qwen.needs_review) return { state: 'classified', result: resultFrom(qwen, 'Pixel/DOM and Qwen agreement.'), attempts: [qwen], errors };
+  await reportStep('llama_judging', 'cloudflare_llama');
   const scout = await tryProvider(() => llama({ previewBuffer, prompt: llamaPrompt(evidence, qwen), accountId: cloudflareAccount, apiToken: cloudflareToken }), errors);
   if (scout && scout.confidence >= JUDGE_ACCEPT && !scout.needs_review && (agrees(scout, qwen) || agrees(scout, deterministic))) return { state: 'classified', result: resultFrom(scout, 'Llama Scout resolved the disagreement.'), attempts: [qwen, scout].filter(Boolean), errors };
   const today = new Date().toISOString().slice(0, 10);
@@ -45,6 +48,7 @@ export async function classifyTone({ previewBuffer, evidence, groqApiKey, gemini
   }).filter((entry) => !entry.state.cooldown && entry.state.calls < geminiDailyBudgetPerKey).sort((a, b) => a.state.calls - b.state.calls);
   for (const entry of eligible) {
     const before = errors.length;
+    await reportStep('gemini_judging', 'gemini');
     finalJudge = await tryProvider(() => gemini({ previewBuffer, prompt: llamaPrompt(evidence, scout || qwen), apiKey: entry.key }), errors);
     if (finalJudge) { entry.state.calls += 1; finalJudge.gemini_slot = entry.slot; break; }
     const failure = errors.slice(before)[0];
