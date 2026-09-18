@@ -42,6 +42,7 @@ class MAC_Tracker_Admin {
 		add_action( 'wp_ajax_mac_tracker_visual_status', array( $this, 'handle_visual_status_ajax' ) );
 		add_action( 'wp_ajax_mac_tracker_visual_runs', array( $this, 'handle_visual_runs_ajax' ) );
 		add_action( 'wp_ajax_mac_tracker_visual_run_detail', array( $this, 'handle_visual_run_detail_ajax' ) );
+		add_action( 'wp_ajax_mac_tracker_visual_run_log', array( $this, 'handle_visual_run_log_ajax' ) );
 		add_action( 'wp_ajax_mac_tracker_visual_run_action', array( $this, 'handle_visual_run_action_ajax' ) );
 	}
 
@@ -247,7 +248,6 @@ class MAC_Tracker_Admin {
 		?>
 		<section class="mac-tracker-overview mac-tracker-visual-overview"><div class="mac-tracker-overview__lead"><p class="mac-tracker-eyebrow">Visual Tone V2 · Control room</p><h2>Manual-first, evidence-led review</h2><p>Saved captures and deterministic UI evidence are reviewed by the free-only AI chain. Cards only poll while a live worker lease is active.</p></div><div class="mac-tracker-summary-grid"><?php $this->stat_card( 'Captured', (int) ( $stats['captured'] ?? 0 ), 'dashicons-format-image' ); ?><?php $this->stat_card( 'Completed', (int) ( $stats['classified'] ?? 0 ), 'dashicons-yes-alt' ); ?><?php $this->stat_card( 'Needs review', $review_count, 'dashicons-visibility' ); ?></div></section>
 		<section class="mac-tracker-visual-auto"><div><p class="mac-tracker-eyebrow">Visual Tone Automation</p><h2><?php echo 'auto' === $visual_mode ? 'Auto processing enabled' : 'Manual review first'; ?></h2><p>Mode: <strong><?php echo 'auto' === $visual_mode ? 'AUTO' : 'MANUAL'; ?></strong> · AI: <strong><?php echo esc_html( 'smart' === $ai_strategy ? 'Qwen → Gemini judge' : strtoupper( $ai_strategy ) ); ?></strong>. Manual buttons always remain available.</p></div><div class="mac-tracker-visual-auto__actions"><form class="mac-tracker-visual-mode" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_save_visual_mode' ); ?><input type="hidden" name="action" value="mac_tracker_save_visual_mode"><fieldset><legend class="screen-reader-text">Visual Tone mode</legend><label><input type="radio" name="visual_mode" value="manual"<?php checked( 'manual', $visual_mode ); ?>> <span>Manual</span></label><label><input type="radio" name="visual_mode" value="auto"<?php checked( 'auto', $visual_mode ); ?>> <span>Auto</span></label></fieldset><label class="screen-reader-text" for="mac-tracker-ai-strategy">AI strategy</label><select id="mac-tracker-ai-strategy" name="ai_strategy"><option value="off"<?php selected( 'off', $ai_strategy ); ?>>AI off</option><option value="qwen"<?php selected( 'qwen', $ai_strategy ); ?>>Qwen only</option><option value="gemini"<?php selected( 'gemini', $ai_strategy ); ?>>Gemini only</option><option value="smart"<?php selected( 'smart', $ai_strategy ); ?>>Smart auto</option></select><label>Accept ≥ <input type="number" name="auto_accept" min="0.75" max="0.99" step="0.01" value="<?php echo esc_attr( $auto_accept ); ?>"></label><label>Retries <input type="number" name="max_capture_retries" min="0" max="3" step="1" value="<?php echo esc_attr( $max_retries ); ?>"></label><button class="button" type="submit">Save controls</button></form><?php if ( get_option( 'mac_tracker_github_dispatch_token', '' ) ) : ?><form class="mac-tracker-visual-run" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_run_visual_workflow' ); ?><input type="hidden" name="action" value="mac_tracker_run_visual_workflow"><button class="button button-primary" type="submit"><span class="dashicons dashicons-controls-play"></span>Run batch now</button></form><?php else : ?><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-settings#mac-tracker-github-dispatch' ) ); ?>">Enable manual run</a><?php endif; ?><span class="mac-tracker-visual-auto__signal <?php echo 'auto' === $visual_mode ? '' : 'is-manual'; ?>"><i></i><?php echo 'auto' === $visual_mode ? 'Scheduled processing on' : 'Scheduled processing off'; ?></span></div></section>
-		<?php $this->render_visual_workflow_monitor(); ?>
 		<form class="mac-tracker-visual-work" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<?php wp_nonce_field( 'mac_tracker_requeue_visuals' ); ?>
 			<input type="hidden" name="action" value="mac_tracker_requeue_visuals">
@@ -263,6 +263,7 @@ class MAC_Tracker_Admin {
 				<?php endforeach; endif; ?>
 			</section>
 		</form>
+		<?php $this->render_visual_workflow_monitor(); ?>
 		<section class="mac-tracker-danger-zone" aria-label="Reset Visual Tone data"><div><p class="mac-tracker-eyebrow">Reset Visual Tone</p><h2>Clear all Visual Tone data</h2><p>Deletes every Visual Tone capture, tone result, queue state and stored screenshot. Projects, pins, Color Review and WPM sync data are kept. Mode returns to Manual.</p></div><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return window.confirm('Clear all Visual Tone data and screenshots? This cannot be undone.');"><?php wp_nonce_field( 'mac_tracker_clear_visual_data' ); ?><input type="hidden" name="action" value="mac_tracker_clear_visual_data"><button class="button mac-tracker-button--danger" type="submit">Clear Visual Tone data</button></form></section>
 		<?php $this->page_end();
 	}
@@ -291,10 +292,11 @@ class MAC_Tracker_Admin {
 	private function render_visual_workflow_monitor() {
 		?>
 		<section class="mac-tracker-workflow-monitor" aria-label="Visual Tone workflow monitor" data-workflow-monitor>
-			<div class="mac-tracker-workflow-monitor__head"><div><p class="mac-tracker-eyebrow">Workflow monitor</p><h2>Visual Tone workflow runs</h2><p>Live execution from GitHub Actions with local Visual Tone progress.</p></div><div class="mac-tracker-workflow-monitor__head-actions"><button type="button" class="button" data-workflow-refresh><span class="dashicons dashicons-update"></span>Refresh</button><button type="button" class="button-link" data-workflow-view-all>View all runs</button></div></div>
+			<div class="mac-tracker-workflow-monitor__head"><div><p class="mac-tracker-eyebrow">Workflow monitor</p><h2>Visual Tone workflow runs</h2><p>Live execution from GitHub Actions with local Visual Tone progress.</p><p class="mac-tracker-workflow-monitor__refreshed" data-workflow-refreshed>Last refresh: —</p></div><div class="mac-tracker-workflow-monitor__head-actions"><button type="button" class="button" data-workflow-refresh><span class="dashicons dashicons-update"></span>Refresh</button><button type="button" class="button-link" data-workflow-view-all aria-expanded="false">Show workflows ▾</button></div></div>
 			<div class="mac-tracker-workflow-summary" data-workflow-summary aria-live="polite"><span class="is-running"><i></i>Running <strong>—</strong></span><span class="is-queued"><i></i>Queued <strong>—</strong></span><span class="is-failed"><i></i>Failed <strong>—</strong></span><span class="is-success"><i></i>Completed <strong>—</strong></span></div>
 			<p class="mac-tracker-workflow-monitor__notice" data-workflow-notice hidden></p>
-			<div class="mac-tracker-workflow-list" data-workflow-list><div class="mac-tracker-workflow-empty"><span class="dashicons dashicons-update spin"></span><strong>Loading workflow runs…</strong><p>Only Visual Tone workflow runs are shown.</p></div></div>
+			<div class="mac-tracker-workflow-list" data-workflow-list hidden></div>
+			<div class="mac-tracker-workflow-pagination" data-workflow-pagination hidden><span data-workflow-showing></span><button type="button" class="button button-small" data-workflow-prev>‹ Previous</button><span data-workflow-page></span><button type="button" class="button button-small" data-workflow-next>Next ›</button></div>
 		</section>
 		<div class="mac-tracker-workflow-detail" data-workflow-detail hidden role="dialog" aria-modal="true" aria-labelledby="mac-tracker-workflow-detail-title"><div class="mac-tracker-workflow-detail__panel"><button type="button" class="mac-tracker-workflow-detail__close" data-workflow-close aria-label="Close workflow details"><span class="dashicons dashicons-no-alt"></span></button><div data-workflow-detail-content></div></div></div>
 		<?php
@@ -492,14 +494,19 @@ class MAC_Tracker_Admin {
 	public function handle_visual_runs_ajax() {
 		check_ajax_referer( 'mac_tracker_visual_workflows', 'nonce' );
 		if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( array( 'message' => 'You are not allowed to read workflow runs.' ), 403 ); }
-		$limit = isset( $_POST['limit'] ) ? max( 1, min( 20, absint( wp_unslash( $_POST['limit'] ) ) ) ) : 8;
+		$page = isset( $_POST['page'] ) ? max( 1, absint( wp_unslash( $_POST['page'] ) ) ) : 1;
+		$per_page = isset( $_POST['per_page'] ) ? max( 1, min( 20, absint( wp_unslash( $_POST['per_page'] ) ) ) ) : 5;
 		$force = ! empty( $_POST['force'] );
-		$github_runs = $this->github_actions->list_visual_runs( $limit, $force );
-		if ( is_wp_error( $github_runs ) ) {
-			wp_send_json_success( array( 'runs' => $this->repository->visual_runs( $limit ), 'github_error' => $github_runs->get_error_message(), 'permissions' => array( 'read' => false, 'write' => false ) ) );
+		$github_page = $this->github_actions->list_visual_runs( $page, $per_page, $force );
+		if ( is_wp_error( $github_page ) ) {
+			$local_page = $this->repository->visual_runs_page( $page, $per_page );
+			wp_send_json_success( array( 'runs' => $local_page['runs'], 'summary' => $this->repository->visual_run_summary(), 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $local_page['total'], 'total_pages' => $local_page['total_pages'] ), 'github_error' => $github_page->get_error_message(), 'permissions' => array( 'read' => false, 'write' => false ) ) );
 		}
-		$this->repository->reconcile_visual_runs( $github_runs );
-		wp_send_json_success( array( 'runs' => $this->repository->visual_runs( $limit ), 'permissions' => array( 'read' => true, 'write' => true ) ) );
+		$this->repository->reconcile_visual_runs( (array) ( $github_page['runs'] ?? array() ) );
+		$local_page = $this->repository->visual_runs_for_github_page( (array) ( $github_page['runs'] ?? array() ), $page, $per_page, (int) ( $github_page['total'] ?? 0 ) );
+		$local_meta = $this->repository->visual_runs_page( $page, $per_page );
+		$total = max( (int) ( $github_page['total'] ?? 0 ), (int) $local_meta['total'] );
+		wp_send_json_success( array( 'runs' => $local_page, 'summary' => $this->repository->visual_run_summary(), 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $total, 'total_pages' => max( 1, (int) ceil( $total / $per_page ) ) ), 'permissions' => array( 'read' => true, 'write' => true ) ) );
 	}
 
 	public function handle_visual_run_detail_ajax() {
@@ -514,6 +521,15 @@ class MAC_Tracker_Admin {
 		}
 		$this->repository->reconcile_visual_runs( array( $github['run'] ) );
 		wp_send_json_success( array( 'local' => $this->repository->visual_run_detail( $run_id ), 'github' => $github ) );
+	}
+
+	public function handle_visual_run_log_ajax() {
+		check_ajax_referer( 'mac_tracker_visual_workflows', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) { wp_send_json_error( array( 'message' => 'You are not allowed to read workflow logs.' ), 403 ); }
+		$run_id = absint( wp_unslash( $_POST['run_id'] ?? 0 ) );
+		$log = $this->github_actions->get_visual_job_log( $run_id );
+		if ( is_wp_error( $log ) ) { wp_send_json_error( array( 'message' => $log->get_error_message() ), 502 ); }
+		wp_send_json_success( $log );
 	}
 
 	public function handle_visual_run_action_ajax() {

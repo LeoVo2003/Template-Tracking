@@ -21,7 +21,7 @@ class MAC_Tracker_GitHub_Actions {
 		return 'https://api.github.com/repos/' . self::OWNER . '/' . self::REPOSITORY . $path;
 	}
 
-	private function request( $method, $path, $body = null ) {
+	private function request( $method, $path, $body = null, $raw_response = false, $with_headers = false ) {
 		$token = $this->token();
 		if ( '' === $token ) { return new WP_Error( 'GITHUB_AUTH', 'GitHub workflow monitor unavailable. Configure a GitHub token with Actions access in Settings.' ); }
 		$args = array(
@@ -48,7 +48,8 @@ class MAC_Tracker_GitHub_Actions {
 			if ( 'GITHUB_RATE_LIMIT' === $code ) { $message = 'GitHub API rate limit reached. Showing last known data.'; }
 			return new WP_Error( $code, $message, array( 'status' => $status, 'github' => is_array( $data ) ? $data : array() ) );
 		}
-		return is_array( $data ) ? $data : array();
+		$result = $raw_response ? $raw : ( is_array( $data ) ? $data : array() );
+		return $with_headers ? array( 'data' => $result, 'headers' => wp_remote_retrieve_headers( $response ) ) : $result;
 	}
 
 	public function dispatch( array $inputs ) {
@@ -56,19 +57,24 @@ class MAC_Tracker_GitHub_Actions {
 	}
 
 	/** List only the tracker workflow. Active results have a short cache. */
-	public function list_visual_runs( $per_page = 10, $force = false ) {
+	public function list_visual_runs( $page = 1, $per_page = 5, $force = false ) {
+		$page = max( 1, absint( $page ) );
 		$per_page = max( 1, min( 20, absint( $per_page ) ) );
-		$key = 'mac_tracker_visual_workflow_runs_' . $per_page;
+		$key = 'mac_tracker_visual_workflow_runs_' . $page . '_' . $per_page;
 		if ( ! $force ) { $cached = get_transient( $key ); if ( is_array( $cached ) ) { return $cached; } }
-		$data = $this->request( 'GET', '/actions/workflows/' . self::WORKFLOW_FILE . '/runs?per_page=' . $per_page );
-		if ( is_wp_error( $data ) ) { return $data; }
+		$response = $this->request( 'GET', '/actions/workflows/' . self::WORKFLOW_FILE . '/runs?page=' . $page . '&per_page=' . $per_page, null, false, true );
+		if ( is_wp_error( $response ) ) { return $response; }
+		$data = (array) ( $response['data'] ?? array() );
 		$runs = array();
 		foreach ( (array) ( $data['workflow_runs'] ?? array() ) as $run ) {
 			if ( ! $this->is_visual_run( $run ) ) { continue; }
 			$runs[] = $this->normalize_run( $run );
 		}
-		set_transient( $key, $runs, 8 );
-		return $runs;
+		$total = count( $runs );
+		$link = (string) ( $response['headers']['link'] ?? $response['headers']['Link'] ?? '' );
+		if ( preg_match( '/[?&]page=(\d+)[^>]*>;\s*rel="last"/i', $link, $match ) ) { $total = max( $total, ( (int) $match[1] - 1 ) * $per_page + count( $runs ) ); }
+		set_transient( $key, array( 'runs' => $runs, 'total' => $total ), 8 );
+		return array( 'runs' => $runs, 'total' => $total );
 	}
 
 	public function get_visual_run( $run_id, $force = false ) {
@@ -92,6 +98,7 @@ class MAC_Tracker_GitHub_Actions {
 		$jobs = array();
 		foreach ( (array) ( $data['jobs'] ?? array() ) as $job ) {
 			$jobs[] = array(
+				'id' => absint( $job['id'] ?? 0 ),
 				'name' => sanitize_text_field( (string) ( $job['name'] ?? '' ) ),
 				'status' => sanitize_key( (string) ( $job['status'] ?? '' ) ),
 				'conclusion' => sanitize_key( (string) ( $job['conclusion'] ?? '' ) ),
@@ -110,6 +117,47 @@ class MAC_Tracker_GitHub_Actions {
 		return array( 'run' => $run, 'jobs' => $jobs );
 	}
 
+	/** Fetch and sanitize only the worker step output on explicit operator request. */
+	public function get_visual_job_log( $run_id ) {
+		$jobs = $this->get_visual_jobs( $run_id );
+		if ( is_wp_error( $jobs ) ) { return $jobs; }
+		$worker = null;
+		foreach ( (array) $jobs['jobs'] as $job ) {
+			foreach ( (array) ( $job['steps'] ?? array() ) as $step ) {
+				if ( 'Capture full pages and classify tone' === (string) ( $step['name'] ?? '' ) ) {
+					$worker = array( 'job_id' => absint( $job['id'] ?? 0 ), 'step_name' => (string) $step['name'] );
+					break 2;
+				}
+			}
+		}
+		if ( ! $worker || $worker['job_id'] <= 0 ) {
+			return array( 'run_id' => absint( $run_id ), 'job_id' => 0, 'step_name' => 'Capture full pages and classify tone', 'log' => '', 'truncated' => false );
+		}
+		$raw = $this->request( 'GET', '/actions/jobs/' . $worker['job_id'] . '/logs', null, true );
+		if ( is_wp_error( $raw ) ) { return $raw; }
+		$log = $this->sanitize_worker_log( (string) $raw );
+		$max = 180 * 1024;
+		$truncated = strlen( $log ) > $max;
+		if ( $truncated ) { $log = substr( $log, 0, $max ) . "\n\nLog truncated. Open on GitHub for full output."; }
+		return array( 'run_id' => absint( $run_id ), 'job_id' => $worker['job_id'], 'step_name' => $worker['step_name'], 'log' => $log, 'truncated' => $truncated );
+	}
+
+	private function sanitize_worker_log( $raw ) {
+		$raw = preg_replace( '/(GEMINI_API_KEY|GROQ_API_KEY|CLOUDFLARE_API_TOKEN|MAC_TRACKER_AUTOMATION_SECRET)\s*[:=]\s*[^\s]+/i', '$1=[REDACTED]', $raw );
+		$raw = preg_replace( '/Authorization\s*:\s*Bearer\s+[^\s]+/i', 'Authorization: Bearer [REDACTED]', $raw );
+		$start = strpos( $raw, 'MAC_VISUAL_WORKER_START' );
+		$end = strpos( $raw, 'MAC_VISUAL_WORKER_END' );
+		if ( false !== $start ) { $raw = substr( $raw, $start, false !== $end && $end > $start ? $end - $start : null ); }
+		$lines = preg_split( '/\r\n|\r|\n/', (string) $raw );
+		$keep = array();
+		foreach ( $lines as $line ) {
+			$line = trim( preg_replace( '/^\d{4}-\d\d-\d\dT[^ ]+\s+/', '', $line ) );
+			if ( '' === $line ) { continue; }
+			if ( preg_match( '/(Captured bundle|Tone #|Visual Tone Action|Action:|Scope:|Logical website limit|Capture:|Analysis:|Success:|Blocked:|Failed:|Processed:|Needs review:|Final:|Pixel:|Qwen:|Llama:|Gemini:)/i', $line ) || false !== strpos( $line, 'MAC_VISUAL_WORKER_' ) ) { $keep[] = $line; }
+		}
+		return implode( "\n", $keep );
+	}
+
 	public function action( $run_id, $action ) {
 		$run = $this->get_visual_run( $run_id, true );
 		if ( is_wp_error( $run ) ) { return $run; }
@@ -125,7 +173,8 @@ class MAC_Tracker_GitHub_Actions {
 	}
 
 	public function clear_cache( $run_id = 0 ) {
-		foreach ( array( 5, 10, 20 ) as $per_page ) { delete_transient( 'mac_tracker_visual_workflow_runs_' . $per_page ); }
+		foreach ( array( 1, 2, 3, 4, 5, 10, 20 ) as $page ) { foreach ( array( 5, 10, 20 ) as $per_page ) { delete_transient( 'mac_tracker_visual_workflow_runs_' . $page . '_' . $per_page ); } }
+		foreach ( array( 5, 10, 20 ) as $legacy_per_page ) { delete_transient( 'mac_tracker_visual_workflow_runs_' . $legacy_per_page ); }
 		if ( $run_id ) { delete_transient( 'mac_tracker_visual_workflow_run_' . absint( $run_id ) ); }
 	}
 

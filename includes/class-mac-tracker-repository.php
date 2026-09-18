@@ -630,8 +630,31 @@ class MAC_Tracker_Repository {
 		}
 	}
 
-	public function visual_runs( $limit = 10 ) {
-		return (array) $this->wpdb->get_results( $this->wpdb->prepare( "SELECT * FROM {$this->visual_runs} ORDER BY CASE WHEN status IN ('queued','in_progress','cancelling') THEN 0 ELSE 1 END, updated_at DESC LIMIT %d", max( 1, min( 20, absint( $limit ) ) ) ), ARRAY_A );
+	public function visual_runs_page( $page = 1, $per_page = 5 ) {
+		$page = max( 1, absint( $page ) ); $per_page = max( 1, min( 20, absint( $per_page ) ) ); $offset = ( $page - 1 ) * $per_page;
+		$order = "CASE WHEN status IN ('queued','in_progress','cancelling') THEN 0 ELSE 1 END ASC, github_run_number DESC, github_run_id DESC";
+		$runs = (array) $this->wpdb->get_results( $this->wpdb->prepare( "SELECT * FROM {$this->visual_runs} ORDER BY {$order} LIMIT %d OFFSET %d", $per_page, $offset ), ARRAY_A );
+		$total = (int) $this->wpdb->get_var( "SELECT COUNT(*) FROM {$this->visual_runs}" );
+		return array( 'runs' => $runs, 'total' => $total, 'page' => $page, 'per_page' => $per_page, 'total_pages' => max( 1, (int) ceil( $total / $per_page ) ) );
+	}
+
+	/** Merge only the GitHub page requested by the monitor; never load all history. */
+	public function visual_runs_for_github_page( array $github_runs, $page, $per_page, $total ) {
+		$ids = array_values( array_filter( array_map( function( $run ) { return absint( $run['id'] ?? 0 ); }, $github_runs ) ) );
+		if ( empty( $ids ) ) { return array(); }
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$rows = (array) $this->wpdb->get_results( $this->wpdb->prepare( "SELECT * FROM {$this->visual_runs} WHERE github_run_id IN ({$placeholders})", $ids ), ARRAY_A );
+		usort( $rows, function( $a, $b ) { $active_a = in_array( $a['status'] ?? '', array( 'queued', 'in_progress', 'cancelling' ), true ) ? 0 : 1; $active_b = in_array( $b['status'] ?? '', array( 'queued', 'in_progress', 'cancelling' ), true ) ? 0 : 1; if ( $active_a !== $active_b ) { return $active_a <=> $active_b; } $number = (int) ( $b['github_run_number'] ?? 0 ) <=> (int) ( $a['github_run_number'] ?? 0 ); return 0 !== $number ? $number : ( (int) ( $b['github_run_id'] ?? 0 ) <=> (int) ( $a['github_run_id'] ?? 0 ) ); } );
+		return $rows;
+	}
+
+	public function visual_runs( $limit = 10 ) { return $this->visual_runs_page( 1, $limit )['runs']; }
+
+	public function visual_run_summary() {
+		$rows = (array) $this->wpdb->get_results( "SELECT status, conclusion FROM {$this->visual_runs}", ARRAY_A );
+		$summary = array( 'running' => 0, 'queued' => 0, 'failed' => 0, 'completed' => 0 );
+		foreach ( $rows as $row ) { if ( in_array( $row['status'], array( 'in_progress', 'cancelling' ), true ) ) { ++$summary['running']; } elseif ( 'queued' === $row['status'] ) { ++$summary['queued']; } elseif ( in_array( $row['conclusion'], array( 'failure', 'timed_out', 'action_required' ), true ) ) { ++$summary['failed']; } elseif ( 'completed' === $row['status'] ) { ++$summary['completed']; } }
+		return $summary;
 	}
 
 	public function visual_run_detail( $run_id ) {

@@ -75,4 +75,7 @@ jobs:
       - name: Install Chromium on this temporary GitHub runner
         run: npx playwright install --with-deps chromium
       - name: Capture full pages and classify tone
-        run: node .github/scripts/capture-visual-tone.mjs
+        run: |
+          echo "=== MAC_VISUAL_WORKER_START ==="
+          node .github/scripts/capture-visual-tone.mjs
+          echo "=== MAC_VISUAL_WORKER_END ==="
