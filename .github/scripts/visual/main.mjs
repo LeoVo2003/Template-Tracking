@@ -3,7 +3,7 @@ import { appendFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { captureRenderedPage } from './capture.mjs';
 import { classifyTone } from './classify.mjs';
-import { normalizeJobScope } from './job-scope.mjs';
+import { fullRunContinuationTargets, normalizeJobScope } from './job-scope.mjs';
 import { PageValidationError } from './validate-page.mjs';
 
 const siteUrl = String(process.env.MAC_TRACKER_SITE_URL || '').replace(/\/+$/, '');
@@ -30,14 +30,29 @@ if (!freeOnly) throw new Error('FREE_ONLY must be true. This workflow is prohibi
 const headers = { 'X-MAC-Tracker-Automation': secret, 'User-Agent': 'MAC-Project-Tracker-GitHub-Action/3.0.0', Accept: 'application/json' };
 await mkdir(workDir, { recursive: true });
 
-async function claimJobs(requestedScope) {
+async function claimJobs(requestedScope, { continuation = false } = {}) {
   const response = await fetch(`${apiBase}/jobs/claim`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(requestedScope) });
   if (!response.ok) throw new Error(`Scoped job claim failed: HTTP ${response.status} ${(await response.text()).replace(/\s+/g, ' ').slice(0, 700)}`);
   const payload = await response.json();
-  summary.claimed += (payload.claimed_ids || []).length;
-  summary.skipped += (payload.skipped_ids || []).length;
+  // A full-run continuation is work for the same logical websites. It must not
+  // inflate the batch count or turn a race into a misleading skipped total.
+  if (!continuation) {
+    summary.claimed += (payload.claimed_ids || []).length;
+    summary.skipped += (payload.skipped_ids || []).length;
+  }
   await reportRunHeartbeat({ current_step: 'claiming_targets', message: `${(payload.claimed_ids || []).length} targets claimed`, event_type: 'targets_claimed' });
   return payload.items || [];
+}
+
+/** Queue only this run's freshly persisted captures for the tone continuation. */
+async function promoteFreshCaptures(capturedIds) {
+  const response = await fetch(`${apiBase}/jobs/promote-captures`, {
+    method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target_ids: capturedIds }),
+  });
+  if (!response.ok) throw new Error(`Fresh-capture promotion failed: HTTP ${response.status} ${(await response.text()).replace(/\s+/g, ' ').slice(0, 700)}`);
+  const payload = await response.json();
+  return payload.promoted_ids || [];
 }
 
 async function workerConfig() {
@@ -177,7 +192,7 @@ async function processToneItems(items, aiStrategy, autoAccept, geminiDailyBudget
 }
 
 async function writeSummary() {
-  const lines = ['## Visual Tone Action', '', `- Action: ${sourceAction}`, `- Scope: ${scope.run_mode}/${scope.stage}`, `- Logical website limit: ${scope.limit}`, `- Claimed: ${summary.claimed}; skipped exact targets: ${summary.skipped}`, `- Capture operations: ${summary.captureSuccess + summary.captureBlocked + summary.captureFailed}`, `- Analysis operations: ${summary.qwenAccepted + summary.geminiJudged + summary.needsReview + summary.providerDeferred}`, '', '### Capture', `- Success: ${summary.captureSuccess}`, `- Blocked: ${summary.captureBlocked}`, `- Failed: ${summary.captureFailed}`, '', '### Analysis', `- Qwen accepted: ${summary.qwenAccepted}`, `- Gemini judged: ${summary.geminiJudged}`, `- Needs review: ${summary.needsReview}`, `- Free provider deferred: ${summary.providerDeferred}`, '', '- Policy: FREE_ONLY=true; no paid provider was selected.', ''].join('\n');
+  const lines = ['## Visual Tone Action', '', `- Action: ${sourceAction}`, `- Scope: ${scope.run_mode}/${scope.stage}`, `- Logical website limit: ${scope.limit}`, `- Claimed logical websites: ${summary.claimed}; skipped exact targets: ${summary.skipped}`, `- Capture operations: ${summary.captureSuccess + summary.captureBlocked + summary.captureFailed}`, `- Analysis operations: ${summary.qwenAccepted + summary.geminiJudged + summary.needsReview + summary.providerDeferred}`, '', '### Capture', `- Success: ${summary.captureSuccess}`, `- Blocked: ${summary.captureBlocked}`, `- Failed: ${summary.captureFailed}`, '', '### Analysis', `- Qwen accepted: ${summary.qwenAccepted}`, `- Gemini judged: ${summary.geminiJudged}`, `- Needs review: ${summary.needsReview}`, `- Free provider deferred: ${summary.providerDeferred}`, '', '- Policy: FREE_ONLY=true; no paid provider was selected.', ''].join('\n');
   console.log(lines);
   if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `${lines}\n`);
 }
@@ -193,11 +208,16 @@ try {
     const geminiDailyBudgetPerKey = Number(config.gemini_daily_budget_per_key || 8);
     await processToneItems(jobs.filter((item) => item.stage === 'tone'), config.ai_strategy || 'smart', Number(config.auto_accept_threshold || 0.85), geminiDailyBudgetPerKey);
     const capturedIds = await processCaptureItems(jobs.filter((item) => item.stage === 'capture'));
-    // A full batch may analyze its own fresh capture, but never any other queue
-    // item and never as a second logical website slot.
-    if (capturedIds.length && (scope.run_mode === 'batch' || scope.stage === 'full')) {
-      const freshToneJobs = await claimJobs({ run_mode: 'targeted', stage: 'tone', target_ids: capturedIds, limit: capturedIds.length });
-      await processToneItems(freshToneJobs, config.ai_strategy || 'smart', Number(config.auto_accept_threshold || 0.85), geminiDailyBudgetPerKey);
+    // Full mode alone continues a successful capture into tone analysis. It is
+    // explicitly scoped to the returned IDs, so it cannot drain another run's
+    // stored-analysis queue or inflate the logical website summary.
+    if (capturedIds.length && scope.stage === 'full') {
+      const promotedIds = await promoteFreshCaptures(capturedIds);
+      const freshToneIds = fullRunContinuationTargets(scope.stage, capturedIds, promotedIds);
+      if (freshToneIds.length) {
+        const freshToneJobs = await claimJobs({ run_mode: 'targeted', stage: 'tone', target_ids: freshToneIds, limit: freshToneIds.length }, { continuation: true });
+        await processToneItems(freshToneJobs, config.ai_strategy || 'smart', Number(config.auto_accept_threshold || 0.85), geminiDailyBudgetPerKey);
+      }
     }
   }
 } catch (error) {

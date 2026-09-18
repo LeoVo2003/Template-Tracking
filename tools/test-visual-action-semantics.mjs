@@ -9,7 +9,7 @@ const browserAdmin = await readFile('assets/admin.js', 'utf8');
 
 test('analysis-only worker path does not invoke capture processing', () => {
   assert.match(main, /processToneItems\(jobs\.filter\(\(item\) => item\.stage === 'tone'\)/);
-  assert.match(main, /scope\.run_mode === 'batch' \|\| scope\.stage === 'full'/);
+  assert.match(main, /scope\.stage === 'full'/);
 });
 
 test('a tone job receives its Gemini budget explicitly without out-of-scope config', () => {
@@ -23,7 +23,7 @@ test('a tone job receives its Gemini budget explicitly without out-of-scope conf
 });
 
 test('capture-only path stops before AI unless an explicit full stage is requested', () => {
-  assert.match(main, /capturedIds\.length && \(scope\.run_mode === 'batch' \|\| scope\.stage === 'full'\)/);
+  assert.match(main, /capturedIds\.length && scope\.stage === 'full'/);
 });
 
 test('repository persists failed stage and separates capture from analysis retries', () => {

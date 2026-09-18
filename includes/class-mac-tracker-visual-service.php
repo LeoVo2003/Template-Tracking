@@ -30,6 +30,12 @@ class MAC_Tracker_Visual_Service {
 			'permission_callback' => '__return_true',
 			'args'                => array( 'run_mode' => array( 'default' => 'batch' ), 'stage' => array( 'default' => 'full' ), 'target_ids' => array( 'default' => array() ), 'limit' => array( 'default' => 10 ) ),
 		) );
+		register_rest_route( self::NAMESPACE, '/visual/jobs/promote-captures', array(
+			'methods'             => WP_REST_Server::CREATABLE,
+			'callback'            => array( $this, 'promote_captures' ),
+			'permission_callback' => '__return_true',
+			'args'                => array( 'target_ids' => array( 'required' => true ) ),
+		) );
 		// Retained for a release so an older runner fails safely rather than exposing
 		// an unauthenticated queue. New runners must use scoped jobs/claim.
 		register_rest_route( self::NAMESPACE, '/visual/queue', array(
@@ -91,6 +97,18 @@ class MAC_Tracker_Visual_Service {
 		$target_ids = array_values( array_unique( array_filter( array_map( 'absint', $target_ids ) ) ) );
 		$result = $this->repository->visual_claim_jobs( $run_mode, $stage, $target_ids, $request->get_param( 'limit' ) );
 		return is_wp_error( $result ) ? $result : rest_ensure_response( $result );
+	}
+
+	/** Make only this worker's just-captured IDs eligible for its full-run tone pass. */
+	public function promote_captures( WP_REST_Request $request ) {
+		if ( ! $this->authorized( $request ) ) { return new WP_Error( 'mac_tracker_visual_forbidden', 'Automation authorization failed.', array( 'status' => 401 ) ); }
+		$target_ids = $request->get_param( 'target_ids' );
+		if ( is_string( $target_ids ) ) { $target_ids = json_decode( $target_ids, true ); }
+		if ( ! is_array( $target_ids ) ) { return new WP_Error( 'mac_tracker_visual_targets', 'target_ids must be a JSON array.', array( 'status' => 400 ) ); }
+		$target_ids = array_values( array_unique( array_filter( array_map( 'absint', $target_ids ) ) ) );
+		if ( empty( $target_ids ) ) { return new WP_Error( 'mac_tracker_visual_targets', 'At least one fresh capture ID is required.', array( 'status' => 400 ) ); }
+		$result = $this->repository->promote_captured_visuals_for_full_analysis( $target_ids );
+		return is_wp_error( $result ) ? $result : rest_ensure_response( array( 'promoted_ids' => $result ) );
 	}
 
 	public function ingest( WP_REST_Request $request ) {

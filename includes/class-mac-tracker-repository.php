@@ -702,6 +702,34 @@ class MAC_Tracker_Repository {
 	}
 
 	/**
+	 * Full-run bridge: only captures created by this worker become tone work.
+	 * It never scans or consumes the wider stored-analysis queue.
+	 */
+	public function promote_captured_visuals_for_full_analysis( array $snapshot_ids ) {
+		$snapshot_ids = array_values( array_unique( array_filter( array_map( 'absint', $snapshot_ids ) ) ) );
+		if ( empty( $snapshot_ids ) ) { return array(); }
+		$lock_name = 'mac_tracker_visual_' . md5( $this->visuals );
+		if ( 1 !== (int) $this->wpdb->get_var( $this->wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $lock_name ) ) ) {
+			return new WP_Error( 'mac_tracker_visual_promote_lock', 'Unable to reserve fresh captures for analysis.' );
+		}
+		try {
+			// The same lock guards normal claims. This selection and update therefore
+			// form one atomic hand-off from this capture run to this tone run.
+			$placeholders = implode( ',', array_fill( 0, count( $snapshot_ids ), '%d' ) );
+			$eligible_sql = "SELECT project_id FROM {$this->visuals} WHERE project_id IN ({$placeholders}) AND pipeline_status = 'captured' AND capture_status = 'captured' AND screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP())";
+			$eligible = array_values( array_map( 'absint', $this->wpdb->get_col( $this->wpdb->prepare( $eligible_sql, $snapshot_ids ) ) ) );
+			if ( empty( $eligible ) ) { return array(); }
+			$eligible_placeholders = implode( ',', array_fill( 0, count( $eligible ), '%d' ) );
+			$sql = "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', tone_status = 'pending', tone_token = '', next_retry_at = NULL, updated_at = %s WHERE project_id IN ({$eligible_placeholders}) AND pipeline_status = 'captured' AND capture_status = 'captured' AND screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP())";
+			$result = $this->wpdb->query( $this->wpdb->prepare( $sql, array_merge( array( MAC_Tracker_Time::now_utc() ), $eligible ) ) );
+			if ( false === $result ) { return new WP_Error( 'mac_tracker_visual_promote', $this->wpdb->last_error ?: 'Unable to queue fresh captures for analysis.' ); }
+			return $eligible;
+		} finally {
+			$this->wpdb->get_var( $this->wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $lock_name ) );
+		}
+	}
+
+	/**
 	 * Claim one explicitly-scoped Visual Tone plan.
 	 *
 	 * A targeted plan never falls back to the shared queue. A batch plan spends its

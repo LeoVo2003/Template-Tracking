@@ -39,6 +39,17 @@ export function batchCapacity(limit, waitingToneCount) {
   return { total, tone, capture: total - tone };
 }
 
+/**
+ * A full run may only analyze IDs that it just captured successfully. The
+ * server also enforces this; keeping the intersection here makes the runner
+ * fail closed if a malformed response ever contains another queue item's ID.
+ */
+export function fullRunContinuationTargets(stage, capturedIds, promotedIds) {
+  if ('full' !== String(stage || '').trim().toLowerCase()) return [];
+  const captured = new Set(uniqueIds(Array.isArray(capturedIds) ? capturedIds : []));
+  return uniqueIds(Array.isArray(promotedIds) ? promotedIds : []).filter((id) => captured.has(id));
+}
+
 function uniqueIds(values) {
   const ids = [];
   for (const value of values) {
