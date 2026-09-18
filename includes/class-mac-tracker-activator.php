@@ -36,6 +36,7 @@ class MAC_Tracker_Activator {
 		$visuals  = $wpdb->prefix . 'mac_tracker_visual_reviews';
 		$visual_runs = $wpdb->prefix . 'mac_tracker_visual_runs';
 		$visual_run_events = $wpdb->prefix . 'mac_tracker_visual_run_events';
+		$exclusions = $wpdb->prefix . 'mac_tracker_project_exclusions';
 		$pins     = $wpdb->prefix . 'mac_tracker_pinned_projects';
 		$logs     = $wpdb->prefix . 'mac_tracker_sync_logs';
 
@@ -109,6 +110,10 @@ class MAC_Tracker_Activator {
 				ai_confidence decimal(4,3) NULL,
 				analyzed_at datetime NULL,
 				manual_locked tinyint(1) NOT NULL DEFAULT 0,
+				human_locked tinyint(1) NOT NULL DEFAULT 0,
+				approved_by bigint(20) unsigned NOT NULL DEFAULT 0,
+				approved_at datetime NULL,
+				approved_capture_revision int(10) unsigned NOT NULL DEFAULT 0,
 				manual_tone varchar(64) NOT NULL DEFAULT '',
 				manual_updated_at datetime NULL,
 				capture_status varchar(32) NOT NULL DEFAULT 'pending',
@@ -132,8 +137,25 @@ class MAC_Tracker_Activator {
 				KEY pipeline_status (pipeline_status),
 				KEY lease_until (lease_until),
 				KEY manual_locked (manual_locked),
+				KEY human_locked (human_locked),
 				KEY capture_status (capture_status),
 				KEY tone_status (tone_status)
+			) {$charset};",
+			"CREATE TABLE {$exclusions} (
+				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+				wpm_project_id bigint(20) unsigned NOT NULL,
+				project_name varchar(255) NOT NULL DEFAULT '',
+				website_url varchar(2048) NOT NULL DEFAULT '',
+				scope varchar(32) NOT NULL DEFAULT 'visual_color',
+				reason text NULL,
+				created_by bigint(20) unsigned NOT NULL DEFAULT 0,
+				created_at datetime NOT NULL,
+				restored_by bigint(20) unsigned NOT NULL DEFAULT 0,
+				restored_at datetime NULL,
+				is_active tinyint(1) NOT NULL DEFAULT 1,
+				PRIMARY KEY (id),
+				UNIQUE KEY wpm_project_id (wpm_project_id),
+				KEY is_active (is_active)
 			) {$charset};",
 			"CREATE TABLE {$visual_runs} (
 				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
@@ -254,6 +276,8 @@ class MAC_Tracker_Activator {
 			// Establish one canonical V2 state before a later phase changes capture transport.
 			( new MAC_Tracker_Repository() )->migrate_visual_pipeline_v2();
 		}
+		// Split human approval from the legacy manual tone flag and preserve old locks.
+		$wpdb->query( "UPDATE {$visuals} SET human_locked = 1 WHERE manual_locked = 1 AND human_locked = 0" );
 		update_option( 'mac_tracker_db_version', MAC_TRACKER_VERSION, false );
 	}
 }

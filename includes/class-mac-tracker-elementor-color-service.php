@@ -97,6 +97,9 @@ class MAC_Tracker_Elementor_Color_Service {
 		if ( ! $snapshot ) {
 			return new WP_Error( 'mac_tracker_color_snapshot_missing', 'That project snapshot no longer exists.' );
 		}
+		if ( $this->repository->is_project_excluded( $snapshot['wpm_project_id'] ?? 0 ) ) {
+			return new WP_Error( 'PROJECT_EXCLUDED', 'This project is excluded from Color Review.' );
+		}
 		if ( ! empty( $snapshot['color_locked'] ) ) {
 			return new WP_Error( 'mac_tracker_color_locked', 'This palette is approved and locked. It was not changed.' );
 		}

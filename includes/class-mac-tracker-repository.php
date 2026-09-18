@@ -13,6 +13,7 @@ class MAC_Tracker_Repository {
 	private $logs;
 	private $visual_runs;
 	private $visual_run_events;
+	private $exclusions;
 
 	public function __construct() {
 		global $wpdb;
@@ -24,6 +25,43 @@ class MAC_Tracker_Repository {
 		$this->logs     = $wpdb->prefix . 'mac_tracker_sync_logs';
 		$this->visual_runs = $wpdb->prefix . 'mac_tracker_visual_runs';
 		$this->visual_run_events = $wpdb->prefix . 'mac_tracker_visual_run_events';
+		$this->exclusions = $wpdb->prefix . 'mac_tracker_project_exclusions';
+	}
+
+	/** Shared exclusion predicate used by every Visual Tone/Color queue. */
+	private function exclusion_sql( $project_alias = 'p' ) {
+		return "NOT EXISTS (SELECT 1 FROM {$this->exclusions} ex WHERE ex.wpm_project_id = {$project_alias}.wpm_project_id AND ex.is_active = 1)";
+	}
+
+	private function visual_exclusion_sql( $visual_alias = 'v' ) {
+		return "NOT EXISTS (SELECT 1 FROM {$this->projects} excluded_project INNER JOIN {$this->exclusions} ex ON ex.wpm_project_id = excluded_project.wpm_project_id AND ex.is_active = 1 WHERE excluded_project.id = {$visual_alias}.project_id)";
+	}
+
+	public function is_project_excluded( $wpm_project_id ) {
+		return 1 === (int) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT is_active FROM {$this->exclusions} WHERE wpm_project_id = %d", absint( $wpm_project_id ) ) );
+	}
+
+	private function is_snapshot_excluded( $snapshot_id ) {
+		$wpm_id = (int) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT wpm_project_id FROM {$this->projects} WHERE id = %d", absint( $snapshot_id ) ) );
+		return $wpm_id > 0 && $this->is_project_excluded( $wpm_id );
+	}
+
+	public function exclude_project( $snapshot_id, $reason = '' ) {
+		$row = $this->wpdb->get_row( $this->wpdb->prepare( "SELECT wpm_project_id, name, website_url FROM {$this->projects} WHERE id = %d", absint( $snapshot_id ) ), ARRAY_A );
+		if ( ! $row || empty( $row['wpm_project_id'] ) ) { return new WP_Error( 'mac_tracker_exclusion_missing', 'Project not found.' ); }
+		$now = MAC_Tracker_Time::now_utc();
+		$data = array( 'wpm_project_id' => absint( $row['wpm_project_id'] ), 'project_name' => sanitize_text_field( $row['name'] ), 'website_url' => esc_url_raw( $row['website_url'] ), 'scope' => 'visual_color', 'reason' => sanitize_textarea_field( $reason ), 'created_by' => get_current_user_id(), 'created_at' => $now, 'restored_by' => 0, 'restored_at' => null, 'is_active' => 1 );
+		$existing = (int) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT id FROM {$this->exclusions} WHERE wpm_project_id = %d", $data['wpm_project_id'] ) );
+		if ( $existing ) { unset( $data['created_by'], $data['created_at'] ); return false === $this->wpdb->update( $this->exclusions, $data, array( 'id' => $existing ) ) ? new WP_Error( 'mac_tracker_exclusion_save', $this->wpdb->last_error ) : true; }
+		return false === $this->wpdb->insert( $this->exclusions, $data ) ? new WP_Error( 'mac_tracker_exclusion_save', $this->wpdb->last_error ) : true;
+	}
+
+	public function restore_project_exclusion( $wpm_project_id ) {
+		return false === $this->wpdb->update( $this->exclusions, array( 'is_active' => 0, 'restored_by' => get_current_user_id(), 'restored_at' => MAC_Tracker_Time::now_utc() ), array( 'wpm_project_id' => absint( $wpm_project_id ) ) ) ? new WP_Error( 'mac_tracker_exclusion_restore', $this->wpdb->last_error ) : true;
+	}
+
+	public function excluded_projects() {
+		return (array) $this->wpdb->get_results( "SELECT ex.*, u.display_name AS created_by_name FROM {$this->exclusions} ex LEFT JOIN {$this->wpdb->users} u ON u.ID = ex.created_by WHERE ex.is_active = 1 ORDER BY ex.created_at DESC", ARRAY_A );
 	}
 
 	/** Create a snapshot once. Existing payloads never change. */
@@ -351,6 +389,9 @@ class MAC_Tracker_Repository {
 		// instead of duplicating that project with its CSV row.
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
 		$where    = array( $visible );
+		if ( ! empty( $filters['exclude_visual'] ) ) {
+			$where[] = $this->exclusion_sql( 'p' );
+		}
 		$args     = array();
 
 		$search = trim( (string) ( $filters['search'] ?? '' ) );
@@ -482,6 +523,9 @@ class MAC_Tracker_Repository {
 	/** Reserved for color phase; locked records ignore later sync changes. */
 	public function upsert_color_record( $project_id, $source_type, $source_raw, array $colors = array(), $status = 'pending' ) {
 		$project_id = absint( $project_id );
+		if ( $this->is_snapshot_excluded( $project_id ) ) {
+			return new WP_Error( 'PROJECT_EXCLUDED', 'This project is excluded from Color Review.' );
+		}
 		$existing   = $this->wpdb->get_row( $this->wpdb->prepare( "SELECT id, locked FROM {$this->colors} WHERE project_id = %d", $project_id ), ARRAY_A );
 		if ( $existing && ! empty( $existing['locked'] ) ) {
 			return array( 'id' => (int) $existing['id'], 'locked' => true, 'changed' => false );
@@ -518,6 +562,7 @@ class MAC_Tracker_Repository {
 		$page = $this->project_page(
 			array(
 				'website' => 'yes',
+				'exclude_visual' => true,
 				'per_page' => 0,
 				'orderby'  => 'date',
 				'order'    => 'desc',
@@ -530,13 +575,13 @@ class MAC_Tracker_Repository {
 	public function pending_color_snapshot_ids( $limit = 6 ) {
 		$limit = max( 1, min( 12, absint( $limit ) ) );
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
-		$sql = "SELECT p.id FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND c.id IS NULL ORDER BY p.task_completed_at DESC, p.id DESC LIMIT %d";
+		$sql = "SELECT p.id FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND {$this->exclusion_sql('p')} AND p.website_url <> '' AND c.id IS NULL ORDER BY p.task_completed_at DESC, p.id DESC LIMIT %d";
 		return array_map( 'intval', (array) $this->wpdb->get_col( $this->wpdb->prepare( $sql, $limit ) ) );
 	}
 
 	public function pending_color_snapshot_count() {
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
-		return (int) $this->wpdb->get_var( "SELECT COUNT(*) FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND c.id IS NULL" );
+		return (int) $this->wpdb->get_var( "SELECT COUNT(*) FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND {$this->exclusion_sql('p')} AND p.website_url <> '' AND c.id IS NULL" );
 	}
 
 	/** Retain an actionable failure rather than retrying a bad site forever in the queue. */
@@ -685,7 +730,7 @@ class MAC_Tracker_Repository {
 	public function visual_review_rows( $limit = 120 ) {
 		$limit = max( 1, min( 300, absint( $limit ) ) );
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
-		$sql = "SELECT p.*, v.screenshot_url, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND (v.screenshot_url <> '' OR v.pipeline_status IN ('idle', 'capture_queued', 'capturing', 'retry_wait', 'blocked', 'failed')) ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d";
+		$sql = "SELECT p.*, v.screenshot_url, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND {$this->exclusion_sql('p')} AND (v.screenshot_url <> '' OR v.pipeline_status IN ('idle', 'capture_queued', 'capturing', 'retry_wait', 'blocked', 'failed')) ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d";
 		return (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
 	}
 
@@ -693,7 +738,7 @@ class MAC_Tracker_Repository {
 	public function visual_queue( $stage, $limit = 10 ) {
 		$limit = max( 1, min( 25, absint( $limit ) ) );
 		$stage = 'tone' === $stage ? 'tone' : 'capture';
-		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design'))) AND {$this->exclusion_sql('p')}";
 		$lock_name = 'mac_tracker_visual_' . md5( $this->visuals );
 		$locked = (int) $this->wpdb->get_var( $this->wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $lock_name ) );
 		if ( 1 !== $locked ) { return array(); }
@@ -704,11 +749,11 @@ class MAC_Tracker_Repository {
 				// A quota or transient provider failure parks a completed capture in
 				// retry_wait. Once its delay has elapsed, return it to the normal
 				// tone queue; no human click and no new capture are required.
-				$this->wpdb->query( "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND tone_status = 'pending' AND screenshot_url <> '' AND manual_locked = 0 AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
-				$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.pipeline_status = 'analysis_queued' AND v.manual_locked = 0 AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()) AND v.screenshot_url <> '' AND v.capture_bundle_json <> '' ORDER BY v.updated_at ASC LIMIT %d";
+				$this->wpdb->query( "UPDATE {$this->visuals} v SET pipeline_status = 'analysis_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND tone_status = 'pending' AND screenshot_url <> '' AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')} AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
+				$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.pipeline_status = 'analysis_queued' AND v.manual_locked = 0 AND v.human_locked = 0 AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()) AND v.screenshot_url <> '' AND v.capture_bundle_json <> '' ORDER BY v.updated_at ASC LIMIT %d";
 			} else {
-				$this->wpdb->query( "UPDATE {$this->visuals} SET pipeline_status = 'capture_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND capture_status = 'pending' AND screenshot_url = '' AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
-				$sql = "SELECT p.id, p.website_url, '' AS screenshot_url, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR (v.pipeline_status = 'capture_queued' AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()))) ORDER BY CASE WHEN v.id IS NULL THEN 1 ELSE 0 END, v.updated_at ASC, p.task_completed_at DESC, p.id DESC LIMIT %d";
+				$this->wpdb->query( "UPDATE {$this->visuals} v SET pipeline_status = 'capture_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND capture_status = 'pending' AND screenshot_url = '' AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')} AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
+				$sql = "SELECT p.id, p.website_url, '' AS screenshot_url, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR (v.pipeline_status = 'capture_queued' AND v.human_locked = 0 AND v.manual_locked = 0 AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()))) ORDER BY CASE WHEN v.id IS NULL THEN 1 ELSE 0 END, v.updated_at ASC, p.task_completed_at DESC, p.id DESC LIMIT %d";
 			}
 			$candidates = (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
 			foreach ( $candidates as $item ) {
@@ -739,11 +784,11 @@ class MAC_Tracker_Repository {
 			// The same lock guards normal claims. This selection and update therefore
 			// form one atomic hand-off from this capture run to this tone run.
 			$placeholders = implode( ',', array_fill( 0, count( $snapshot_ids ), '%d' ) );
-			$eligible_sql = "SELECT project_id FROM {$this->visuals} WHERE project_id IN ({$placeholders}) AND pipeline_status = 'captured' AND capture_status = 'captured' AND screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP())";
+			$eligible_sql = "SELECT project_id FROM {$this->visuals} v WHERE project_id IN ({$placeholders}) AND pipeline_status = 'captured' AND capture_status = 'captured' AND screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')} AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP())";
 			$eligible = array_values( array_map( 'absint', $this->wpdb->get_col( $this->wpdb->prepare( $eligible_sql, $snapshot_ids ) ) ) );
 			if ( empty( $eligible ) ) { return array(); }
 			$eligible_placeholders = implode( ',', array_fill( 0, count( $eligible ), '%d' ) );
-			$sql = "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', tone_status = 'pending', tone_token = '', next_retry_at = NULL, updated_at = %s WHERE project_id IN ({$eligible_placeholders}) AND pipeline_status = 'captured' AND capture_status = 'captured' AND screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP())";
+			$sql = "UPDATE {$this->visuals} v SET pipeline_status = 'analysis_queued', tone_status = 'pending', tone_token = '', next_retry_at = NULL, updated_at = %s WHERE project_id IN ({$eligible_placeholders}) AND pipeline_status = 'captured' AND capture_status = 'captured' AND screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')} AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP())";
 			$result = $this->wpdb->query( $this->wpdb->prepare( $sql, array_merge( array( MAC_Tracker_Time::now_utc() ), $eligible ) ) );
 			if ( false === $result ) { return new WP_Error( 'mac_tracker_visual_promote', $this->wpdb->last_error ?: 'Unable to queue fresh captures for analysis.' ); }
 			return $eligible;
@@ -803,14 +848,14 @@ class MAC_Tracker_Repository {
 	private function visual_queue_targeted( $stage, array $target_ids, $limit ) {
 		$stage = in_array( $stage, array( 'capture', 'tone', 'full' ), true ) ? $stage : 'full';
 		$limit = max( 1, min( count( $target_ids ), absint( $limit ) ) );
-		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design'))) AND {$this->exclusion_sql('p')}";
 		$lock_name = 'mac_tracker_visual_' . md5( $this->visuals );
 		if ( 1 !== (int) $this->wpdb->get_var( $this->wpdb->prepare( 'SELECT GET_LOCK(%s, 5)', $lock_name ) ) ) { return array(); }
 		$items = array();
 		try {
 			$this->reclaim_expired_visual_leases();
 			$placeholders = implode( ',', array_fill( 0, count( $target_ids ), '%d' ) );
-			$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw, v.pipeline_status FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.id IN ({$placeholders}) AND v.manual_locked = 0 AND ((%s = 'tone' AND v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '' AND v.capture_bundle_json <> '') OR (%s = 'capture' AND v.pipeline_status = 'capture_queued') OR (%s = 'full' AND ((v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '' AND v.capture_bundle_json <> '') OR v.pipeline_status = 'capture_queued'))) ORDER BY FIELD(p.id, " . implode( ',', array_fill( 0, count( $target_ids ), '%d' ) ) . ')';
+			$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw, v.pipeline_status FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.id IN ({$placeholders}) AND ((%s = 'tone' AND v.manual_locked = 0 AND v.human_locked = 0 AND v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '' AND v.capture_bundle_json <> '') OR (%s = 'capture' AND v.pipeline_status = 'capture_queued') OR (%s = 'full' AND ((v.manual_locked = 0 AND v.human_locked = 0 AND v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '' AND v.capture_bundle_json <> '') OR v.pipeline_status = 'capture_queued'))) ORDER BY FIELD(p.id, " . implode( ',', array_fill( 0, count( $target_ids ), '%d' ) ) . ')';
 			$args = array_merge( $target_ids, array( $stage, $stage, $stage ), $target_ids );
 			$candidates = (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $args ), ARRAY_A );
 			foreach ( array_slice( $candidates, 0, $limit ) as $item ) {
@@ -829,10 +874,13 @@ class MAC_Tracker_Repository {
 	}
 
 	public function save_visual_capture( $snapshot_id, $attachment_id, $url, $token, array $bundle = array(), $preview_url = '', $preview_attachment_id = 0 ) {
+		if ( $this->is_snapshot_excluded( $snapshot_id ) ) {
+			return new WP_Error( 'PROJECT_EXCLUDED', 'This project is excluded from Visual Tone and Color Review.', array( 'status' => 409 ) );
+		}
 		$bundle['artifacts'] = array_merge( (array) ( $bundle['artifacts'] ?? array() ), array( 'full_screenshot_url' => esc_url_raw( $url ), 'ai_preview_url' => esc_url_raw( $preview_url ) ) );
 		$metrics = (array) ( $bundle['ui']['metrics'] ?? array() );
 		$revision = 1 + (int) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT capture_revision FROM {$this->visuals} WHERE project_id = %d", absint( $snapshot_id ) ) );
-		return $this->save_claimed_visual( $snapshot_id, 'capture', $token, array( 'pipeline_status' => 'captured', 'capture_status' => 'captured', 'attachment_id' => absint( $attachment_id ), 'preview_attachment_id' => absint( $preview_attachment_id ), 'screenshot_url' => esc_url_raw( $url ), 'tone_status' => 'stale', 'tone_token' => '', 'captured_at' => MAC_Tracker_Time::now_utc(), 'capture_revision' => $revision, 'lease_until' => null, 'claimed_at' => null, 'job_token' => '', 'final_url' => esc_url_raw( (string) ( $bundle['final_url'] ?? '' ) ), 'http_status' => absint( $bundle['http_status'] ?? 0 ), 'page_title' => sanitize_text_field( (string) ( $bundle['page_title'] ?? '' ) ), 'capture_bundle_json' => wp_json_encode( $bundle ), 'metrics_json' => wp_json_encode( $metrics ), 'last_failed_stage' => '' ) );
+		return $this->save_claimed_visual( $snapshot_id, 'capture', $token, array( 'pipeline_status' => 'captured', 'capture_status' => 'captured', 'attachment_id' => absint( $attachment_id ), 'preview_attachment_id' => absint( $preview_attachment_id ), 'screenshot_url' => esc_url_raw( $url ), 'tone_status' => 'stale', 'tone_token' => '', 'captured_at' => MAC_Tracker_Time::now_utc(), 'capture_revision' => $revision, 'manual_locked' => 0, 'human_locked' => 0, 'approved_capture_revision' => 0, 'approved_by' => 0, 'approved_at' => null, 'lease_until' => null, 'claimed_at' => null, 'job_token' => '', 'final_url' => esc_url_raw( (string) ( $bundle['final_url'] ?? '' ) ), 'http_status' => absint( $bundle['http_status'] ?? 0 ), 'page_title' => sanitize_text_field( (string) ( $bundle['page_title'] ?? '' ) ), 'capture_bundle_json' => wp_json_encode( $bundle ), 'metrics_json' => wp_json_encode( $metrics ), 'last_failed_stage' => '' ) );
 	}
 
 	/** Claim a queue item before returning it to a GitHub worker. */
@@ -846,7 +894,8 @@ class MAC_Tracker_Repository {
 		$now = MAC_Tracker_Time::now_utc();
 		$lease_until = gmdate( 'Y-m-d H:i:s', time() + ( 15 * MINUTE_IN_SECONDS ) );
 		$attempt_column = 'tone' === $stage ? 'analysis_attempts' : 'capture_attempts';
-		$claimed = $this->wpdb->query( $this->wpdb->prepare( "UPDATE {$this->visuals} SET pipeline_status = %s, " . ( 'tone' === $stage ? "tone_status = 'analyzing', tone_token = %s" : "capture_status = 'capturing', capture_token = %s" ) . ", run_id = %s, job_token = %s, claimed_at = %s, lease_until = %s, {$attempt_column} = {$attempt_column} + 1, updated_at = %s WHERE project_id = %d AND pipeline_status = %s", 'tone' === $stage ? 'analyzing' : 'capturing', $token, $token, $token, $now, $lease_until, $now, absint( $snapshot_id ), 'tone' === $stage ? 'analysis_queued' : 'capture_queued' ) );
+		$lock_guard = 'tone' === $stage ? ' AND manual_locked = 0 AND human_locked = 0' : '';
+		$claimed = $this->wpdb->query( $this->wpdb->prepare( "UPDATE {$this->visuals} SET pipeline_status = %s, " . ( 'tone' === $stage ? "tone_status = 'analyzing', tone_token = %s" : "capture_status = 'capturing', capture_token = %s" ) . ", run_id = %s, job_token = %s, claimed_at = %s, lease_until = %s, {$attempt_column} = {$attempt_column} + 1, updated_at = %s WHERE project_id = %d AND pipeline_status = %s{$lock_guard}", 'tone' === $stage ? 'analyzing' : 'capturing', $token, $token, $token, $now, $lease_until, $now, absint( $snapshot_id ), 'tone' === $stage ? 'analysis_queued' : 'capture_queued' ) );
 		if ( false === $claimed ) { return new WP_Error( 'mac_tracker_visual_claim', $this->wpdb->last_error ?: 'Unable to claim visual work.' ); }
 		return 1 === (int) $claimed ? true : new WP_Error( 'mac_tracker_visual_claimed', 'This visual job is no longer ready to claim.', array( 'status' => 409 ) );
 	}
@@ -910,6 +959,9 @@ class MAC_Tracker_Repository {
 	}
 
 	public function save_visual_tone( $snapshot_id, $tone, $confidence, $reason, $raw, $token, $metadata = array() ) {
+		if ( $this->is_snapshot_excluded( $snapshot_id ) ) {
+			return new WP_Error( 'PROJECT_EXCLUDED', 'This project is excluded from Visual Tone and Color Review.', array( 'status' => 409 ) );
+		}
 		$allowed = $this->visual_tones();
 		$tone = in_array( $tone, $allowed, true ) ? $tone : 'Cần duyệt';
 		$numeric_confidence = is_numeric( $confidence ) ? max( 0, min( 1, (float) $confidence ) ) : ( isset( $metadata['ai_confidence'] ) ? max( 0, min( 1, (float) $metadata['ai_confidence'] ) ) : 0 );
@@ -948,6 +1000,10 @@ class MAC_Tracker_Repository {
 			'tone_token'  => '',
 			'ai_raw'      => wp_json_encode( array( 'manual' => true, 'user_id' => get_current_user_id(), 'predicted_tone' => sanitize_text_field( (string) ( $previous['tone'] ?? '' ) ), 'manual_tone' => $tone, 'analysis_before_manual' => $analysis, 'capture_bundle_version' => 3 ) ),
 			'manual_locked' => 1,
+			'human_locked' => 1,
+			'approved_by' => get_current_user_id(),
+			'approved_at' => MAC_Tracker_Time::now_utc(),
+			'approved_capture_revision' => (int) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT capture_revision FROM {$this->visuals} WHERE project_id = %d", absint( $snapshot_id ) ) ),
 			'manual_tone' => $tone,
 			'manual_updated_at' => MAC_Tracker_Time::now_utc(),
 			'analyzed_at' => MAC_Tracker_Time::now_utc(),
@@ -957,9 +1013,18 @@ class MAC_Tracker_Repository {
 		) );
 	}
 
+	/** Approve the current AI tone without changing its value. */
+	public function approve_visual_tone( $snapshot_id ) {
+		$row = $this->wpdb->get_row( $this->wpdb->prepare( "SELECT tone, tone_status, capture_revision FROM {$this->visuals} WHERE project_id = %d", absint( $snapshot_id ) ), ARRAY_A );
+		if ( ! $row || 'classified' !== $row['tone_status'] || ! in_array( $row['tone'], $this->visual_tones(), true ) || 'Cần duyệt' === $row['tone'] ) {
+			return new WP_Error( 'mac_tracker_visual_approve_invalid', 'Only a valid AI tone can be approved.' );
+		}
+		return $this->save_visual( absint( $snapshot_id ), array( 'human_locked' => 1, 'approved_by' => get_current_user_id(), 'approved_at' => MAC_Tracker_Time::now_utc(), 'approved_capture_revision' => absint( $row['capture_revision'] ), 'manual_locked' => 0 ) );
+	}
+
 	/** Explicit unlock is required before AI can write a manually reviewed tone again. */
 	public function unlock_manual_visual_tone( $snapshot_id ) {
-		return $this->save_visual( absint( $snapshot_id ), array( 'manual_locked' => 0, 'manual_tone' => '', 'manual_updated_at' => null ) );
+		return $this->save_visual( absint( $snapshot_id ), array( 'manual_locked' => 0, 'human_locked' => 0, 'approved_by' => 0, 'approved_at' => null, 'approved_capture_revision' => 0, 'manual_tone' => '', 'manual_updated_at' => null ) );
 	}
 
 	/** A visual-model prompt change can safely reuse the stored screenshots. */
@@ -969,7 +1034,7 @@ class MAC_Tracker_Repository {
 
 	/** Queue every reusable stored capture and return the exact rows changed. */
 	public function requeue_visual_tones_with_ids() {
-		$ids = (array) $this->wpdb->get_col( "SELECT project_id FROM {$this->visuals} WHERE screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP()) AND pipeline_status NOT IN ('capturing', 'analyzing')" );
+		$ids = (array) $this->wpdb->get_col( "SELECT project_id FROM {$this->visuals} v WHERE screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')} AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP()) AND pipeline_status NOT IN ('capturing', 'analyzing')" );
 		return $this->requeue_visual_analysis_targets( $ids );
 	}
 
@@ -978,11 +1043,11 @@ class MAC_Tracker_Repository {
 		$ids = array_values( array_unique( array_filter( array_map( 'absint', $snapshot_ids ) ) ) );
 		if ( empty( $ids ) ) { return array(); }
 		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
-		$eligible_sql = "SELECT project_id FROM {$this->visuals} WHERE project_id IN ({$placeholders}) AND screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP()) AND pipeline_status NOT IN ('capturing', 'analyzing')";
+		$eligible_sql = "SELECT project_id FROM {$this->visuals} v WHERE project_id IN ({$placeholders}) AND screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')} AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP()) AND pipeline_status NOT IN ('capturing', 'analyzing')";
 		$eligible = array_values( array_map( 'absint', (array) $this->wpdb->get_col( $this->wpdb->prepare( $eligible_sql, $ids ) ) ) );
 		if ( empty( $eligible ) ) { return array(); }
 		$eligible_placeholders = implode( ',', array_fill( 0, count( $eligible ), '%d' ) );
-		$sql = "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', tone = '', tone_group = '', precise_tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE project_id IN ({$eligible_placeholders})";
+		$sql = "UPDATE {$this->visuals} v SET pipeline_status = 'analysis_queued', tone = '', tone_group = '', precise_tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE project_id IN ({$eligible_placeholders}) AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')}";
 		$result = $this->wpdb->query( $this->wpdb->prepare( $sql, array_merge( array( MAC_Tracker_Time::now_utc() ), $eligible ) ) );
 		return false === $result ? array() : $eligible;
 	}
@@ -1002,7 +1067,7 @@ class MAC_Tracker_Repository {
 		if ( empty( $labels ) ) { return 0; }
 		$placeholders = implode( ',', array_fill( 0, count( $labels ), '%s' ) );
 		$args = array_merge( array( MAC_Tracker_Time::now_utc() ), $labels );
-		$sql = "UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', tone = '', tone_group = '', precise_tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE pipeline_status IN ('captured', 'classified', 'needs_review') AND screenshot_url <> '' AND manual_locked = 0 AND tone IN ({$placeholders})";
+		$sql = "UPDATE {$this->visuals} v SET pipeline_status = 'analysis_queued', tone = '', tone_group = '', precise_tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')} AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP()) AND pipeline_status NOT IN ('capturing', 'analyzing') AND tone IN ({$placeholders})";
 		return (int) $this->wpdb->query( $this->wpdb->prepare( $sql, $args ) );
 	}
 
@@ -1018,7 +1083,7 @@ class MAC_Tracker_Repository {
 		} elseif ( 'recapture' === $mode ) {
 			// Keep the old capture until the new bundle is committed. This prevents a
 			// failed recapture from leaving a card with no usable image.
-			$sql = "UPDATE {$this->visuals} SET pipeline_status = 'capture_queued', capture_status = 'pending', capture_token = '', tone = '', tone_group = '', precise_tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE manual_locked = 0 AND project_id IN ({$placeholders})";
+			$sql = "UPDATE {$this->visuals} v SET pipeline_status = 'capture_queued', capture_status = 'pending', capture_token = '', tone = '', tone_group = '', precise_tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE project_id IN ({$placeholders}) AND {$this->visual_exclusion_sql('v')}";
 			$args = array_merge( array( $now ), $ids );
 		} else {
 			$sql = "UPDATE {$this->visuals} SET pipeline_status = IF(screenshot_url <> '', 'analysis_queued', 'capture_queued'), capture_token = '', tone_token = '', tone_group = '', precise_tone = '', capture_status = IF(screenshot_url <> '', 'captured', 'pending'), tone_status = 'pending', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE pipeline_status = 'failed' AND project_id IN ({$placeholders})";
@@ -1040,13 +1105,13 @@ class MAC_Tracker_Repository {
 
 	public function requeue_failed_visual_items() {
 		$now = MAC_Tracker_Time::now_utc();
-		$result = $this->wpdb->query( $this->wpdb->prepare( "UPDATE {$this->visuals} SET pipeline_status = IF(screenshot_url <> '', 'analysis_queued', 'capture_queued'), capture_token = '', tone_token = '', capture_status = IF(screenshot_url <> '', 'captured', 'pending'), tone_status = 'pending', ai_raw = '', next_retry_at = NULL, last_error_code = '', last_error_message = NULL, last_error_at = NULL, updated_at = %s WHERE pipeline_status IN ('failed', 'retry_wait') AND manual_locked = 0", $now ) );
+		$result = $this->wpdb->query( $this->wpdb->prepare( "UPDATE {$this->visuals} v SET pipeline_status = IF(screenshot_url <> '', 'analysis_queued', 'capture_queued'), capture_token = '', tone_token = '', capture_status = IF(screenshot_url <> '', 'captured', 'pending'), tone_status = 'pending', ai_raw = '', next_retry_at = NULL, last_error_code = '', last_error_message = NULL, last_error_at = NULL, updated_at = %s WHERE pipeline_status IN ('failed', 'retry_wait') AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')}", $now ) );
 		return false === $result ? new WP_Error( 'mac_tracker_visual_retry', $this->wpdb->last_error ?: 'Unable to retry failed visual work.' ) : (int) $result;
 	}
 
 	/** Requeue failed work by its persisted stage; never turn a retry into a full run. */
 	public function requeue_failed_visual_items_by_stage() {
-		$rows = (array) $this->wpdb->get_results( "SELECT project_id, last_failed_stage, capture_status, tone_status, screenshot_url FROM {$this->visuals} WHERE pipeline_status IN ('failed', 'retry_wait', 'blocked') AND manual_locked = 0", ARRAY_A );
+		$rows = (array) $this->wpdb->get_results( "SELECT v.project_id, v.last_failed_stage, v.capture_status, v.tone_status, v.screenshot_url FROM {$this->visuals} v WHERE v.pipeline_status IN ('failed', 'retry_wait', 'blocked') AND v.manual_locked = 0 AND v.human_locked = 0 AND {$this->visual_exclusion_sql('v')}", ARRAY_A );
 		$capture = array(); $tone = array(); $skipped = array();
 		foreach ( $rows as $row ) {
 			$stage = (string) $row['last_failed_stage'];
@@ -1111,11 +1176,39 @@ class MAC_Tracker_Repository {
 	}
 
 	private function visual_manual_locked( $snapshot_id ) {
-		return 1 === (int) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT manual_locked FROM {$this->visuals} WHERE project_id = %d", absint( $snapshot_id ) ) );
+		return 1 === (int) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT (manual_locked OR human_locked) FROM {$this->visuals} WHERE project_id = %d", absint( $snapshot_id ) ) );
 	}
 
 	public function visual_tones() {
-		return array( 'Vàng kem sáng', 'Vàng kem', 'Vàng be', 'Vàng nâu', 'Vàng đen', 'Vàng trắng', 'Đen vàng', 'Đen trắng', 'Đen xám', 'Hồng xanh trắng', 'Hồng trắng', 'Hồng kem', 'Hồng be', 'Hồng xám', 'Hồng nâu', 'Hồng đen', 'Đỏ trắng', 'Đỏ kem', 'Đỏ be', 'Đỏ hồng', 'Đỏ nâu', 'Đỏ đen', 'Nâu kem', 'Nâu trắng', 'Nâu be', 'Nâu vàng', 'Nâu xám', 'Nâu đen', 'Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem', 'Trắng kem', 'Trắng be', 'Trắng xám', 'Kem trắng', 'Kem be', 'Kem xám', 'Kem nâu', 'Be trắng', 'Be kem', 'Be xám', 'Be nâu', 'Xám trắng', 'Xám kem', 'Xám be', 'Xám nâu', 'Xám đen', 'Tím hồng', 'Tím trắng', 'Tím kem', 'Tím be', 'Tím xám', 'Tím đen', 'Cam trắng', 'Cam kem', 'Cam be', 'Cam nâu', 'Cam đen', 'Cần duyệt' );
+		return array_keys( $this->visual_tone_palette() );
+	}
+
+	/** Canonical source of truth for every manual and AI tone swatch. */
+	public function visual_tone_palette() {
+		$families = array(
+			'Vàng' => array( '#E8B84A', '#FFF3C4', '#FFF9E8', '#C79021', '#3B2A0A' ),
+			'Đen' => array( '#151515', '#F0F0F0', '#FAFAFA', '#555555', '#111111' ),
+			'Hồng' => array( '#E98BA9', '#FADCE6', '#FFF4F7', '#C45A7A', '#5A2034' ),
+			'Đỏ' => array( '#C9343D', '#F7D5D7', '#FFF3F3', '#9E1F29', '#4B1015' ),
+			'Nâu' => array( '#8C5A3C', '#E6D0BF', '#F8EFE8', '#6A3D28', '#321C13' ),
+			'Xanh' => array( '#2F8F83', '#D7F0EC', '#F2FBFA', '#1D665D', '#123B37' ),
+			'Trắng' => array( '#FFFFFF', '#F3F3F0', '#FFFEFC', '#BDBDB5', '#343434' ),
+			'Kem' => array( '#F4D9AE', '#FFF0D4', '#FFF9EE', '#D3AA70', '#5A3E20' ),
+			'Be' => array( '#CBB39E', '#EEE1D4', '#FBF5EF', '#A38770', '#4B3A2C' ),
+			'Xám' => array( '#8D9297', '#DDE0E2', '#F5F6F7', '#686E73', '#282B2E' ),
+			'Tím' => array( '#8A5AA6', '#E8DDF0', '#FBF7FE', '#684080', '#33203F' ),
+			'Cam' => array( '#E47B35', '#FADCC7', '#FFF5ED', '#B8571D', '#51250E' ),
+		);
+		$tones = array( 'Vàng kem sáng', 'Vàng kem', 'Vàng be', 'Vàng nâu', 'Vàng đen', 'Vàng trắng', 'Đen vàng', 'Đen trắng', 'Đen xám', 'Hồng xanh trắng', 'Hồng trắng', 'Hồng kem', 'Hồng be', 'Hồng xám', 'Hồng nâu', 'Hồng đen', 'Đỏ trắng', 'Đỏ kem', 'Đỏ be', 'Đỏ hồng', 'Đỏ nâu', 'Đỏ đen', 'Nâu kem', 'Nâu trắng', 'Nâu be', 'Nâu vàng', 'Nâu xám', 'Nâu đen', 'Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem', 'Trắng kem', 'Trắng be', 'Trắng xám', 'Kem trắng', 'Kem be', 'Kem xám', 'Kem nâu', 'Be trắng', 'Be kem', 'Be xám', 'Be nâu', 'Xám trắng', 'Xám kem', 'Xám be', 'Xám nâu', 'Xám đen', 'Tím hồng', 'Tím trắng', 'Tím kem', 'Tím be', 'Tím xám', 'Tím đen', 'Cam trắng', 'Cam kem', 'Cam be', 'Cam nâu', 'Cam đen' );
+		$palette = array();
+		foreach ( $tones as $tone ) {
+			$parts = preg_split( '/\s+/', $tone );
+			$first = $families[ $parts[0] ] ?? $families['Xám'];
+			$second = $families[ $parts[1] ?? $parts[0] ] ?? $first;
+			$palette[ $tone ] = array( 'tone_a' => $first[0], 'tone_b' => $second[0], 'tone_soft' => $second[2], 'tone_line' => $first[3], 'tone_ink' => $first[4] );
+		}
+		$palette['Cần duyệt'] = array( 'tone_a' => '#E8B84A', 'tone_b' => '#FFF3C4', 'tone_soft' => '#FFF9E8', 'tone_line' => '#C79021', 'tone_ink' => '#3B2A0A' );
+		return $palette;
 	}
 
 	/** Reject late callbacks from a superseded Analyze/Capture request. */
@@ -1130,6 +1223,9 @@ class MAC_Tracker_Repository {
 
 	private function save_claimed_visual( $snapshot_id, $stage, $token, array $data ) {
 		$snapshot_id = absint( $snapshot_id );
+		if ( $this->is_snapshot_excluded( $snapshot_id ) ) {
+			return new WP_Error( 'PROJECT_EXCLUDED', 'This project is excluded from Visual Tone and Color Review.', array( 'status' => 409 ) );
+		}
 		$stage = 'tone' === $stage ? 'tone' : 'capture';
 		$token = sanitize_text_field( (string) $token );
 		if ( ! $this->visual_claim_matches( $snapshot_id, $stage, $token ) ) {
@@ -1161,6 +1257,9 @@ class MAC_Tracker_Repository {
 	/** Approval locks a reviewed palette so later extraction cannot overwrite it. */
 	public function approve_color_record( $project_id, array $colors ) {
 		$project_id = absint( $project_id );
+		if ( $this->is_snapshot_excluded( $project_id ) ) {
+			return new WP_Error( 'PROJECT_EXCLUDED', 'This project is excluded from Color Review.' );
+		}
 		if ( $project_id <= 0 || empty( $colors ) ) {
 			return new WP_Error( 'mac_tracker_color_approve_invalid', 'Add at least one valid color before approving.' );
 		}
