@@ -260,7 +260,7 @@ class MAC_Tracker_Admin {
 				<p class="mac-tracker-eyebrow">Visual Tone Automation</p>
 				<h2 data-visual-mode-heading><?php echo 'auto' === $visual_mode ? 'Auto processing enabled' : 'Manual review first'; ?></h2>
 				<p>Mode: <strong data-visual-mode-label><?php echo 'auto' === $visual_mode ? 'AUTO' : 'MANUAL'; ?></strong> · AI: <strong><?php echo esc_html( 'smart' === $ai_strategy ? 'Qwen → Gemini judge' : strtoupper( $ai_strategy ) ); ?></strong>. Manual buttons always remain available.</p>
-				<span class="mac-tracker-visual-auto__signal <?php echo 'auto' === $visual_mode ? '' : 'is-manual'; ?>" data-visual-schedule-signal><i></i><span class="mac-tracker-status mac-tracker-status--<?php echo 'auto' === $visual_mode ? 'success' : 'muted'; ?>" data-visual-schedule-status>Schedule: <?php echo 'auto' === $visual_mode ? 'On' : 'Off'; ?></span></span>
+				<div class="mac-tracker-visual-auto__signal <?php echo 'auto' === $visual_mode ? '' : 'is-manual'; ?>" data-visual-schedule-signal role="status"><i></i><strong data-visual-schedule-status><?php echo 'auto' === $visual_mode ? 'Automation on' : 'Automation paused'; ?></strong><span data-visual-schedule-detail><?php echo 'auto' === $visual_mode ? 'Scheduled Visual Tone runs are enabled.' : 'Select Auto to enable scheduled Visual Tone runs.'; ?></span></div>
 			</div>
 			<div class="mac-tracker-visual-auto__actions">
 				<form class="mac-tracker-visual-mode" data-visual-controls method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -275,7 +275,7 @@ class MAC_Tracker_Admin {
 		<form class="mac-tracker-visual-work" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 			<?php wp_nonce_field( 'mac_tracker_requeue_visuals' ); ?>
 			<input type="hidden" name="action" value="mac_tracker_requeue_visuals">
-			<section class="mac-tracker-visual-tools" aria-label="Visual review actions"><div><p class="mac-tracker-eyebrow">Actions for this tab</p><strong data-visual-bulk-title>Chọn card để chạy riêng, hoặc không chọn để áp dụng cho toàn bộ tab đang mở</strong><span data-visual-bulk-help>Analyze dùng capture đã lưu. Capture chỉ chụp lại; Chụp + phân tích chỉ phân tích các capture mới thành công.</span></div><div class="mac-tracker-visual-tools__actions"><label class="mac-tracker-select-all"><input type="checkbox" data-visual-select-all><span>Select all in this tab</span></label><button class="button" type="submit" name="visual_action" value="reanalyze_selected" data-visual-bulk="reanalyze_selected">Phân tích tab này</button><button class="button" type="submit" name="visual_action" value="recapture_selected" data-visual-bulk="recapture_selected">Chụp lại tab này</button><button class="button button-primary" type="submit" name="visual_action" value="capture_analyze_selected" data-visual-bulk="capture_analyze_selected">Chụp + phân tích tab này</button><button class="button" type="submit" name="visual_action" value="retry_failed">Chạy lại mục lỗi</button></div></section>
+			<section class="mac-tracker-visual-tools" aria-label="Visual review actions"><div><p class="mac-tracker-eyebrow">Actions for this tab</p><strong data-visual-bulk-title>Chọn card để chạy riêng, hoặc không chọn để áp dụng cho toàn bộ tab đang mở</strong><span data-visual-bulk-help>Analyze dùng capture đã lưu. Capture chỉ chụp lại; Chụp + phân tích chỉ phân tích các capture mới thành công.</span></div><div class="mac-tracker-visual-tools__actions"><label class="mac-tracker-select-all"><input type="checkbox" data-visual-select-all><span>Select all in this tab</span></label><button class="button" type="submit" name="visual_action" value="reanalyze_selected" data-visual-bulk="reanalyze_selected">Phân tích tab này</button><button class="button" type="submit" name="visual_action" value="recapture_selected" data-visual-bulk="recapture_selected">Chụp lại tab này</button><button class="button button-primary" type="submit" name="visual_action" value="capture_analyze_selected" data-visual-bulk="capture_analyze_selected">Chụp + phân tích tab này</button><button class="button button-primary" type="submit" name="visual_action" value="approve_selected" data-visual-approve-all hidden>Approve all review</button><button class="button" type="submit" name="visual_action" value="retry_failed">Chạy lại mục lỗi</button></div></section>
 			<nav class="mac-tracker-visual-tabs" aria-label="Visual tone status"><button type="button" class="is-active" data-visual-tab="queue">Queue &amp; processing <span><?php echo esc_html( $queue_count ); ?></span></button><button type="button" data-visual-tab="review">Review <span><?php echo esc_html( $review_count ); ?></span></button><button type="button" data-visual-tab="locked">Locked <span><?php echo esc_html( $locked_count ); ?></span></button></nav>
 			<section class="mac-tracker-visual-gallery" aria-label="Visual tone gallery">
 				<?php if ( empty( $rows ) ) : ?>
@@ -458,6 +458,13 @@ class MAC_Tracker_Admin {
 
 	/** Shared queue operation used by the normal form and the in-page AJAX controls. */
 	private function process_visual_action( $action, array $ids, array $manual_tones = array() ) {
+		if ( 'approve_selected' === $action ) {
+			$result = $this->repository->approve_visual_tones( $ids );
+			if ( $result <= 0 ) {
+				return array( 'result' => new WP_Error( 'mac_tracker_visual_approve_empty', 'No eligible AI review cards were selected.' ), 'message' => 'No eligible AI review cards were selected.', 'dispatch' => false );
+			}
+			return array( 'result' => $result, 'message' => sprintf( '%d review card(s) approved and locked.', (int) $result ), 'dispatch' => false );
+		}
 		if ( preg_match( '/^approve_one_(\d+)$/', $action, $approve_match ) ) {
 			$result = $this->repository->approve_visual_tone( absint( $approve_match[1] ) );
 			return array( 'result' => $result, 'message' => 'AI tone approved and locked.', 'dispatch' => false );

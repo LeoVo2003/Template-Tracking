@@ -1022,6 +1022,20 @@ class MAC_Tracker_Repository {
 		return $this->save_visual( absint( $snapshot_id ), array( 'human_locked' => 1, 'approved_by' => get_current_user_id(), 'approved_at' => MAC_Tracker_Time::now_utc(), 'approved_capture_revision' => absint( $row['capture_revision'] ), 'manual_locked' => 0 ) );
 	}
 
+	/** Approve only valid, currently reviewable AI classifications from a selected Review tab. */
+	public function approve_visual_tones( array $snapshot_ids ) {
+		$ids = array_values( array_unique( array_filter( array_map( 'absint', $snapshot_ids ) ) ) );
+		if ( empty( $ids ) ) {
+			return 0;
+		}
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$tones        = array_values( array_diff( $this->visual_tones(), array( 'Cần duyệt' ) ) );
+		$tone_tokens  = implode( ',', array_fill( 0, count( $tones ), '%s' ) );
+		$sql           = "UPDATE {$this->visuals} SET human_locked = 1, manual_locked = 0, approved_by = %d, approved_at = %s, approved_capture_revision = capture_revision, updated_at = %s WHERE project_id IN ({$placeholders}) AND human_locked = 0 AND manual_locked = 0 AND tone_status = 'classified' AND tone IN ({$tone_tokens})";
+		$args          = array_merge( array( get_current_user_id(), MAC_Tracker_Time::now_utc(), MAC_Tracker_Time::now_utc() ), $ids, $tones );
+		return (int) $this->wpdb->query( $this->wpdb->prepare( $sql, $args ) );
+	}
+
 	/** Explicit unlock is required before AI can write a manually reviewed tone again. */
 	public function unlock_manual_visual_tone( $snapshot_id ) {
 		return $this->save_visual( absint( $snapshot_id ), array( 'manual_locked' => 0, 'human_locked' => 0, 'approved_by' => 0, 'approved_at' => null, 'approved_capture_revision' => 0, 'manual_tone' => '', 'manual_updated_at' => null ) );

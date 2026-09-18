@@ -49,8 +49,26 @@ test('bulk actions stay scoped to the active tab and locked cards remain immutab
     assert.match(admin, new RegExp(`data-visual-bulk="${action}"`));
   }
   assert.match(js, /boxes\.forEach\(function\(box\)\{box\.checked=true;\}\)/);
-  assert.match(js, /activeTab\(\)==='locked'/);
+  assert.match(js, /tab==='locked'/);
   assert.match(js, /Card đã duyệt không chạy lại bằng bulk action/);
+});
+
+test('Review exposes a safe approve-all action only for eligible AI classifications', () => {
+  const repository = fs.readFileSync('includes/class-mac-tracker-repository.php', 'utf8');
+  assert.match(admin, /value="approve_selected" data-visual-approve-all hidden/);
+  assert.match(js, /approve\.hidden=tab!=='review'/);
+  assert.match(js, /Approve all review/);
+  assert.match(admin, /approve_visual_tones\( \$ids \)/);
+  assert.match(repository, /function approve_visual_tones\( array \$snapshot_ids \)/);
+  assert.match(repository, /human_locked = 0 AND manual_locked = 0 AND tone_status = 'classified'/);
+  assert.match(repository, /tone IN \(\{\$tone_tokens\}\)/);
+});
+
+test('automation state is presented as a semantic notice badge, not a detached white card', () => {
+  assert.match(admin, /data-visual-schedule-detail/);
+  assert.match(admin, /Automation paused/);
+  assert.match(css, /\.mac-tracker-visual-auto__signal\.is-manual \{ color: var\(--warn\); background: var\(--warn-soft\)/);
+  assert.match(css, /\.mac-tracker-visual-auto__signal strong \{/);
 });
 
 test('card actions stay inside each card, with approval only on Review and a visible skip control everywhere', () => {
