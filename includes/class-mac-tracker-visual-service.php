@@ -64,9 +64,7 @@ class MAC_Tracker_Visual_Service {
 	/** Read-only worker configuration. API secrets remain GitHub-only. */
 	public function config( WP_REST_Request $request ) {
 		if ( ! $this->authorized( $request ) ) { return new WP_Error( 'mac_tracker_visual_forbidden', 'Automation authorization failed.', array( 'status' => 401 ) ); }
-		// V3.2 has a benchmark gate. Keep cloud workers manual-first until the
-		// reviewed dataset proves the new semantic pipeline is production-ready.
-		$mode = 'manual';
+		$mode = 'auto' === get_option( 'mac_tracker_visual_mode', 'manual' ) ? 'auto' : 'manual';
 		$strategy = sanitize_key( (string) get_option( 'mac_tracker_visual_ai_strategy', 'smart' ) );
 		if ( ! in_array( $strategy, array( 'off', 'qwen', 'gemini', 'smart' ), true ) ) { $strategy = 'smart'; }
 		return rest_ensure_response( array(
