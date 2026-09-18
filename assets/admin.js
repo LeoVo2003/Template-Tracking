@@ -45,10 +45,11 @@ document.addEventListener('DOMContentLoaded',function(){
 
 document.addEventListener('DOMContentLoaded',function(){
  var form=document.querySelector('[data-visual-controls]'),status=form&&form.querySelector('[data-visual-controls-status]');if(!form||!status||typeof macTrackerVisual==='undefined')return;
- var timer=null;
- function save(){status.textContent='Saving…';var body=new URLSearchParams({action:'mac_tracker_save_visual_controls',nonce:macTrackerVisual.controlsNonce});new FormData(form).forEach(function(value,key){if(key!=='_wpnonce'&&key!=='action')body.append(key,value);});fetch(macTrackerVisual.ajaxUrl,{method:'POST',credentials:'same-origin',body:body}).then(function(response){return response.json();}).then(function(payload){if(!payload.success)throw new Error(payload.data&&payload.data.message?payload.data.message:'Save failed');status.textContent='Saved';}).catch(function(){status.textContent='Save failed';});}
+ var timer=null,heading=document.querySelector('[data-visual-mode-heading]'),label=document.querySelector('[data-visual-mode-label]'),signal=document.querySelector('[data-visual-schedule-signal]'),schedule=document.querySelector('[data-visual-schedule-status]');
+ function selectedMode(){var checked=form.querySelector('input[name="visual_mode"]:checked');return checked&&checked.value==='auto'?'auto':'manual';}
+ function reflectMode(mode){var isAuto=mode==='auto';if(heading)heading.textContent=isAuto?'Auto processing enabled':'Manual review first';if(label)label.textContent=isAuto?'AUTO':'MANUAL';if(signal)signal.classList.toggle('is-manual',!isAuto);if(schedule){schedule.className='mac-tracker-status mac-tracker-status--'+(isAuto?'success':'muted');schedule.textContent='Schedule: '+(isAuto?'On':'Off');}}
+ function save(){var mode=selectedMode();status.textContent='Saving…';var body=new URLSearchParams({action:'mac_tracker_save_visual_controls',nonce:macTrackerVisual.controlsNonce});new FormData(form).forEach(function(value,key){if(key!=='_wpnonce'&&key!=='action')body.append(key,value);});fetch(macTrackerVisual.ajaxUrl,{method:'POST',credentials:'same-origin',body:body}).then(function(response){return response.json();}).then(function(payload){if(!payload.success)throw new Error(payload.data&&payload.data.message?payload.data.message:'Save failed');reflectMode(mode);status.textContent='Saved';}).catch(function(){status.textContent='Save failed';});}
  form.addEventListener('change',function(){clearTimeout(timer);timer=setTimeout(save,350);});form.addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(save,500);});
- var enable=document.querySelector('[data-enable-visual-schedule]');if(enable){enable.addEventListener('click',function(){var radio=form.querySelector('input[name="visual_mode"][value="auto"]');if(radio){radio.checked=true;radio.dispatchEvent(new Event('change',{bubbles:true}));}});}
 });
 
 document.addEventListener('DOMContentLoaded',function(){
