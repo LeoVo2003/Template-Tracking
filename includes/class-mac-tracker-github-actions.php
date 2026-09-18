@@ -70,9 +70,10 @@ class MAC_Tracker_GitHub_Actions {
 			if ( ! $this->is_visual_run( $run ) ) { continue; }
 			$runs[] = $this->normalize_run( $run );
 		}
-		$total = count( $runs );
+		$has_total_count = array_key_exists( 'total_count', $data );
+		$total = $has_total_count ? absint( $data['total_count'] ) : count( $runs );
 		$link = (string) ( $response['headers']['link'] ?? $response['headers']['Link'] ?? '' );
-		if ( preg_match( '/[?&]page=(\d+)[^>]*>;\s*rel="last"/i', $link, $match ) ) { $total = max( $total, ( (int) $match[1] - 1 ) * $per_page + count( $runs ) ); }
+		if ( ! $has_total_count && preg_match( '/[?&]page=(\d+)[^>]*>;\s*rel="last"/i', $link, $match ) ) { $total = max( $total, ( (int) $match[1] - 1 ) * $per_page + count( $runs ) ); }
 		set_transient( $key, array( 'runs' => $runs, 'total' => $total ), 8 );
 		return array( 'runs' => $runs, 'total' => $total );
 	}

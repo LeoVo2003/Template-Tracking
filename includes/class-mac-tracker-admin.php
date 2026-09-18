@@ -504,8 +504,7 @@ class MAC_Tracker_Admin {
 		}
 		$this->repository->reconcile_visual_runs( (array) ( $github_page['runs'] ?? array() ) );
 		$local_page = $this->repository->visual_runs_for_github_page( (array) ( $github_page['runs'] ?? array() ), $page, $per_page, (int) ( $github_page['total'] ?? 0 ) );
-		$local_meta = $this->repository->visual_runs_page( $page, $per_page );
-		$total = max( (int) ( $github_page['total'] ?? 0 ), (int) $local_meta['total'] );
+		$total = (int) ( $github_page['total'] ?? 0 );
 		wp_send_json_success( array( 'runs' => $local_page, 'summary' => $this->repository->visual_run_summary(), 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $total, 'total_pages' => max( 1, (int) ceil( $total / $per_page ) ) ), 'permissions' => array( 'read' => true, 'write' => true ) ) );
 	}
 
