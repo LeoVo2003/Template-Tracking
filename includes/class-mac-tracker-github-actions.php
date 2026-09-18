@@ -95,7 +95,16 @@ class MAC_Tracker_GitHub_Actions {
 				'name' => sanitize_text_field( (string) ( $job['name'] ?? '' ) ),
 				'status' => sanitize_key( (string) ( $job['status'] ?? '' ) ),
 				'conclusion' => sanitize_key( (string) ( $job['conclusion'] ?? '' ) ),
-				'steps' => array_map( function( $step ) { return array( 'name' => sanitize_text_field( (string) ( $step['name'] ?? '' ) ), 'status' => sanitize_key( (string) ( $step['status'] ?? '' ) ), 'conclusion' => sanitize_key( (string) ( $step['conclusion'] ?? '' ) ); }, (array) ( $job['steps'] ?? array() ) ),
+				'steps' => array_map(
+					function( $step ) {
+						return array(
+							'name'       => sanitize_text_field( (string) ( $step['name'] ?? '' ) ),
+							'status'     => sanitize_key( (string) ( $step['status'] ?? '' ) ),
+							'conclusion' => sanitize_key( (string) ( $step['conclusion'] ?? '' ) ),
+						);
+					},
+					(array) ( $job['steps'] ?? array() )
+				),
 			);
 		}
 		return array( 'run' => $run, 'jobs' => $jobs );

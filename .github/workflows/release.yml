@@ -26,6 +26,13 @@ jobs:
           test "$plugin_version" = "$constant_version"
           test "$tag_version" = "$plugin_version"
 
+      - name: PHP syntax check
+        shell: bash
+        run: |
+          set -euo pipefail
+          find . -type f -name '*.php' -not -path './build/*' -print0 \
+            | xargs -0 -n1 php -l
+
       - name: Build installable ZIP
         shell: bash
         run: |
