@@ -29,6 +29,7 @@ test('review flow exposes Queue, Review, Locked and Vietnamese combined action',
   assert.match(admin, /data-visual-tab="review"/);
   assert.match(admin, /data-visual-tab="locked"/);
   assert.match(admin, /capture_analyze_selected/);
+  assert.match(repo, /capture_and_analyze_selected/);
   assert.match(admin, /Save &amp; approve/);
   assert.match(admin, /Approve/);
   assert.match(admin, /Bỏ qua project/);
