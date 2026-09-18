@@ -491,6 +491,15 @@
 .mac-tracker-visual-status--locked { color: var(--ok); font-weight: 700; }
 .mac-tracker-auto-save-status { min-width: 58px; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--text-2xs); }
 .mac-tracker-visual-work button[aria-disabled="true"] { pointer-events: none; opacity: .55; }
+.mac-tracker-wrap .mac-tracker-table-shell { margin-top: var(--space-4); }
+.mac-tracker-visual-auto__signal { width: fit-content; margin-top: var(--space-3); }
+.mac-tracker-button--skip { color: var(--warn) !important; background: var(--warn-soft) !important; border-color: rgba(154, 120, 52, .35) !important; }
+.mac-tracker-button--skip:hover, .mac-tracker-button--skip:focus { color: #765a27 !important; background: #f5e9cc !important; border-color: var(--warn) !important; }
+.mac-tracker-workflow-monitor__head-actions .button { min-height: 32px; }
+.mac-tracker-workflow-pagination { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; }
+.mac-tracker-workflow-pagination__controls { display: inline-flex; grid-column: 2; align-items: center; justify-content: center; gap: var(--space-2); padding: var(--space-1); background: var(--mist-light); border: 1px solid var(--line); border-radius: 7px; }
+.mac-tracker-workflow-pagination__controls [data-workflow-page] { min-width: 82px; color: var(--text-muted); text-align: center; }
+@media (max-width: 620px) { .mac-tracker-workflow-pagination { grid-template-columns: 1fr; justify-items: center; } .mac-tracker-workflow-pagination__controls { grid-column: 1; } }
 @keyframes mac-tracker-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .mac-tracker-visual-status--working .dashicons { animation: none; } }
 

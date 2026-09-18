@@ -42,3 +42,32 @@ test('controls auto-save and monitor hidden state remain guarded', () => {
   assert.match(css, /\.mac-tracker-workflow-list\[hidden\][^{]*\{[^}]*display:\s*none\s*!important/);
   assert.match(css, /\.mac-tracker-workflow-pagination\[hidden\][^{]*\{[^}]*display:\s*none\s*!important/);
 });
+
+test('bulk actions stay scoped to the active tab and locked cards remain immutable', () => {
+  assert.doesNotMatch(admin, /value="reanalyze_all"/);
+  for (const action of ['reanalyze_selected', 'recapture_selected', 'capture_analyze_selected']) {
+    assert.match(admin, new RegExp(`data-visual-bulk="${action}"`));
+  }
+  assert.match(js, /boxes\.forEach\(function\(box\)\{box\.checked=true;\}\)/);
+  assert.match(js, /activeTab\(\)==='locked'/);
+  assert.match(js, /Card đã duyệt không chạy lại bằng bulk action/);
+});
+
+test('card actions stay inside each card, with approval only on Review and a visible skip control everywhere', () => {
+  const cardStart = admin.indexOf('<article class="mac-tracker-visual-card');
+  const cardEnd = admin.indexOf('</article>', cardStart);
+  const card = admin.slice(cardStart, cardEnd);
+  assert.match(card, /mac-tracker-visual-card__quick-actions/);
+  assert.match(card, /! \$is_locked && \$valid_tone/);
+  assert.match(card, /mac-tracker-button--skip/);
+  assert.match(card, /\$is_locked \).*?unlock_tone_/s);
+  assert.doesNotMatch(card, /\$is_locked \? 'recapture_one_'/);
+});
+
+test('monitor and skipped-project surfaces use clear button treatments', () => {
+  assert.match(admin, /class="button" data-workflow-view-all/);
+  assert.match(admin, /mac-tracker-workflow-pagination__controls/);
+  assert.match(css, /\.mac-tracker-workflow-pagination__controls\s*\{/);
+  assert.match(css, /\.mac-tracker-wrap \.mac-tracker-table-shell \{ margin-top: var\(--space-4\); \}/);
+  assert.match(css, /\.mac-tracker-button--skip\s*\{/);
+});
