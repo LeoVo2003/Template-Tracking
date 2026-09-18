@@ -937,10 +937,13 @@ class MAC_Tracker_Admin {
 		$deterministic = (array) ( $raw['deterministic']['semantic_model'] ?? array() );
 		$canvas = (array) ( $deterministic['canvas'] ?? array() );
 		$accent = (array) ( $deterministic['primary_accent'] ?? array() );
+		$brand = (array) ( $deterministic['brand'] ?? array() );
 		$outcome = (array) ( $raw['result'] ?? array() );
 		echo '<details class="mac-tracker-visual-debug"><summary>Evidence &amp; provider trace</summary><dl>';
-		echo '<dt>Canvas</dt><dd>' . esc_html( trim( (string) ( $canvas['primary_surface'] ?? $canvas['family'] ?? '' ) . ' / ' . (string) ( $canvas['secondary_surface'] ?? '' ) . ' / ' . (string) ( $canvas['mode'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
+		echo '<dt>Canvas</dt><dd>' . esc_html( trim( (string) ( $canvas['primary_surface'] ?? $canvas['family'] ?? '' ) . ' / ' . (string) ( $canvas['secondary_surface'] ?? '' ) . ' / ' . (string) ( $canvas['mode'] ?? '' ) . ' · confidence ' . (string) ( $canvas['surface_confidence'] ?? $canvas['confidence'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
+		echo '<dt>Brand candidates</dt><dd>' . esc_html( trim( (string) ( $brand['brand_primary_family'] ?? $accent['family'] ?? '' ) . ' ' . (string) ( $brand['brand_primary_score'] ?? $accent['score'] ?? '' ) . ' · sections ' . (string) ( $brand['brand_evidence'][0]['section_count'] ?? '' ) . ' · roles ' . implode( ', ', (array) ( $brand['brand_evidence'][0]['roles'] ?? array() ) ) ) ?: 'Not available' ) . '</dd>';
 		echo '<dt>Primary accent</dt><dd>' . esc_html( trim( (string) ( $accent['family'] ?? '' ) . ' ' . (string) ( $accent['hex'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
+		echo '<dt>Provider decisions</dt><dd>' . esc_html( wp_json_encode( array_map( static function( $attempt ) { return array( 'provider' => $attempt['provider'] ?? '', 'brand' => $attempt['primary_family'] ?? '', 'canvas' => $attempt['primary_surface'] ?? '', 'mode' => $attempt['canvas_mode'] ?? '' ); }, (array) ( $raw['attempts'] ?? array() ) ) ) ) . '</dd>';
 		echo '<dt>Final resolver</dt><dd>' . esc_html( (string) ( $outcome['result']['reason'] ?? $row['tone_reason'] ?? 'Pending' ) ) . '</dd>';
 		echo '<dt>Provider errors</dt><dd>' . esc_html( wp_json_encode( (array) ( $raw['errors'] ?? array() ) ) ) . '</dd></dl></details>';
 	}
@@ -967,8 +970,8 @@ class MAC_Tracker_Admin {
 			'classified'     => array( 'complete', 'dashicons-yes-alt', 'AI completed · chờ duyệt' ),
 			'needs_review'   => array( 'queued', 'dashicons-visibility', 'Needs review · cần duyệt tone' ),
 			'retry_wait'     => array( 'queued', 'dashicons-update', 'Retry scheduled' . ( ! empty( $row['next_retry_at'] ) ? ' · ' . MAC_Tracker_Time::bangkok_label( $row['next_retry_at'] ) : '' ) ),
-			'blocked'        => array( 'failed', 'dashicons-lock', 'Blocked · ' . ( $row['last_error_message'] ?: 'cần xử lý thủ công' ) ),
-			'failed'         => array( 'failed', 'dashicons-warning', 'Failed · ' . ( $row['last_error_message'] ?: 'cần retry' ) ),
+			'blocked'        => array( 'failed', 'dashicons-lock', 'Blocked' . ( ! empty( $row['last_error_code'] ) ? ' · ' . $row['last_error_code'] : '' ) . ' · ' . ( $row['last_error_message'] ?: 'cần xử lý thủ công' ) ),
+			'failed'         => array( 'failed', 'dashicons-warning', 'Failed' . ( ! empty( $row['last_error_code'] ) ? ' · ' . $row['last_error_code'] : '' ) . ' · ' . ( $row['last_error_message'] ?: 'cần retry' ) ),
 		);
 		if ( isset( $canonical[ $pipeline ] ) ) {
 			$entry = $canonical[ $pipeline ];

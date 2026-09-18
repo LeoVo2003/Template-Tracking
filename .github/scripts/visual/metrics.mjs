@@ -173,13 +173,13 @@ export function summarizeUiSamples(samples) {
   const percent = (value) => Math.round(clamp(value) * 100);
   const text = `Deterministic UI evidence (visible area weighted; photos/media excluded): ${surface} surface; light/cream ${percent(coverage.light + coverage.cream)}%, dark ${percent(coverage.dark)}%; red ${percent(coverage.red)}%, pink ${percent(coverage.pink)}%, brown ${percent(coverage.brown)}%, yellow ${percent(coverage.yellow)}%, green ${percent(coverage.green)}%, blue ${percent(coverage.blue)}%, purple ${percent(coverage.purple)}%. Candidate: ${candidate.tone} (${Math.round(confidence * 100)}%); warm/cool ${warmCoolTendency}; contrast ${contrastLevel}.`;
   return {
-    metrics_version: 3,
-    scope: 'structural_ui',
+    metrics_version: 5,
+    scope: 'legacy_diagnostic_only',
     weighting: 'visible_area',
-    candidate: candidate.tone,
-    candidate_confidence: confidence,
-    primary_family: pair.primary,
-    secondary_family: pair.secondary,
+    legacy_candidate: candidate.tone,
+    legacy_candidate_confidence: confidence,
+    legacy_primary_family: pair.primary,
+    legacy_secondary_family: pair.secondary,
     surface,
     coverage,
     // Keep these top-level keys for the existing API, but make them direct

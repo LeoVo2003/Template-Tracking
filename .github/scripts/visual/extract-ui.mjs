@@ -34,11 +34,13 @@ export async function collectUiSamples(page) {
     const roleFor = (element) => {
       const tag = element.tagName;
       if ('BODY' === tag) return 'canvas';
-      if ('HEADER' === tag || 'NAV' === tag) return 'nav';
+      if ('HEADER' === tag) return 'section';
+      if ('NAV' === tag) return 'nav_link';
       if (['MAIN', 'SECTION', 'ARTICLE', 'FOOTER'].includes(tag)) return 'section';
       if ('BUTTON' === tag || element.getAttribute('role') === 'button') return 'button';
-      if ('A' === tag && /active|current|selected/i.test(`${element.className} ${element.getAttribute('aria-current') || ''}`)) return 'active';
-      if ('A' === tag) return 'cta';
+      if ('A' === tag && /active|current|selected/i.test(`${element.className} ${element.getAttribute('aria-current') || ''}`)) return 'active_nav';
+      if ('A' === tag && /button|btn|cta|book|appointment|contact|call-now/i.test(`${element.className} ${element.getAttribute('role') || ''} ${element.getAttribute('aria-label') || ''}`)) return 'cta';
+      if ('A' === tag) return 'ordinary_link';
       if (/^H[1-4]$/.test(tag)) return 'heading';
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)) return 'control';
       if ('SVG' === tag) return 'icon';
@@ -48,15 +50,16 @@ export async function collectUiSamples(page) {
     };
     const roleWeight = {
       canvas: 0.34,
-      nav: 1.25,
+      nav_link: 0.45,
       section: 1.65,
       button: 2.10,
       cta: 1.4,
-      active: 1.8,
+      active_nav: 1.8,
       card: 0.86,
       control: 1.20,
       unknown: 0.30,
       heading: 0.36,
+      ordinary_link: 0.14,
       text: 0.16,
       icon: 0.18,
     };
@@ -84,6 +87,8 @@ export async function collectUiSamples(page) {
         structural: Boolean(structural),
         area_ratio: Number(Math.max(0, areaRatio).toFixed(6)),
         tag: element?.tagName || '',
+        section_key: (element?.closest?.('header,nav,main,section,article,footer')?.tagName || 'body') + ':' + Math.round((element?.closest?.('header,nav,main,section,article,footer')?.getBoundingClientRect?.().top || 0) / 180),
+        control_key: element?.closest?.('button,a,[role="button"]') ? `${element.closest('button,a,[role="button"]').tagName}:${(element.closest('button,a,[role="button"]').textContent || '').trim().slice(0, 64)}` : '',
       });
     };
     const nodes = [document.body, ...document.querySelectorAll('header,nav,main,section,article,footer,button,a,h1,h2,h3,h4,p,div,li,input,select,textarea,svg')];
@@ -108,9 +113,9 @@ export async function collectUiSamples(page) {
       // A background image is media evidence, not UI palette evidence. Keep
       // an explicit overlay color only when it is actually translucent.
       const differentBackground = style.backgroundColor !== parentBackground;
-      if (ownBackground && (!hasBackgroundImage || ownBackground.alpha < 0.92) && (differentBackground || structural || 'button' === role || 'control' === role)) {
+      if (ownBackground && (!hasBackgroundImage || ownBackground.alpha < 0.92) && (differentBackground || structural || ['button', 'cta', 'active_nav', 'control'].includes(role))) {
         const roleFactor = roleWeight[role] || roleWeight.unknown;
-        add(style.backgroundColor, areaRatio * roleFactor, role, 'background', element, areaRatio, structural || ['button', 'cta', 'active'].includes(role), opacity);
+        add(style.backgroundColor, areaRatio * roleFactor, role, 'background', element, areaRatio, structural || ['button', 'cta', 'active_nav'].includes(role), opacity);
       }
       const hasOwnText = [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
       if (hasOwnText || /^H[1-4]$/.test(element.tagName) || ['A', 'BUTTON'].includes(element.tagName)) {
@@ -137,6 +142,13 @@ export async function collectUiSamples(page) {
         add(style.stroke, areaRatio * roleWeight.icon, role, 'icon', element, areaRatio, false, opacity);
       }
     }
+    const rootStyle = getComputedStyle(document.documentElement);
+    ['--e-global-color-primary', '--e-global-color-secondary', '--e-global-color-accent', '--e-global-color-text', '--e-global-color-background'].forEach((token) => {
+      const value = rootStyle.getPropertyValue(token).trim();
+      if (!value) return;
+      const role = /primary|secondary|accent/i.test(token) ? 'token_accent' : (/background/i.test(token) ? 'canvas' : 'text');
+      add(value, role === 'token_accent' ? 0.012 : 0.004, role, 'css_token', document.documentElement, 0.004, role === 'canvas', 1);
+    });
     // Keep bundle metadata bounded while retaining every large structural
     // surface and the most meaningful controls/text samples.
     return result.sort((a, b) => b.weight - a.weight).slice(0, 1400);

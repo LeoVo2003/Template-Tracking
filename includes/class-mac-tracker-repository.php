@@ -909,7 +909,7 @@ class MAC_Tracker_Repository {
 		$stage = 'tone' === $stage ? 'tone' : 'capture';
 		$attempt_column = 'tone' === $stage ? 'analysis_attempts' : 'capture_attempts';
 		$attempts = (int) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT {$attempt_column} FROM {$this->visuals} WHERE project_id = %d", absint( $snapshot_id ) ) );
-		$blocked_codes = array( 'CF_CHALLENGE', 'CAPTCHA', 'PARKED_DOMAIN', 'MAINTENANCE', 'LOGIN_WALL', 'BAD_REDIRECT', 'EMPTY_PAGE' );
+		$blocked_codes = array( 'CF_CHALLENGE', 'CAPTCHA', 'PARKED_DOMAIN', 'MAINTENANCE', 'LOGIN_WALL', 'BAD_REDIRECT', 'EMPTY_PAGE', 'HOMEPAGE_RESOLUTION_FAILED', 'HTTP_401', 'HTTP_403', 'HTTP_404', 'INVALID_URL', 'UNSUPPORTED_PROTOCOL' );
 		$code = strtoupper( sanitize_key( $error_code ) );
 		$max_retries = max( 0, min( 3, absint( get_option( 'mac_tracker_visual_max_capture_retries', 3 ) ) ) );
 		if ( in_array( $code, $blocked_codes, true ) || $attempts > $max_retries ) {

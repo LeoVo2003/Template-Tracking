@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import { activateLazyContent, collectUiSamples, hideMediaForPreview } from './extract-ui.mjs';
 import { validatePage, PageValidationError } from './validate-page.mjs';
+import { homepageCandidates } from './homepage-resolver.mjs';
 import { summarizeUiSamples } from './metrics.mjs';
 import { analyzeUiColor } from './color-engine.mjs';
 
@@ -41,16 +42,33 @@ async function stabilize(page) {
   await page.waitForTimeout(220);
 }
 
+async function resolveHomepage(page, requestedUrl) {
+  const candidates = homepageCandidates(requestedUrl);
+  const rejected = [];
+  for (const candidate of candidates) {
+    try {
+      const response = await page.goto(candidate, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      const validation = await validatePage(page, response, candidate);
+      return { response, validation, candidateUrls: candidates, resolvedCaptureUrl: candidate, resolutionStrategy: candidates.length > 1 ? ('/home/' === new URL(candidate).pathname ? 'root_prefer_home' : 'root_fallback') : 'stored_path' };
+    } catch (error) {
+      const code = error?.code || error?.name || 'NAV_ERROR';
+      rejected.push({ url: candidate, code, message: String(error?.message || 'Candidate could not be loaded.').replace(/\s+/g, ' ').slice(0, 180) });
+    }
+  }
+  const context = rejected.map((entry) => { try { return `${new URL(entry.url).pathname || '/'} → ${entry.code}`; } catch { return `${entry.url} → ${entry.code}`; } }).join('; ');
+  throw new PageValidationError('HOMEPAGE_RESOLUTION_FAILED', `No valid homepage candidate. ${context}`, { requested_url: requestedUrl, candidate_urls: candidates, candidates: rejected });
+}
+
 export async function captureRenderedPage(browser, requestedUrl, snapshotId, runId) {
   const started = Date.now();
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
   const page = await context.newPage();
   try {
-    const response = await page.goto(requestedUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await validatePage(page, response, requestedUrl);
+    const resolved = await resolveHomepage(page, requestedUrl);
+    const { response, validation: firstValidation, candidateUrls, resolvedCaptureUrl, resolutionStrategy } = resolved;
     await activateLazyContent(page);
     await stabilize(page);
-    const validation = await validatePage(page, response, requestedUrl);
+    const validation = await validatePage(page, response, resolvedCaptureUrl);
     const samples = await collectUiSamples(page);
     const pageHeight = await page.evaluate(() => Math.max(document.body?.scrollHeight || 0, document.documentElement?.scrollHeight || 0));
     const full = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 58 });
@@ -58,16 +76,19 @@ export async function captureRenderedPage(browser, requestedUrl, snapshotId, run
     await page.waitForTimeout(140);
     const preview = await sharp(await page.screenshot({ fullPage: true, type: 'jpeg', quality: 64 })).resize({ width: 768, withoutEnlargement: true }).jpeg({ quality: 66 }).toBuffer();
     const pixel = await analyzeUiColor(preview, samples);
-    const metrics = { ...summarizeUiSamples(samples), semantic_model: pixel, metrics_version: 4, scope: 'ui_only_oklch' };
+    const metrics = { ...summarizeUiSamples(samples), semantic_model: pixel, metrics_version: 5, scope: 'brand_canvas_ui_only' };
     const capturedAt = new Date().toISOString();
     return {
       full,
       preview,
       bundle: {
-        version: 3,
+        version: 4,
         snapshot_id: snapshotId,
         run_id: runId,
         requested_url: requestedUrl,
+        candidate_urls: candidateUrls,
+        resolved_capture_url: resolvedCaptureUrl,
+        resolution_strategy: resolutionStrategy,
         final_url: validation.final_url,
         http_status: validation.http_status,
         redirect_count: validation.redirect_count,
@@ -76,7 +97,7 @@ export async function captureRenderedPage(browser, requestedUrl, snapshotId, run
         page_height: pageHeight,
         captured_at: capturedAt,
         render_ms: Date.now() - started,
-        validation,
+        validation: { ...validation, initial: firstValidation },
         ui: { samples, metrics },
         artifacts: { full_screenshot_url: null, ai_preview_url: null },
       },

@@ -134,7 +134,7 @@ class MAC_Tracker_GitHub_Actions {
 		if ( ! $worker || $worker['job_id'] <= 0 ) {
 			return array( 'run_id' => absint( $run_id ), 'job_id' => 0, 'step_name' => 'Capture full pages and classify tone', 'log' => '', 'truncated' => false );
 		}
-		$raw = $this->request( 'GET', '/actions/jobs/' . $worker['job_id'] . '/logs', null, true );
+		$raw = $this->download_visual_job_log( $worker['job_id'] );
 		if ( is_wp_error( $raw ) ) { return $raw; }
 		$log = $this->sanitize_worker_log( (string) $raw );
 		$max = 180 * 1024;
@@ -143,7 +143,47 @@ class MAC_Tracker_GitHub_Actions {
 		return array( 'run_id' => absint( $run_id ), 'job_id' => $worker['job_id'], 'step_name' => $worker['step_name'], 'log' => $log, 'truncated' => $truncated );
 	}
 
+	/** GitHub returns a short-lived redirect for job logs; never expose it or the token to the browser. */
+	private function download_visual_job_log( $job_id ) {
+		$token = $this->token();
+		$first = wp_remote_get( $this->endpoint( '/actions/jobs/' . absint( $job_id ) . '/logs' ), array( 'timeout' => 25, 'redirection' => 0, 'headers' => array( 'Authorization' => 'Bearer ' . $token, 'Accept' => 'application/vnd.github+json', 'User-Agent' => 'MAC-Project-Tracker/' . MAC_TRACKER_VERSION ) ) );
+		if ( is_wp_error( $first ) ) { return new WP_Error( 'GITHUB_LOG_UNAVAILABLE', 'Could not load GitHub worker log.', array( 'status' => 503 ) ); }
+		$status = (int) wp_remote_retrieve_response_code( $first );
+		if ( 200 === $status ) { return (string) wp_remote_retrieve_body( $first ); }
+		$location = (string) wp_remote_retrieve_header( $first, 'location' );
+		$host = (string) wp_parse_url( $location, PHP_URL_HOST );
+		if ( ! in_array( $status, array( 301, 302, 303, 307, 308 ), true ) || '' === $location || ! preg_match( '/(^|\.)githubusercontent\.com$|(^|\.)github\.com$/i', $host ) ) { return new WP_Error( 'GITHUB_LOG_UNAVAILABLE', 'Could not load GitHub worker log.', array( 'status' => 502 ) ); }
+		$download = wp_remote_get( $location, array( 'timeout' => 25, 'redirection' => 2, 'limit_response_size' => 512 * 1024, 'headers' => array( 'User-Agent' => 'MAC-Project-Tracker/' . MAC_TRACKER_VERSION ) ) );
+		if ( is_wp_error( $download ) || (int) wp_remote_retrieve_response_code( $download ) < 200 || (int) wp_remote_retrieve_response_code( $download ) >= 300 ) { return new WP_Error( 'GITHUB_LOG_UNAVAILABLE', 'Could not load GitHub worker log.', array( 'status' => 503 ) ); }
+		return $this->normalize_downloaded_log( (string) wp_remote_retrieve_body( $download ) );
+	}
+
+	private function normalize_downloaded_log( $raw ) {
+		if ( 0 === strpos( $raw, "\x1F\x8B" ) && function_exists( 'gzdecode' ) ) {
+			$decoded = @gzdecode( $raw );
+			if ( false !== $decoded ) { $raw = $decoded; }
+		}
+		if ( 0 === strpos( $raw, "PK\x03\x04" ) && class_exists( 'ZipArchive' ) ) {
+			$tmp = wp_tempnam( 'mac-tracker-visual-log.zip' );
+			if ( $tmp ) {
+				file_put_contents( $tmp, $raw );
+				$zip = new ZipArchive();
+				if ( true === $zip->open( $tmp ) ) {
+					$parts = array();
+					for ( $index = 0; $index < $zip->numFiles; $index++ ) { $parts[] = (string) $zip->getFromIndex( $index ); }
+					$zip->close();
+					$raw = implode( "\n", $parts );
+				}
+				wp_delete_file( $tmp );
+			}
+		}
+		return $raw;
+	}
+
 	private function sanitize_worker_log( $raw ) {
+		$raw = wp_check_invalid_utf8( (string) $raw, true );
+		$raw = preg_replace( '/\x1B\[[0-?]*[ -\/]*[@-~]/', '', $raw );
+		$raw = preg_replace( '/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $raw );
 		$raw = preg_replace( '/(GEMINI_API_KEY|GROQ_API_KEY|CLOUDFLARE_API_TOKEN|MAC_TRACKER_AUTOMATION_SECRET)\s*[:=]\s*[^\s]+/i', '$1=[REDACTED]', $raw );
 		$raw = preg_replace( '/Authorization\s*:\s*Bearer\s+[^\s]+/i', 'Authorization: Bearer [REDACTED]', $raw );
 		$start = strpos( $raw, 'MAC_VISUAL_WORKER_START' );
@@ -154,7 +194,7 @@ class MAC_Tracker_GitHub_Actions {
 		foreach ( $lines as $line ) {
 			$line = trim( preg_replace( '/^\d{4}-\d\d-\d\dT[^ ]+\s+/', '', $line ) );
 			if ( '' === $line ) { continue; }
-			if ( preg_match( '/(Captured bundle|Tone #|Visual Tone Action|Action:|Scope:|Logical website limit|Capture:|Analysis:|Success:|Blocked:|Failed:|Processed:|Needs review:|Final:|Pixel:|Qwen:|Llama:|Gemini:)/i', $line ) || false !== strpos( $line, 'MAC_VISUAL_WORKER_' ) ) { $keep[] = $line; }
+			if ( preg_match( '/(Captured bundle|Capture failed #\d+:|Tone failed #\d+:|Capturing #|Preparing analysis|Qwen analyzing|Llama|Gemini|Visual Tone Action|Action:|Scope:|Logical website limit|Capture:|Analysis:|Success:|Blocked:|Failed:|Processed:|Needs review:|Final:|Pixel:|Qwen:|HTTP_\d+|CF_CHALLENGE|CAPTCHA|PARKED_DOMAIN|MAINTENANCE|LOGIN_WALL|BAD_REDIRECT|EMPTY_PAGE|NAV_TIMEOUT|DNS|PLAYWRIGHT)/i', $line ) || false !== strpos( $line, 'MAC_VISUAL_WORKER_' ) ) { $keep[] = $line; }
 		}
 		return implode( "\n", $keep );
 	}

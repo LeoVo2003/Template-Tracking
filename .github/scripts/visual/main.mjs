@@ -115,7 +115,9 @@ async function uploadCapture(item, captured) {
 }
 
 async function reportFailure(mode, item, error) {
-  try { await postJson({ mode, snapshot_id: item.id, job_token: item.job_token, error_code: error.code || (error instanceof PageValidationError ? 'PAGE_VALIDATION_FAILED' : 'WORKER_ERROR'), message: error.message }); }
+  const context = Array.isArray(error?.details?.candidates) ? error.details.candidates.map((candidate) => `${candidate.url} → ${candidate.code}`).join('; ') : '';
+  const message = `${error.message || 'Worker error.'}${context && !String(error.message || '').includes(context) ? ` ${context}` : ''}`.slice(0, 900);
+  try { await postJson({ mode, snapshot_id: item.id, job_token: item.job_token, error_code: error.code || (error instanceof PageValidationError ? 'PAGE_VALIDATION_FAILED' : 'WORKER_ERROR'), message }); }
   catch (reportError) { console.warn(`Failure callback ignored for #${item.id}: ${reportError.message}`); }
 }
 
@@ -137,10 +139,10 @@ async function processCaptureItems(items) {
         console.log(`Captured bundle #${item.id}: ${captured.bundle.http_status} ${captured.bundle.final_url}`);
       } catch (error) {
         await reportFailure('capture_failed', item, error);
-        if (['CF_CHALLENGE', 'CAPTCHA', 'PARKED_DOMAIN', 'MAINTENANCE', 'LOGIN_WALL', 'BAD_REDIRECT', 'EMPTY_PAGE'].includes(error.code)) summary.captureBlocked += 1;
+        if (['CF_CHALLENGE', 'CAPTCHA', 'PARKED_DOMAIN', 'MAINTENANCE', 'LOGIN_WALL', 'BAD_REDIRECT', 'EMPTY_PAGE', 'HOMEPAGE_RESOLUTION_FAILED', 'HTTP_401', 'HTTP_403', 'HTTP_404'].includes(error.code)) summary.captureBlocked += 1;
         else summary.captureFailed += 1;
         summary.processed += 1;
-        await reportRunHeartbeat({ current_snapshot_id: item.id, current_step: 'failed', message: `Capture failed #${item.id}`, event_type: 'capture_failed' });
+        await reportRunHeartbeat({ current_snapshot_id: item.id, current_step: 'failed', message: `Capture failed #${item.id}: ${error.message}`, event_type: 'capture_failed' });
         console.warn(`Capture failed #${item.id}: ${error.message}`);
       }
     }

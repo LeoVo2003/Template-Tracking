@@ -29,3 +29,11 @@ test('dark black, dusty rose, champagne, sage, teal and terracotta normalize pre
   assert.equal(mapVietnameseTone(semantic('teal', 'white')), 'Xanh trắng');
   assert.deepEqual(resolveTone(semantic('terracotta', 'cream')), { precise_tone: 'Cam đất kem', tone_group: 'Cam kem', base_surface: 'cream' });
 });
+
+test('V3.18 always resolves brand first and structural canvas second', () => {
+  assert.equal(mapVietnameseTone(semantic('gold', 'black', 'white', { canvas_mode: 'dark' })), 'Vàng đen');
+  assert.equal(mapVietnameseTone(semantic('pink', 'cream')), 'Hồng kem');
+  assert.equal(mapVietnameseTone(semantic('brown', 'cream')), 'Nâu kem');
+  assert.equal(mapVietnameseTone(semantic('blue', 'white')), 'Xanh trắng');
+  assert.equal(mapVietnameseTone(semantic('black', 'white')), 'Đen trắng');
+});
