@@ -3,7 +3,7 @@ import { ProviderError, errorFromResponse, parseJsonStrict, validateToneResult, 
 const PROVIDER = 'cloudflare';
 const MODEL = '@cf/qwen/qwen3.8-27b';
 
-export async function classifyWithCloudflareQwen({ accountId, apiToken, prompt, previewBuffer, fetchImpl = fetch }) {
+export async function classifyWithCloudflareQwen({ accountId, apiToken, prompt, previewBuffer, fetchImpl = fetch, responseSchema = TONE_SCHEMA, validateResult = validateToneResult }) {
   if (!accountId || !apiToken) throw new ProviderError('CLOUDFLARE_UNCONFIGURED', 'Cloudflare Workers AI is not configured.', { provider: PROVIDER });
   let response;
   try {
@@ -18,7 +18,7 @@ export async function classifyWithCloudflareQwen({ accountId, apiToken, prompt, 
         ] }],
         max_completion_tokens: 260,
         temperature: 0,
-        response_format: { type: 'json_schema', json_schema: { name: 'visual_tone', strict: true, schema: TONE_SCHEMA } },
+        response_format: { type: 'json_schema', json_schema: { name: 'visual_tone', strict: true, schema: responseSchema } },
       }),
     });
   } catch (error) {
@@ -29,5 +29,5 @@ export async function classifyWithCloudflareQwen({ accountId, apiToken, prompt, 
   let payload;
   try { payload = JSON.parse(body); } catch { throw new ProviderError('CLOUDFLARE_INVALID_RESPONSE', 'Cloudflare returned non-JSON HTTP output.', { provider: PROVIDER }); }
   const content = payload?.choices?.[0]?.message?.content;
-  return validateToneResult(parseJsonStrict(content, PROVIDER), PROVIDER, MODEL);
+  return validateResult(parseJsonStrict(content, PROVIDER), PROVIDER, MODEL);
 }

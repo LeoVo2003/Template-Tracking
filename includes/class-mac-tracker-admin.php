@@ -239,6 +239,7 @@ class MAC_Tracker_Admin {
 		$ai_strategy = in_array( get_option( 'mac_tracker_visual_ai_strategy', 'smart' ), array( 'off', 'qwen', 'gemini', 'smart' ), true ) ? get_option( 'mac_tracker_visual_ai_strategy', 'smart' ) : 'smart';
 		$auto_accept = max( 0.75, min( 0.99, (float) get_option( 'mac_tracker_visual_auto_accept', 0.85 ) ) );
 		$max_retries = max( 0, min( 3, absint( get_option( 'mac_tracker_visual_max_capture_retries', 3 ) ) ) );
+		$classifier_mode = in_array( get_option( 'mac_tracker_visual_classifier_mode', 'legacy' ), array( 'legacy', 'benchmark_only', 'direct_vision' ), true ) ? get_option( 'mac_tracker_visual_classifier_mode', 'legacy' ) : 'legacy';
 		$queue_count = 0;
 		$review_count = 0;
 		$locked_count = 0;
@@ -259,7 +260,7 @@ class MAC_Tracker_Admin {
 			<div>
 				<p class="mac-tracker-eyebrow">Visual Tone Automation</p>
 				<h2 data-visual-mode-heading><?php echo 'auto' === $visual_mode ? 'Auto processing enabled' : 'Manual review first'; ?></h2>
-				<p>Mode: <strong data-visual-mode-label><?php echo 'auto' === $visual_mode ? 'AUTO' : 'MANUAL'; ?></strong> · AI: <strong><?php echo esc_html( 'smart' === $ai_strategy ? 'Qwen → Gemini judge' : strtoupper( $ai_strategy ) ); ?></strong>. Manual buttons always remain available.</p>
+				<p>Mode: <strong data-visual-mode-label><?php echo 'auto' === $visual_mode ? 'AUTO' : 'MANUAL'; ?></strong> · AI: <strong><?php echo esc_html( 'smart' === $ai_strategy ? 'Qwen → Gemini judge' : strtoupper( $ai_strategy ) ); ?></strong> · Classifier: <strong><?php echo esc_html( $classifier_mode ); ?></strong>. Manual buttons always remain available.</p>
 				<div class="mac-tracker-visual-auto__signal <?php echo 'auto' === $visual_mode ? '' : 'is-manual'; ?>" data-visual-schedule-signal role="status"><i></i><strong data-visual-schedule-status><?php echo 'auto' === $visual_mode ? 'Automation on' : 'Automation paused'; ?></strong><span data-visual-schedule-detail><?php echo 'auto' === $visual_mode ? 'Scheduled Visual Tone runs are enabled.' : 'Select Auto to enable scheduled Visual Tone runs.'; ?></span></div>
 			</div>
 			<div class="mac-tracker-visual-auto__actions">
@@ -411,10 +412,13 @@ class MAC_Tracker_Admin {
 		$auto_accept = isset( $_POST['auto_accept'] ) ? (float) wp_unslash( $_POST['auto_accept'] ) : 0.85;
 		$auto_accept = max( 0.75, min( 0.99, $auto_accept ) );
 		$max_retries = isset( $_POST['max_capture_retries'] ) ? max( 0, min( 3, absint( wp_unslash( $_POST['max_capture_retries'] ) ) ) ) : 3;
+		$classifier_mode = isset( $_POST['classifier_mode'] ) ? sanitize_key( wp_unslash( $_POST['classifier_mode'] ) ) : get_option( 'mac_tracker_visual_classifier_mode', 'legacy' );
+		if ( ! in_array( $classifier_mode, array( 'legacy', 'benchmark_only', 'direct_vision' ), true ) ) { $classifier_mode = 'legacy'; }
 		update_option( 'mac_tracker_visual_mode', $mode, false );
 		update_option( 'mac_tracker_visual_ai_strategy', $strategy, false );
 		update_option( 'mac_tracker_visual_auto_accept', $auto_accept, false );
 		update_option( 'mac_tracker_visual_max_capture_retries', $max_retries, false );
+		update_option( 'mac_tracker_visual_classifier_mode', $classifier_mode, false );
 		$this->redirect( 'mac-project-tracker-visuals', sprintf( 'Visual Tone controls saved: %s mode, %s AI strategy.', strtoupper( $mode ), strtoupper( $strategy ) ), 'success' );
 	}
 
@@ -426,7 +430,9 @@ class MAC_Tracker_Admin {
 		if ( ! in_array( $strategy, array( 'off', 'qwen', 'gemini', 'smart' ), true ) ) { $strategy = 'smart'; }
 		$threshold = max( 0.75, min( 0.99, (float) wp_unslash( $_POST['auto_accept'] ?? 0.85 ) ) );
 		$retries = max( 0, min( 3, absint( $_POST['max_capture_retries'] ?? 3 ) ) );
-		update_option( 'mac_tracker_visual_mode', $mode, false ); update_option( 'mac_tracker_visual_ai_strategy', $strategy, false ); update_option( 'mac_tracker_visual_auto_accept', $threshold, false ); update_option( 'mac_tracker_visual_max_capture_retries', $retries, false );
+		$classifier_mode = sanitize_key( wp_unslash( $_POST['classifier_mode'] ?? get_option( 'mac_tracker_visual_classifier_mode', 'legacy' ) ) );
+		if ( ! in_array( $classifier_mode, array( 'legacy', 'benchmark_only', 'direct_vision' ), true ) ) { $classifier_mode = 'legacy'; }
+		update_option( 'mac_tracker_visual_mode', $mode, false ); update_option( 'mac_tracker_visual_ai_strategy', $strategy, false ); update_option( 'mac_tracker_visual_auto_accept', $threshold, false ); update_option( 'mac_tracker_visual_max_capture_retries', $retries, false ); update_option( 'mac_tracker_visual_classifier_mode', $classifier_mode, false );
 		wp_send_json_success( array( 'message' => 'Saved' ) );
 	}
 

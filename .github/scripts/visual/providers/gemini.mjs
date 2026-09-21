@@ -12,7 +12,7 @@ function outputText(payload) {
     .join('');
 }
 
-export async function classifyWithGemini({ apiKey, prompt, previewBuffer, fetchImpl = fetch }) {
+export async function classifyWithGemini({ apiKey, prompt, previewBuffer, fetchImpl = fetch, responseSchema = TONE_SCHEMA, validateResult = validateToneResult }) {
   if (!apiKey) throw new ProviderError('GEMINI_UNCONFIGURED', 'Gemini API key is not configured.', { provider: PROVIDER });
   let response;
   try {
@@ -25,7 +25,7 @@ export async function classifyWithGemini({ apiKey, prompt, previewBuffer, fetchI
           { type: 'text', text: prompt },
           { type: 'image', data: previewBuffer.toString('base64'), mime_type: 'image/jpeg' },
         ],
-        response_format: { type: 'text', mime_type: 'application/json', schema: TONE_SCHEMA },
+        response_format: { type: 'text', mime_type: 'application/json', schema: responseSchema },
       }),
     });
   } catch (error) {
@@ -35,5 +35,5 @@ export async function classifyWithGemini({ apiKey, prompt, previewBuffer, fetchI
   if (!response.ok) throw errorFromResponse(PROVIDER, response, body);
   let payload;
   try { payload = JSON.parse(body); } catch { throw new ProviderError('GEMINI_INVALID_RESPONSE', 'Gemini returned non-JSON HTTP output.', { provider: PROVIDER }); }
-  return validateToneResult(parseJsonStrict(outputText(payload), PROVIDER), PROVIDER, MODEL);
+  return validateResult(parseJsonStrict(outputText(payload), PROVIDER), PROVIDER, MODEL);
 }

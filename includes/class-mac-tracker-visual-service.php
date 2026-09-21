@@ -70,6 +70,7 @@ class MAC_Tracker_Visual_Service {
 		return rest_ensure_response( array(
 			'mode' => $mode,
 			'ai_strategy' => $strategy,
+			'classifier_mode' => in_array( get_option( 'mac_tracker_visual_classifier_mode', 'legacy' ), array( 'legacy', 'benchmark_only', 'direct_vision' ), true ) ? get_option( 'mac_tracker_visual_classifier_mode', 'legacy' ) : 'legacy',
 			'pipeline_version' => 2,
 			'auto_accept_threshold' => (float) get_option( 'mac_tracker_visual_auto_accept', 0.85 ),
 			'max_capture_retries' => max( 0, min( 3, absint( get_option( 'mac_tracker_visual_max_capture_retries', 3 ) ) ) ),

@@ -12,6 +12,8 @@ class MAC_Tracker_GitHub_Actions {
 	const REPOSITORY = 'Template-Tracking';
 	const WORKFLOW_FILE = 'capture-visual-tone.yml';
 	const WORKFLOW_PATH = '.github/workflows/capture-visual-tone.yml';
+	const LOCAL_WORKFLOW_FILE = 'capture-visual-tone-local.yml';
+	const LOCAL_WORKFLOW_PATH = '.github/workflows/capture-visual-tone-local.yml';
 
 	private function token() {
 		return MAC_Tracker_Crypto::decrypt( get_option( 'mac_tracker_github_dispatch_token', '' ) );
@@ -66,20 +68,42 @@ class MAC_Tracker_GitHub_Actions {
 		$per_page = max( 1, min( 20, absint( $per_page ) ) );
 		$key = 'mac_tracker_visual_workflow_runs_' . $page . '_' . $per_page;
 		if ( ! $force ) { $cached = get_transient( $key ); if ( is_array( $cached ) ) { return $cached; } }
-		$response = $this->request( 'GET', '/actions/workflows/' . self::WORKFLOW_FILE . '/runs?page=' . $page . '&per_page=' . $per_page, null, false, true );
-		if ( is_wp_error( $response ) ) { return $response; }
-		$data = (array) ( $response['data'] ?? array() );
 		$runs = array();
-		foreach ( (array) ( $data['workflow_runs'] ?? array() ) as $run ) {
-			if ( ! $this->is_visual_run( $run ) ) { continue; }
-			$runs[] = $this->normalize_run( $run );
+		$seen_run_ids = array();
+		$workflow_totals = array();
+		$success = false;
+		foreach ( array( self::WORKFLOW_FILE, self::LOCAL_WORKFLOW_FILE ) as $workflow_file ) {
+			$source_total = 0;
+			$source_loaded = false;
+			for ( $source_page = 1; $source_page <= $page; $source_page++ ) {
+				$response = $this->request( 'GET', '/actions/workflows/' . $workflow_file . '/runs?page=' . $source_page . '&per_page=' . $per_page, null, false, true );
+				if ( is_wp_error( $response ) ) { break; }
+				$success = true;
+				$data = (array) ( $response['data'] ?? array() );
+				$source_runs = (array) ( $data['workflow_runs'] ?? array() );
+				if ( ! $source_loaded ) {
+					$has_total_count = array_key_exists( 'total_count', $data );
+					$source_total = $has_total_count ? absint( $data['total_count'] ) : count( $source_runs );
+					$link = (string) ( $response['headers']['link'] ?? $response['headers']['Link'] ?? '' );
+					if ( ! $has_total_count && preg_match( '/[?&]page=(\d+)[^>]*>;\s*rel="last"/i', $link, $match ) ) { $source_total = max( $source_total, ( (int) $match[1] - 1 ) * $per_page + count( $source_runs ) ); }
+					$source_loaded = true;
+				}
+				foreach ( $source_runs as $run ) {
+					if ( ! $this->is_visual_run( $run ) ) { continue; }
+					$run_id = absint( $run['id'] ?? 0 );
+					if ( $run_id > 0 && isset( $seen_run_ids[ $run_id ] ) ) { continue; }
+					if ( $run_id > 0 ) { $seen_run_ids[ $run_id ] = true; }
+					$runs[] = $this->normalize_run( $run );
+				}
+				if ( count( $source_runs ) < $per_page ) { break; }
+			}
+			if ( $source_loaded ) { $workflow_totals[] = $source_total; }
 		}
-		$has_total_count = array_key_exists( 'total_count', $data );
-		$total = $has_total_count ? absint( $data['total_count'] ) : count( $runs );
-		$link = (string) ( $response['headers']['link'] ?? $response['headers']['Link'] ?? '' );
-		if ( ! $has_total_count && preg_match( '/[?&]page=(\d+)[^>]*>;\s*rel="last"/i', $link, $match ) ) { $total = max( $total, ( (int) $match[1] - 1 ) * $per_page + count( $runs ) ); }
+		if ( ! $success ) { return new WP_Error( 'GITHUB_UNAVAILABLE', 'Could not refresh Visual Tone workflow status. Showing last known data.', array( 'status' => 503 ) ); }
+		$total = array_sum( $workflow_totals );
+		usort( $runs, function( $a, $b ) { $number = (int) ( $b['run_number'] ?? 0 ) <=> (int) ( $a['run_number'] ?? 0 ); return 0 !== $number ? $number : ( (int) ( $b['id'] ?? 0 ) <=> (int) ( $a['id'] ?? 0 ) ); } );
 		set_transient( $key, array( 'runs' => $runs, 'total' => $total ), 8 );
-		return array( 'runs' => $runs, 'total' => $total );
+		return array( 'runs' => array_slice( $runs, ( $page - 1 ) * $per_page, $per_page ), 'total' => $total );
 	}
 
 	public function get_visual_run( $run_id, $force = false ) {
@@ -226,7 +250,7 @@ class MAC_Tracker_GitHub_Actions {
 	private function is_visual_run( array $run ) {
 		$path = (string) ( $run['path'] ?? '' );
 		$workflow = (string) ( $run['workflow_url'] ?? '' );
-		return 0 === strpos( $path, self::WORKFLOW_PATH ) || false !== strpos( $workflow, '/actions/workflows/' . self::WORKFLOW_FILE );
+		return 0 === strpos( $path, self::WORKFLOW_PATH ) || 0 === strpos( $path, self::LOCAL_WORKFLOW_PATH ) || false !== strpos( $workflow, '/actions/workflows/' . self::WORKFLOW_FILE ) || false !== strpos( $workflow, '/actions/workflows/' . self::LOCAL_WORKFLOW_FILE );
 	}
 
 	private function normalize_run( array $run ) {
@@ -236,6 +260,8 @@ class MAC_Tracker_GitHub_Actions {
 			'html_url' => esc_url_raw( (string) ( $run['html_url'] ?? '' ) ), 'event' => sanitize_key( (string) ( $run['event'] ?? '' ) ),
 			'head_branch' => sanitize_text_field( (string) ( $run['head_branch'] ?? '' ) ), 'head_sha' => sanitize_text_field( (string) ( $run['head_sha'] ?? '' ) ),
 			'created_at' => sanitize_text_field( (string) ( $run['created_at'] ?? '' ) ), 'updated_at' => sanitize_text_field( (string) ( $run['updated_at'] ?? '' ) ),
+			'workflow_file' => false !== strpos( (string) ( $run['path'] ?? '' ), self::LOCAL_WORKFLOW_PATH ) ? self::LOCAL_WORKFLOW_FILE : self::WORKFLOW_FILE,
+			'runner_type' => false !== strpos( (string) ( $run['path'] ?? '' ), self::LOCAL_WORKFLOW_PATH ) ? 'self-hosted-windows' : 'github-hosted',
 			'run_started_at' => sanitize_text_field( (string) ( $run['run_started_at'] ?? '' ) ),
 		);
 	}

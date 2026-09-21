@@ -3,7 +3,7 @@ import { ProviderError, errorFromResponse, parseJsonStrict, validateToneResult, 
 const PROVIDER = 'groq';
 const MODEL = 'qwen/qwen3.8-27b';
 
-export async function classifyWithGroq({ apiKey, prompt, previewBuffer, fetchImpl = fetch }) {
+export async function classifyWithGroq({ apiKey, prompt, previewBuffer, fetchImpl = fetch, responseSchema = TONE_SCHEMA, validateResult = validateToneResult }) {
   if (!apiKey) throw new ProviderError('GROQ_UNCONFIGURED', 'Groq API key is not configured.', { provider: PROVIDER });
   let response;
   try {
@@ -19,7 +19,7 @@ export async function classifyWithGroq({ apiKey, prompt, previewBuffer, fetchImp
           { type: 'text', text: prompt },
           { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${previewBuffer.toString('base64')}` } },
         ] }],
-        response_format: { type: 'json_schema', json_schema: { name: 'visual_tone', strict: true, schema: TONE_SCHEMA } },
+        response_format: { type: 'json_schema', json_schema: { name: 'visual_tone', strict: true, schema: responseSchema } },
       }),
     });
   } catch (error) {
@@ -29,5 +29,5 @@ export async function classifyWithGroq({ apiKey, prompt, previewBuffer, fetchImp
   if (!response.ok) throw errorFromResponse(PROVIDER, response, body);
   let payload;
   try { payload = JSON.parse(body); } catch { throw new ProviderError('GROQ_INVALID_RESPONSE', 'Groq returned non-JSON HTTP output.', { provider: PROVIDER }); }
-  return validateToneResult(parseJsonStrict(payload?.choices?.[0]?.message?.content, PROVIDER), PROVIDER, MODEL);
+  return validateResult(parseJsonStrict(payload?.choices?.[0]?.message?.content, PROVIDER), PROVIDER, MODEL);
 }

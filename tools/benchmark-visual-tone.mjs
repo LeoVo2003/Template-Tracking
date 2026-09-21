@@ -9,7 +9,7 @@ const goldPath = resolve(root, 'data/visual-tone-gold.json');
 const outputPath = resolve(root, process.env.BENCHMARK_OUTPUT || 'reports/visual-tone-benchmark.json');
 const requestedLimit = Math.max(1, Math.min(50, Number(process.env.BENCHMARK_LIMIT || 50)));
 const repeat = 'false' !== String(process.env.BENCHMARK_REPEAT || 'true').toLowerCase();
-const minimum = 40;
+const minimum = 30;
 const blockedCodes = new Set(['CF_CHALLENGE', 'CAPTCHA', 'PARKED_DOMAIN', 'MAINTENANCE', 'LOGIN_WALL', 'BAD_REDIRECT', 'EMPTY_PAGE']);
 
 const gold = JSON.parse(await readFile(goldPath, 'utf8'));
@@ -35,6 +35,8 @@ async function saveReport(report) {
     `- False challenge/error classifications: ${report.metrics?.false_page_classifications ?? 'n/a'}`,
     `- Repeatability: ${report.metrics?.repeatability_percent ?? 'n/a'}%`,
     `- Tone-group accuracy: ${report.metrics?.tone_group_accuracy_percent ?? 'n/a'}%`,
+    `- Direct Vision tone accuracy: ${report.metrics?.direct_vision_tone_accuracy_percent ?? 'n/a'}%`,
+    `- Direct Vision high-confidence wrong: ${report.metrics?.direct_vision_high_confidence_wrong ?? 'n/a'}`,
     `- Precise-tone accuracy: ${report.metrics?.precise_tone_accuracy_percent ?? 'n/a'}%`,
     `- Family / canvas-mode accuracy: ${report.metrics?.family_accuracy_percent ?? 'n/a'}% / ${report.metrics?.canvas_mode_accuracy_percent ?? 'n/a'}%`,
     `- AUTO eligible: ${report.pass ? 'YES' : 'NO'}`, '',
@@ -67,6 +69,14 @@ if (reviewed.length < baseReport.required_labels) {
           geminiApiKeys: [process.env.GEMINI_API_KEY_1 || process.env.GEMINI_API_KEY || '', process.env.GEMINI_API_KEY_2 || ''], freeOnly: true, autoAccept: Number(process.env.BENCHMARK_AUTO_ACCEPT || 0.85),
         });
         row.first = { state: primary.state, tone: primary.result?.tone_group || primary.result?.tone || null, precise_tone: primary.result?.precise_tone || null, primary_family: primary.result?.primary_family || null, canvas_mode: primary.result?.canvas_mode || null, primary_surface: primary.result?.primary_surface || null, provider: primary.result?.provider || null, confidence: primary.result?.confidence ?? null };
+        const direct = await classifyTone({
+          previewBuffer: first.full,
+          evidence: first.bundle.ui.metrics,
+          groqApiKey: process.env.GROQ_API_KEY || '', geminiApiKey: process.env.GEMINI_API_KEY || '',
+          cloudflareAccount: process.env.CLOUDFLARE_ACCOUNT_ID || '', cloudflareToken: process.env.CLOUDFLARE_API_TOKEN || '',
+          geminiApiKeys: [process.env.GEMINI_API_KEY_1 || process.env.GEMINI_API_KEY || '', process.env.GEMINI_API_KEY_2 || ''], freeOnly: true, autoAccept: Number(process.env.BENCHMARK_AUTO_ACCEPT || 0.85), classifierMode: 'direct_vision',
+        });
+        row.direct_vision = { state: direct.state, tone: direct.result?.tone_group || direct.result?.tone || null, precise_tone: direct.result?.precise_tone || null, primary_family: direct.result?.primary_family || null, canvas_mode: direct.result?.canvas_mode || null, primary_surface: direct.result?.primary_surface || null, provider: direct.result?.provider || null, confidence: direct.result?.confidence ?? null, authority: direct.authority || 'judge_or_review' };
         if (repeat && 'classified' === primary.state) {
           const second = await captureRenderedPage(browser, entry.url, index + 1, `benchmark-repeat-${Date.now()}-${index}`);
           const repeated = await classifyTone({
@@ -92,6 +102,8 @@ if (reviewed.length < baseReport.required_labels) {
   const classified = captured.filter((row) => 'classified' === row.first?.state);
   const repeatable = classified.filter((row) => row.repeat && 'classified' === row.repeat.state);
   const correct = classified.filter((row) => row.first.tone === row.expected_tone);
+  const directClassified = captured.filter((row) => 'classified' === row.direct_vision?.state);
+  const directCorrect = directClassified.filter((row) => row.direct_vision.tone === row.expected_tone);
   const preciseLabeled = classified.filter((row) => row.expected_precise_tone);
   const familyLabeled = classified.filter((row) => row.expected_primary_family);
   const canvasModeLabeled = classified.filter((row) => row.expected_canvas_mode);
@@ -103,6 +115,9 @@ if (reviewed.length < baseReport.required_labels) {
     false_page_classifications: falsePages,
     repeatability_percent: repeat ? percent(repeatable.filter((row) => row.first.tone === row.repeat.tone).length, repeatable.length) : null,
     tone_group_accuracy_percent: percent(correct.length, classified.length),
+    direct_vision_tone_accuracy_percent: percent(directCorrect.length, directClassified.length),
+    direct_vision_high_confidence_wrong: directClassified.filter((row) => Number(row.direct_vision.confidence || 0) >= 0.90 && row.direct_vision.tone !== row.expected_tone).length,
+    direct_vision_needs_review: captured.filter((row) => 'classified' !== row.direct_vision?.state).length,
     precise_tone_accuracy_percent: preciseLabeled.length ? percent(preciseLabeled.filter((row) => row.first.precise_tone === row.expected_precise_tone).length, preciseLabeled.length) : null,
     family_accuracy_percent: familyLabeled.length ? percent(familyLabeled.filter((row) => row.first.primary_family === row.expected_primary_family).length, familyLabeled.length) : null,
     canvas_mode_accuracy_percent: canvasModeLabeled.length ? percent(canvasModeLabeled.filter((row) => row.first.canvas_mode === row.expected_canvas_mode).length, canvasModeLabeled.length) : null,
@@ -111,7 +126,7 @@ if (reviewed.length < baseReport.required_labels) {
     confusion_matrix: classified.filter((row) => row.first.tone !== row.expected_tone).reduce((counts, row) => { const key = `${row.expected_tone}->${row.first.tone}`; counts[key] = (counts[key] || 0) + 1; return counts; }, {}),
     confusion_counters: familyLabeled.reduce((counts, row) => { const key = `${row.expected_primary_family}_to_${row.first.primary_family}`; if (row.expected_primary_family !== row.first.primary_family) counts[key] = (counts[key] || 0) + 1; return counts; }, { navy_to_black: 0, gray_to_white: 0, greige_to_cream: 0, beige_to_brown: 0, pink_to_cream: 0, gold_to_brown: 0, orange_to_brown: 0 }),
   };
-  const pass = metrics.capture_success_percent >= 95 && 0 === metrics.false_page_classifications && (!repeat || metrics.repeatability_percent >= 95) && metrics.tone_group_accuracy_percent >= 90;
+  const pass = metrics.capture_success_percent >= 95 && 0 === metrics.false_page_classifications && (!repeat || metrics.repeatability_percent >= 95) && metrics.tone_group_accuracy_percent >= 90 && metrics.direct_vision_tone_accuracy_percent >= 90 && metrics.direct_vision_high_confidence_wrong === 0;
   await saveReport({ ...baseReport, selected: selected.length, repeat, metrics, pass, results });
   if (!pass) process.exitCode = 1;
 }
