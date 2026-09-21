@@ -70,7 +70,7 @@ class MAC_Tracker_Visual_Service {
 		return rest_ensure_response( array(
 			'mode' => $mode,
 			'ai_strategy' => $strategy,
-			'classifier_mode' => in_array( get_option( 'mac_tracker_visual_classifier_mode', 'legacy' ), array( 'legacy', 'benchmark_only', 'direct_vision' ), true ) ? get_option( 'mac_tracker_visual_classifier_mode', 'legacy' ) : 'legacy',
+			'classifier_mode' => in_array( get_option( 'mac_tracker_visual_classifier_mode', 'direct_vision' ), array( 'legacy', 'benchmark_only', 'direct_vision' ), true ) ? get_option( 'mac_tracker_visual_classifier_mode', 'direct_vision' ) : 'direct_vision',
 			'pipeline_version' => 2,
 			'auto_accept_threshold' => (float) get_option( 'mac_tracker_visual_auto_accept', 0.85 ),
 			'max_capture_retries' => max( 0, min( 3, absint( get_option( 'mac_tracker_visual_max_capture_retries', 3 ) ) ) ),
@@ -203,6 +203,7 @@ class MAC_Tracker_Visual_Service {
 	}
 
 	private function ingest_diagnostic( $snapshot_id, $job_token, WP_REST_Request $request ) {
+		$old_diagnostic_attachment_id = $this->repository->visual_diagnostic_attachment_id( $snapshot_id );
 		$file = $_FILES['diagnostic'] ?? array();
 		if ( empty( $file['tmp_name'] ) ) { return new WP_Error( 'mac_tracker_visual_diagnostic_file', 'Diagnostic screenshot file is required.', array( 'status' => 400 ) ); }
 		if ( (int) $file['size'] > 10 * MB_IN_BYTES ) { return new WP_Error( 'mac_tracker_visual_diagnostic_size', 'Diagnostic screenshot must be 10 MB or smaller.', array( 'status' => 413 ) ); }
@@ -216,6 +217,9 @@ class MAC_Tracker_Visual_Service {
 		$url = (string) wp_get_attachment_url( $attachment_id );
 		$result = $this->repository->save_visual_diagnostic( $snapshot_id, $attachment_id, $url, $job_token, $code, sanitize_text_field( (string) $request->get_param( 'message' ) ), array( 'runner_type' => $request->get_param( 'runner_type' ), 'final_url' => $request->get_param( 'final_url' ) ) );
 		if ( is_wp_error( $result ) ) { wp_delete_attachment( $attachment_id, true ); return $result; }
+		if ( $old_diagnostic_attachment_id && (int) $old_diagnostic_attachment_id !== (int) $attachment_id ) {
+			wp_delete_attachment( $old_diagnostic_attachment_id, true );
+		}
 		return rest_ensure_response( array( 'saved' => true, 'diagnostic_screenshot_url' => $url ) );
 	}
 

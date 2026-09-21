@@ -239,7 +239,7 @@ class MAC_Tracker_Admin {
 		$ai_strategy = in_array( get_option( 'mac_tracker_visual_ai_strategy', 'smart' ), array( 'off', 'qwen', 'gemini', 'smart' ), true ) ? get_option( 'mac_tracker_visual_ai_strategy', 'smart' ) : 'smart';
 		$auto_accept = max( 0.75, min( 0.99, (float) get_option( 'mac_tracker_visual_auto_accept', 0.85 ) ) );
 		$max_retries = max( 0, min( 3, absint( get_option( 'mac_tracker_visual_max_capture_retries', 3 ) ) ) );
-		$classifier_mode = in_array( get_option( 'mac_tracker_visual_classifier_mode', 'legacy' ), array( 'legacy', 'benchmark_only', 'direct_vision' ), true ) ? get_option( 'mac_tracker_visual_classifier_mode', 'legacy' ) : 'legacy';
+		$classifier_mode = in_array( get_option( 'mac_tracker_visual_classifier_mode', 'direct_vision' ), array( 'legacy', 'benchmark_only', 'direct_vision' ), true ) ? get_option( 'mac_tracker_visual_classifier_mode', 'direct_vision' ) : 'direct_vision';
 		$queue_count = 0;
 		$review_count = 0;
 		$locked_count = 0;
@@ -253,14 +253,14 @@ class MAC_Tracker_Admin {
 				++$queue_count;
 			}
 		}
-		$this->page_start( 'Visual Tone', 'Manual review is active while Visual Tone V2 is rebuilt. Opening this page only reads saved data.', 'visuals' );
+		$this->page_start( 'Visual Tone', 'Direct Vision reads the complete rendered screenshot. Opening this page only reads saved data.', 'visuals' );
 		?>
-		<section class="mac-tracker-overview mac-tracker-visual-overview"><div class="mac-tracker-overview__lead"><p class="mac-tracker-eyebrow">Visual Tone V2 · Control room</p><h2>Manual-first, evidence-led review</h2><p>Saved captures and deterministic UI evidence are reviewed by the free-only AI chain. Cards only poll while a live worker lease is active.</p></div><div class="mac-tracker-summary-grid"><?php $this->stat_card( 'Captured', (int) ( $stats['captured'] ?? 0 ), 'dashicons-format-image' ); ?><?php $this->stat_card( 'Review', $review_count, 'dashicons-visibility' ); ?><?php $this->stat_card( 'Locked', $locked_count, 'dashicons-lock' ); ?></div></section>
+		<section class="mac-tracker-overview mac-tracker-visual-overview"><div class="mac-tracker-overview__lead"><p class="mac-tracker-eyebrow">Visual Tone · Control room</p><h2>Direct Vision, human-approved</h2><p>Direct Vision uses the complete rendered screenshot as the production authority. Deterministic DOM/pixel colors remain diagnostic and sanity evidence only.</p></div><div class="mac-tracker-summary-grid"><?php $this->stat_card( 'Captured', (int) ( $stats['captured'] ?? 0 ), 'dashicons-format-image' ); ?><?php $this->stat_card( 'Review', $review_count, 'dashicons-visibility' ); ?><?php $this->stat_card( 'Locked', $locked_count, 'dashicons-lock' ); ?></div></section>
 		<section class="mac-tracker-visual-auto">
 			<div>
 				<p class="mac-tracker-eyebrow">Visual Tone Automation</p>
 				<h2 data-visual-mode-heading><?php echo 'auto' === $visual_mode ? 'Auto processing enabled' : 'Manual review first'; ?></h2>
-				<p>Mode: <strong data-visual-mode-label><?php echo 'auto' === $visual_mode ? 'AUTO' : 'MANUAL'; ?></strong> · AI: <strong><?php echo esc_html( 'smart' === $ai_strategy ? 'Qwen → Gemini judge' : strtoupper( $ai_strategy ) ); ?></strong> · Classifier: <strong><?php echo esc_html( $classifier_mode ); ?></strong>. Manual buttons always remain available.</p>
+				<p>Mode: <strong data-visual-mode-label><?php echo 'auto' === $visual_mode ? 'AUTO' : 'MANUAL'; ?></strong> · AI: <strong><?php echo esc_html( 'smart' === $ai_strategy ? 'Qwen → Llama → Gemini judge' : strtoupper( $ai_strategy ) ); ?></strong> · Classifier: <strong><?php echo esc_html( 'direct_vision' === $classifier_mode ? 'Direct Vision' : ( 'benchmark_only' === $classifier_mode ? 'Benchmark only' : 'Legacy evidence' ) ); ?></strong>. Manual buttons always remain available.</p>
 				<div class="mac-tracker-visual-auto__signal <?php echo 'auto' === $visual_mode ? '' : 'is-manual'; ?>" data-visual-schedule-signal role="status"><i></i><strong data-visual-schedule-status><?php echo 'auto' === $visual_mode ? 'Automation on' : 'Automation paused'; ?></strong><span data-visual-schedule-detail><?php echo 'auto' === $visual_mode ? 'Scheduled Visual Tone runs are enabled.' : 'Select Auto to enable scheduled Visual Tone runs.'; ?></span></div>
 			</div>
 			<div class="mac-tracker-visual-auto__actions">
@@ -268,6 +268,7 @@ class MAC_Tracker_Admin {
 					<?php wp_nonce_field( 'mac_tracker_save_visual_mode' ); ?><input type="hidden" name="action" value="mac_tracker_save_visual_mode">
 					<fieldset><legend class="screen-reader-text">Visual Tone mode</legend><label><input type="radio" name="visual_mode" value="manual"<?php checked( 'manual', $visual_mode ); ?>> <span>Manual</span></label><label><input type="radio" name="visual_mode" value="auto"<?php checked( 'auto', $visual_mode ); ?>> <span>Auto</span></label></fieldset>
 					<label class="screen-reader-text" for="mac-tracker-ai-strategy">AI strategy</label><select id="mac-tracker-ai-strategy" name="ai_strategy"><option value="off"<?php selected( 'off', $ai_strategy ); ?>>AI off</option><option value="qwen"<?php selected( 'qwen', $ai_strategy ); ?>>Qwen only</option><option value="gemini"<?php selected( 'gemini', $ai_strategy ); ?>>Gemini only</option><option value="smart"<?php selected( 'smart', $ai_strategy ); ?>>Smart auto</option></select>
+					<label class="screen-reader-text" for="mac-tracker-classifier-mode">Classifier</label><select id="mac-tracker-classifier-mode" name="classifier_mode"><option value="direct_vision"<?php selected( 'direct_vision', $classifier_mode ); ?>>Direct Vision</option><option value="legacy"<?php selected( 'legacy', $classifier_mode ); ?>>Legacy evidence</option><option value="benchmark_only"<?php selected( 'benchmark_only', $classifier_mode ); ?>>Benchmark only</option></select>
 					<label>Accept ≥ <input type="number" name="auto_accept" min="0.75" max="0.99" step="0.01" value="<?php echo esc_attr( $auto_accept ); ?>"></label><label>Retries <input type="number" name="max_capture_retries" min="0" max="3" step="1" value="<?php echo esc_attr( $max_retries ); ?>"></label><span class="mac-tracker-auto-save-status" data-visual-controls-status aria-live="polite">Saved</span>
 				</form>
 				<?php if ( get_option( 'mac_tracker_github_dispatch_token', '' ) ) : ?><form class="mac-tracker-visual-run" method="post" action="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-visuals' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_run_visual_workflow' ); ?><input type="hidden" name="action" value="mac_tracker_run_visual_workflow"><button class="button button-primary" type="submit"><span class="dashicons dashicons-controls-play"></span>Run batch now</button></form><?php else : ?><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-settings#mac-tracker-github-dispatch' ) ); ?>">Enable manual run</a><?php endif; ?>
@@ -413,13 +414,14 @@ class MAC_Tracker_Admin {
 		$auto_accept = isset( $_POST['auto_accept'] ) ? (float) wp_unslash( $_POST['auto_accept'] ) : 0.85;
 		$auto_accept = max( 0.75, min( 0.99, $auto_accept ) );
 		$max_retries = isset( $_POST['max_capture_retries'] ) ? max( 0, min( 3, absint( wp_unslash( $_POST['max_capture_retries'] ) ) ) ) : 3;
-		$classifier_mode = isset( $_POST['classifier_mode'] ) ? sanitize_key( wp_unslash( $_POST['classifier_mode'] ) ) : get_option( 'mac_tracker_visual_classifier_mode', 'legacy' );
-		if ( ! in_array( $classifier_mode, array( 'legacy', 'benchmark_only', 'direct_vision' ), true ) ) { $classifier_mode = 'legacy'; }
+		$classifier_mode = isset( $_POST['classifier_mode'] ) ? sanitize_key( wp_unslash( $_POST['classifier_mode'] ) ) : get_option( 'mac_tracker_visual_classifier_mode', 'direct_vision' );
+		if ( ! in_array( $classifier_mode, array( 'legacy', 'benchmark_only', 'direct_vision' ), true ) ) { $classifier_mode = 'direct_vision'; }
 		update_option( 'mac_tracker_visual_mode', $mode, false );
 		update_option( 'mac_tracker_visual_ai_strategy', $strategy, false );
 		update_option( 'mac_tracker_visual_auto_accept', $auto_accept, false );
 		update_option( 'mac_tracker_visual_max_capture_retries', $max_retries, false );
 		update_option( 'mac_tracker_visual_classifier_mode', $classifier_mode, false );
+		update_option( 'mac_tracker_visual_classifier_mode_explicit', 1, false );
 		$this->redirect( 'mac-project-tracker-visuals', sprintf( 'Visual Tone controls saved: %s mode, %s AI strategy.', strtoupper( $mode ), strtoupper( $strategy ) ), 'success' );
 	}
 
@@ -431,9 +433,9 @@ class MAC_Tracker_Admin {
 		if ( ! in_array( $strategy, array( 'off', 'qwen', 'gemini', 'smart' ), true ) ) { $strategy = 'smart'; }
 		$threshold = max( 0.75, min( 0.99, (float) wp_unslash( $_POST['auto_accept'] ?? 0.85 ) ) );
 		$retries = max( 0, min( 3, absint( $_POST['max_capture_retries'] ?? 3 ) ) );
-		$classifier_mode = sanitize_key( wp_unslash( $_POST['classifier_mode'] ?? get_option( 'mac_tracker_visual_classifier_mode', 'legacy' ) ) );
-		if ( ! in_array( $classifier_mode, array( 'legacy', 'benchmark_only', 'direct_vision' ), true ) ) { $classifier_mode = 'legacy'; }
-		update_option( 'mac_tracker_visual_mode', $mode, false ); update_option( 'mac_tracker_visual_ai_strategy', $strategy, false ); update_option( 'mac_tracker_visual_auto_accept', $threshold, false ); update_option( 'mac_tracker_visual_max_capture_retries', $retries, false ); update_option( 'mac_tracker_visual_classifier_mode', $classifier_mode, false );
+		$classifier_mode = sanitize_key( wp_unslash( $_POST['classifier_mode'] ?? get_option( 'mac_tracker_visual_classifier_mode', 'direct_vision' ) ) );
+		if ( ! in_array( $classifier_mode, array( 'legacy', 'benchmark_only', 'direct_vision' ), true ) ) { $classifier_mode = 'direct_vision'; }
+		update_option( 'mac_tracker_visual_mode', $mode, false ); update_option( 'mac_tracker_visual_ai_strategy', $strategy, false ); update_option( 'mac_tracker_visual_auto_accept', $threshold, false ); update_option( 'mac_tracker_visual_max_capture_retries', $retries, false ); update_option( 'mac_tracker_visual_classifier_mode', $classifier_mode, false ); update_option( 'mac_tracker_visual_classifier_mode_explicit', 1, false );
 		wp_send_json_success( array( 'message' => 'Saved' ) );
 	}
 
@@ -505,7 +507,7 @@ class MAC_Tracker_Admin {
 				return array( 'result' => $dispatch, 'message' => 'Local runner dispatch failed: ' . $dispatch->get_error_message(), 'dispatch' => false, 'dispatch_error' => true );
 			}
 			$this->github_actions->clear_cache();
-			return array( 'result' => count( $queued ), 'message' => ( 'unknown' === ( $runner['state'] ?? '' ) ? 'Local capture dispatched, but runner status is unknown. Check GitHub Actions for the queued run.' : 'Local capture queued. ' . (string) ( $runner['message'] ?? 'Waiting for local capture machine.' ) ), 'dispatch' => true );
+			return array( 'result' => count( $queued ), 'message' => 'Local capture queued.', 'dispatch' => true );
 		}
 		if ( preg_match( '/^(reanalyze_one|recapture_one)_(\d+)$/', $action, $one_match ) ) {
 			$action = $one_match[1];
@@ -605,12 +607,12 @@ class MAC_Tracker_Admin {
 		$github_page = $this->github_actions->list_visual_runs( $page, $per_page, $force );
 		if ( is_wp_error( $github_page ) ) {
 			$local_page = $this->repository->visual_runs_page( $page, $per_page );
-			wp_send_json_success( array( 'runs' => $local_page['runs'], 'summary' => array( 'running' => 0, 'queued' => 0, 'failed' => 0, 'completed' => 0, 'scope' => 'stale_unknown', 'summary_scope' => 'stale_unknown', 'stale_count' => $local_page['total'], 'stale' => true ), 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $local_page['total'], 'total_pages' => $local_page['total_pages'], 'scope' => 'local_history_fallback' ), 'github_error' => $github_page->get_error_message(), 'runner_status' => array( 'state' => 'unknown', 'message' => 'Runner status unavailable while GitHub workflow data is unavailable.' ), 'permissions' => array( 'read' => false, 'write' => false ) ) );
+			wp_send_json_success( array( 'runs' => $local_page['runs'], 'summary' => array( 'running' => 0, 'queued' => 0, 'failed' => 0, 'completed' => 0, 'scope' => 'stale_unknown', 'summary_scope' => 'stale_unknown', 'stale_count' => $local_page['total'], 'stale' => true ), 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $local_page['total'], 'total_pages' => $local_page['total_pages'], 'scope' => 'local_history_fallback' ), 'github_error' => $github_page->get_error_message(), 'permissions' => array( 'read' => false, 'write' => false ) ) );
 		}
 		$this->repository->reconcile_visual_runs( (array) ( $github_page['runs'] ?? array() ) );
 		$local_page = $this->repository->visual_runs_for_github_page( (array) ( $github_page['runs'] ?? array() ), $page, $per_page, (int) ( $github_page['total'] ?? 0 ) );
 		$total = (int) ( $github_page['total'] ?? 0 );
-		wp_send_json_success( array( 'runs' => $local_page, 'summary' => (array) ( $github_page['summary'] ?? array( 'running' => 0, 'queued' => 0, 'failed' => 0, 'completed' => 0, 'scope' => 'github_fresh_page' ) ), 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $total, 'total_pages' => max( 1, (int) ceil( $total / $per_page ) ), 'scope' => 'github_workflow_history' ), 'runner_status' => $this->github_actions->local_runner_status(), 'permissions' => array( 'read' => true, 'write' => true ) ) );
+		wp_send_json_success( array( 'runs' => $local_page, 'summary' => (array) ( $github_page['summary'] ?? array( 'running' => 0, 'queued' => 0, 'failed' => 0, 'completed' => 0, 'scope' => 'github_fresh_page' ) ), 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $total, 'total_pages' => max( 1, (int) ceil( $total / $per_page ) ), 'scope' => 'github_workflow_history' ), 'permissions' => array( 'read' => true, 'write' => true ) ) );
 	}
 
 	public function handle_visual_run_detail_ajax() {
@@ -965,12 +967,19 @@ class MAC_Tracker_Admin {
 		$accent = (array) ( $deterministic['primary_accent'] ?? array() );
 		$brand = (array) ( $deterministic['brand'] ?? array() );
 		$outcome = (array) ( $raw['result'] ?? array() );
+		$is_direct = 'direct_vision' === (string) ( $raw['classifier_mode'] ?? '' ) || 'direct-vision-v1' === (string) ( $raw['classifier_version'] ?? '' );
 		echo '<details class="mac-tracker-visual-debug"><summary>Evidence &amp; provider trace</summary><dl>';
+		if ( $is_direct ) {
+			echo '<dt>Production authority</dt><dd>Direct Vision · complete rendered screenshot</dd>';
+			echo '<dt>AI decision</dt><dd>' . esc_html( trim( (string) ( $outcome['provider'] ?? $row['ai_provider'] ?? '' ) . ' / ' . (string) ( $outcome['model'] ?? $row['ai_model'] ?? '' ) . ' · brand ' . (string) ( $outcome['brand'] ?? $outcome['primary_family'] ?? '' ) . ' · canvas ' . (string) ( $outcome['canvas'] ?? $outcome['primary_surface'] ?? '' ) . ' · tone ' . (string) ( $outcome['tone_group'] ?? $outcome['tone'] ?? '' ) . ' · confidence ' . (string) ( $outcome['confidence'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
+			echo '<dt>Decision path</dt><dd>' . esc_html( (string) ( $raw['authority'] ?? 'manual_review' ) ) . '</dd>';
+			echo '<dt>Vision input</dt><dd>' . esc_html( wp_json_encode( (array) ( $raw['vision_input'] ?? array() ) ) ) . '</dd>';
+		}
 		echo '<dt>Canvas</dt><dd>' . esc_html( trim( (string) ( $canvas['primary_surface'] ?? $canvas['family'] ?? '' ) . ' / ' . (string) ( $canvas['secondary_surface'] ?? '' ) . ' / ' . (string) ( $canvas['mode'] ?? '' ) . ' · confidence ' . (string) ( $canvas['surface_confidence'] ?? $canvas['confidence'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
-		echo '<dt>Brand candidates</dt><dd>' . esc_html( trim( (string) ( $brand['brand_primary_family'] ?? $accent['family'] ?? '' ) . ' ' . (string) ( $brand['brand_primary_score'] ?? $accent['score'] ?? '' ) . ' · sections ' . (string) ( $brand['brand_evidence'][0]['section_count'] ?? '' ) . ' · roles ' . implode( ', ', (array) ( $brand['brand_evidence'][0]['roles'] ?? array() ) ) ) ?: 'Not available' ) . '</dd>';
+		echo '<dt>Deterministic sanity</dt><dd>' . esc_html( trim( (string) ( $brand['brand_primary_family'] ?? $accent['family'] ?? '' ) . ' ' . (string) ( $brand['brand_primary_score'] ?? $accent['score'] ?? '' ) . ' · sections ' . (string) ( $brand['brand_evidence'][0]['section_count'] ?? '' ) . ' · roles ' . implode( ', ', (array) ( $brand['brand_evidence'][0]['roles'] ?? array() ) ) ) ?: 'Not available' ) . '</dd>';
 		echo '<dt>Primary accent</dt><dd>' . esc_html( trim( (string) ( $accent['family'] ?? '' ) . ' ' . (string) ( $accent['hex'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
 		echo '<dt>Provider decisions</dt><dd>' . esc_html( wp_json_encode( array_map( static function( $attempt ) { return array( 'provider' => $attempt['provider'] ?? '', 'brand' => $attempt['primary_family'] ?? '', 'canvas' => $attempt['primary_surface'] ?? '', 'mode' => $attempt['canvas_mode'] ?? '' ); }, (array) ( $raw['attempts'] ?? array() ) ) ) ) . '</dd>';
-		echo '<dt>Final resolver</dt><dd>' . esc_html( (string) ( $outcome['result']['reason'] ?? $row['tone_reason'] ?? 'Pending' ) ) . '</dd>';
+		echo '<dt>Final reason</dt><dd>' . esc_html( (string) ( $outcome['reason'] ?? $row['tone_reason'] ?? 'Pending' ) ) . '</dd>';
 		echo '<dt>Provider errors</dt><dd>' . esc_html( wp_json_encode( (array) ( $raw['errors'] ?? array() ) ) ) . '</dd></dl></details>';
 	}
 

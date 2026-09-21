@@ -47,6 +47,20 @@ export function parseJsonStrict(value, provider) {
   try { return JSON.parse(value); } catch { throw new ProviderError(`${provider.toUpperCase()}_INVALID_SCHEMA`, `${provider} returned invalid JSON.`, { provider }); }
 }
 
+/** Normalize supported OpenAI-compatible and Workers AI response shapes. */
+export function extractStructuredContent(payload, provider) {
+  const root = payload?.result || payload;
+  const message = root?.choices?.[0]?.message || root?.message || {};
+  if (message.parsed && 'object' === typeof message.parsed) return message.parsed;
+  if (message.content && 'object' === typeof message.content && !Array.isArray(message.content)) return message.content;
+  if (Array.isArray(message.content)) {
+    const text = message.content.map((part) => part?.text || part?.content || '').filter(Boolean).join('');
+    if (text) return parseJsonStrict(text, provider);
+  }
+  const candidate = message.content ?? root?.response ?? root?.result?.response ?? root?.output_text;
+  return parseJsonStrict(candidate, provider);
+}
+
 export function validateToneResult(value, provider, model) {
   if (!value || 'object' !== typeof value || Array.isArray(value)) throw new ProviderError(`${provider.toUpperCase()}_INVALID_SCHEMA`, `${provider} returned an invalid result object.`, { provider });
   const expected = Object.keys(TONE_SCHEMA.properties);

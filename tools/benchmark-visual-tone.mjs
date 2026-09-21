@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { classifyTone } from '../.github/scripts/visual/classify.mjs';
 import { TONES } from '../.github/scripts/visual/providers/common.mjs';
+import { prepareVisionInput } from '../.github/scripts/visual/vision-input.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const goldPath = resolve(root, 'data/visual-tone-gold.json');
@@ -10,7 +11,7 @@ const outputPath = resolve(root, process.env.BENCHMARK_OUTPUT || 'reports/visual
 const requestedLimit = Math.max(1, Math.min(50, Number(process.env.BENCHMARK_LIMIT || 50)));
 const repeat = 'false' !== String(process.env.BENCHMARK_REPEAT || 'true').toLowerCase();
 const minimum = 30;
-const blockedCodes = new Set(['CF_CHALLENGE', 'CAPTCHA', 'PARKED_DOMAIN', 'MAINTENANCE', 'LOGIN_WALL', 'BAD_REDIRECT', 'EMPTY_PAGE']);
+const blockedCodes = new Set(['HTTP_401', 'HTTP_403', 'CF_CHALLENGE', 'CAPTCHA', 'PARKED_DOMAIN', 'MAINTENANCE', 'LOGIN_WALL', 'BAD_REDIRECT', 'EMPTY_PAGE']);
 
 const gold = JSON.parse(await readFile(goldPath, 'utf8'));
 const entries = Array.isArray(gold.entries) ? gold.entries : [];
@@ -23,6 +24,8 @@ const baseReport = {
   reviewed_labels: reviewed.length,
   required_labels: Math.max(minimum, Number(gold.minimum_reviewed_labels || 0)),
   pending_labels: missing.map((entry) => ({ id: entry.id, name: entry.name, url: entry.url })),
+  taxonomy_semantics: gold.taxonomy_semantics || 'unspecified',
+  benchmark_eligible: reviewed.length >= Math.max(minimum, Number(gold.minimum_reviewed_labels || 0)),
 };
 
 async function saveReport(report) {
@@ -69,12 +72,14 @@ if (reviewed.length < baseReport.required_labels) {
           geminiApiKeys: [process.env.GEMINI_API_KEY_1 || process.env.GEMINI_API_KEY || '', process.env.GEMINI_API_KEY_2 || ''], freeOnly: true, autoAccept: Number(process.env.BENCHMARK_AUTO_ACCEPT || 0.85),
         });
         row.first = { state: primary.state, tone: primary.result?.tone_group || primary.result?.tone || null, precise_tone: primary.result?.precise_tone || null, primary_family: primary.result?.primary_family || null, canvas_mode: primary.result?.canvas_mode || null, primary_surface: primary.result?.primary_surface || null, provider: primary.result?.provider || null, confidence: primary.result?.confidence ?? null };
+        const prepared = await prepareVisionInput(first.full);
+        row.vision_input = prepared.metadata;
         const direct = await classifyTone({
-          previewBuffer: first.full,
+          previewBuffer: prepared.buffer,
           evidence: first.bundle.ui.metrics,
           groqApiKey: process.env.GROQ_API_KEY || '', geminiApiKey: process.env.GEMINI_API_KEY || '',
           cloudflareAccount: process.env.CLOUDFLARE_ACCOUNT_ID || '', cloudflareToken: process.env.CLOUDFLARE_API_TOKEN || '',
-          geminiApiKeys: [process.env.GEMINI_API_KEY_1 || process.env.GEMINI_API_KEY || '', process.env.GEMINI_API_KEY_2 || ''], freeOnly: true, autoAccept: Number(process.env.BENCHMARK_AUTO_ACCEPT || 0.85), classifierMode: 'direct_vision',
+          geminiApiKeys: [process.env.GEMINI_API_KEY_1 || process.env.GEMINI_API_KEY || '', process.env.GEMINI_API_KEY_2 || ''], freeOnly: true, autoAccept: Number(process.env.BENCHMARK_AUTO_ACCEPT || 0.85), classifierMode: 'direct_vision', aiStrategy: process.env.BENCHMARK_AI_STRATEGY || 'smart',
         });
         row.direct_vision = { state: direct.state, tone: direct.result?.tone_group || direct.result?.tone || null, precise_tone: direct.result?.precise_tone || null, primary_family: direct.result?.primary_family || null, canvas_mode: direct.result?.canvas_mode || null, primary_surface: direct.result?.primary_surface || null, provider: direct.result?.provider || null, confidence: direct.result?.confidence ?? null, authority: direct.authority || 'judge_or_review' };
         if (repeat && 'classified' === primary.state) {

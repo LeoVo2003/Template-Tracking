@@ -750,7 +750,7 @@ class MAC_Tracker_Repository {
 				// retry_wait. Once its delay has elapsed, return it to the normal
 				// tone queue; no human click and no new capture are required.
 				$this->wpdb->query( "UPDATE {$this->visuals} v SET pipeline_status = 'analysis_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND tone_status = 'pending' AND screenshot_url <> '' AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')} AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
-				$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.pipeline_status = 'analysis_queued' AND v.manual_locked = 0 AND v.human_locked = 0 AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()) AND v.screenshot_url <> '' AND v.capture_bundle_json <> '' ORDER BY v.updated_at ASC LIMIT %d";
+				$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.diagnostic_screenshot_url, v.last_error_code, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.pipeline_status = 'analysis_queued' AND v.manual_locked = 0 AND v.human_locked = 0 AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()) AND v.screenshot_url <> '' AND v.capture_bundle_json <> '' AND v.diagnostic_screenshot_url = '' ORDER BY v.updated_at ASC LIMIT %d";
 			} else {
 				$this->wpdb->query( "UPDATE {$this->visuals} v SET pipeline_status = 'capture_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND capture_status = 'pending' AND screenshot_url = '' AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')} AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
 				$sql = "SELECT p.id, p.website_url, '' AS screenshot_url, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR (v.pipeline_status = 'capture_queued' AND v.human_locked = 0 AND v.manual_locked = 0 AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()))) ORDER BY CASE WHEN v.id IS NULL THEN 1 ELSE 0 END, v.updated_at ASC, p.task_completed_at DESC, p.id DESC LIMIT %d";
@@ -855,7 +855,7 @@ class MAC_Tracker_Repository {
 		try {
 			$this->reclaim_expired_visual_leases();
 			$placeholders = implode( ',', array_fill( 0, count( $target_ids ), '%d' ) );
-			$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw, v.pipeline_status FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.id IN ({$placeholders}) AND ((%s = 'tone' AND v.manual_locked = 0 AND v.human_locked = 0 AND v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '' AND v.capture_bundle_json <> '') OR (%s = 'capture' AND v.pipeline_status = 'capture_queued') OR (%s = 'full' AND ((v.manual_locked = 0 AND v.human_locked = 0 AND v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '' AND v.capture_bundle_json <> '') OR v.pipeline_status = 'capture_queued'))) ORDER BY FIELD(p.id, " . implode( ',', array_fill( 0, count( $target_ids ), '%d' ) ) . ')';
+			$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.diagnostic_screenshot_url, v.last_error_code, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw, v.pipeline_status FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.id IN ({$placeholders}) AND ((%s = 'tone' AND v.manual_locked = 0 AND v.human_locked = 0 AND v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '' AND v.capture_bundle_json <> '' AND v.diagnostic_screenshot_url = '') OR (%s = 'capture' AND v.pipeline_status = 'capture_queued') OR (%s = 'full' AND ((v.manual_locked = 0 AND v.human_locked = 0 AND v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '' AND v.capture_bundle_json <> '' AND v.diagnostic_screenshot_url = '') OR v.pipeline_status = 'capture_queued'))) ORDER BY FIELD(p.id, " . implode( ',', array_fill( 0, count( $target_ids ), '%d' ) ) . ')';
 			$args = array_merge( $target_ids, array( $stage, $stage, $stage ), $target_ids );
 			$candidates = (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $args ), ARRAY_A );
 			foreach ( array_slice( $candidates, 0, $limit ) as $item ) {
@@ -880,7 +880,18 @@ class MAC_Tracker_Repository {
 		$bundle['artifacts'] = array_merge( (array) ( $bundle['artifacts'] ?? array() ), array( 'full_screenshot_url' => esc_url_raw( $url ), 'ai_preview_url' => esc_url_raw( $preview_url ) ) );
 		$metrics = (array) ( $bundle['ui']['metrics'] ?? array() );
 		$revision = 1 + (int) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT capture_revision FROM {$this->visuals} WHERE project_id = %d", absint( $snapshot_id ) ) );
-		return $this->save_claimed_visual( $snapshot_id, 'capture', $token, array( 'pipeline_status' => 'captured', 'capture_status' => 'captured', 'attachment_id' => absint( $attachment_id ), 'preview_attachment_id' => absint( $preview_attachment_id ), 'screenshot_url' => esc_url_raw( $url ), 'tone_status' => 'stale', 'tone_token' => '', 'captured_at' => MAC_Tracker_Time::now_utc(), 'capture_revision' => $revision, 'manual_locked' => 0, 'human_locked' => 0, 'approved_capture_revision' => 0, 'approved_by' => 0, 'approved_at' => null, 'lease_until' => null, 'claimed_at' => null, 'job_token' => '', 'final_url' => esc_url_raw( (string) ( $bundle['final_url'] ?? '' ) ), 'http_status' => absint( $bundle['http_status'] ?? 0 ), 'page_title' => sanitize_text_field( (string) ( $bundle['page_title'] ?? '' ) ), 'capture_bundle_json' => wp_json_encode( $bundle ), 'metrics_json' => wp_json_encode( $metrics ), 'last_error_code' => '', 'last_error_message' => null, 'last_error_at' => null, 'last_failed_stage' => '', 'runner_type' => '' ) );
+		return $this->save_claimed_visual( $snapshot_id, 'capture', $token, array( 'pipeline_status' => 'captured', 'capture_status' => 'captured', 'attachment_id' => absint( $attachment_id ), 'preview_attachment_id' => absint( $preview_attachment_id ), 'screenshot_url' => esc_url_raw( $url ), 'diagnostic_attachment_id' => 0, 'diagnostic_screenshot_url' => '', 'diagnostic_captured_at' => null, 'tone_status' => 'stale', 'tone_token' => '', 'captured_at' => MAC_Tracker_Time::now_utc(), 'capture_revision' => $revision, 'manual_locked' => 0, 'human_locked' => 0, 'approved_capture_revision' => 0, 'approved_by' => 0, 'approved_at' => null, 'lease_until' => null, 'claimed_at' => null, 'job_token' => '', 'final_url' => esc_url_raw( (string) ( $bundle['final_url'] ?? '' ) ), 'http_status' => absint( $bundle['http_status'] ?? 0 ), 'page_title' => sanitize_text_field( (string) ( $bundle['page_title'] ?? '' ) ), 'capture_bundle_json' => wp_json_encode( $bundle ), 'metrics_json' => wp_json_encode( $metrics ), 'last_error_code' => '', 'last_error_message' => null, 'last_error_at' => null, 'last_failed_stage' => '', 'runner_type' => '' ) );
+	}
+
+	/** One-time V3.18 migration: re-use valid stored captures with Direct Vision. */
+	public function requeue_legacy_ai_for_direct_vision() {
+		$now = MAC_Tracker_Time::now_utc();
+		$result = $this->wpdb->query( $this->wpdb->prepare(
+			"UPDATE {$this->visuals} SET pipeline_status = 'analysis_queued', tone_status = 'pending', tone_token = '', lease_until = NULL, claimed_at = NULL, job_token = '', next_retry_at = NULL, updated_at = %s WHERE screenshot_url <> '' AND capture_bundle_json <> '' AND diagnostic_screenshot_url = '' AND manual_locked = 0 AND human_locked = 0 AND (lease_until IS NULL OR lease_until < UTC_TIMESTAMP()) AND (tone <> '' OR ai_raw <> '') AND (ai_raw IS NULL OR ai_raw NOT LIKE %s)",
+			$now,
+			'%"classifier_version":"direct-vision-v1"%'
+		) );
+		return false === $result ? 0 : (int) $result;
 	}
 
 	/** Save a security-page screenshot as diagnostic evidence only; never AI input. */
@@ -1139,6 +1150,10 @@ class MAC_Tracker_Repository {
 		$sql = "SELECT attachment_id, preview_attachment_id, diagnostic_attachment_id FROM {$this->visuals} WHERE project_id IN ({$placeholders})";
 		$rows = (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $ids ), ARRAY_A );
 		return array_values( array_unique( array_filter( array_map( 'absint', array_merge( array_column( $rows, 'attachment_id' ), array_column( $rows, 'preview_attachment_id' ), array_column( $rows, 'diagnostic_attachment_id' ) ) ) ) ) );
+	}
+
+	public function visual_diagnostic_attachment_id( $snapshot_id ) {
+		return absint( $this->wpdb->get_var( $this->wpdb->prepare( "SELECT diagnostic_attachment_id FROM {$this->visuals} WHERE project_id = %d", absint( $snapshot_id ) ) ) );
 	}
 
 	public function requeue_failed_visual_items() {

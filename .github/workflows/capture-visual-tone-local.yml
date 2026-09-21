@@ -18,11 +18,14 @@ concurrency:
 
 jobs:
   capture-and-classify-local:
+    if: github.repository == 'LeoVo2003/Template-Tracking' && github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, windows, mac-visual]
     timeout-minutes: 60
     env:
       MAC_TRACKER_SITE_URL: ${{ secrets.MAC_TRACKER_SITE_URL }}
       MAC_TRACKER_AUTOMATION_SECRET: ${{ secrets.MAC_TRACKER_AUTOMATION_SECRET }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
@@ -37,17 +40,46 @@ jobs:
       BATCH_LIMIT: ${{ inputs.limit }}
       GITHUB_RUN_ID: ${{ github.run_id }}
       GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+      GITHUB_WORKFLOW: ${{ github.workflow }}
+      GITHUB_SHA: ${{ github.sha }}
       GITHUB_REPOSITORY: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - name: Install local capture dependencies
+      - name: Verify persistent local runtime
         shell: powershell
-        run: npm install --no-save playwright@1.57.0 sharp@0.34.5
-      - name: Install Chromium
-        shell: powershell
-        run: npx playwright install chromium
+        run: |
+          $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
+          $npmCommand = Get-Command npm -ErrorAction SilentlyContinue
+          if (-not $nodeCommand -or -not $npmCommand) {
+            throw "Local Visual runtime requires a persistent Node.js 20+ installation. Run: powershell -ExecutionPolicy Bypass -File scripts/setup-local-visual-runtime.ps1"
+          }
+          $nodeVersion = (node --version).Trim()
+          $nodeMajor = [int](($nodeVersion -replace '^v', '').Split('.')[0])
+          if ($nodeMajor -lt 20) {
+            throw "Local Visual runtime requires Node.js 20 or newer. Found $nodeVersion. Run: powershell -ExecutionPolicy Bypass -File scripts/setup-local-visual-runtime.ps1"
+          }
+          $repoParent = Split-Path $env:GITHUB_WORKSPACE -Parent
+          $runtimeRoot = Split-Path $repoParent -Parent
+          $playwrightPackage = Join-Path $runtimeRoot 'node_modules\playwright\package.json'
+          $sharpPackage = Join-Path $runtimeRoot 'node_modules\sharp\package.json'
+          $browserRoot = Join-Path $runtimeRoot '.mac-visual-browsers'
+          if (-not (Test-Path -LiteralPath $playwrightPackage) -or -not (Test-Path -LiteralPath $sharpPackage) -or -not (Test-Path -LiteralPath $browserRoot)) {
+            throw "Local Visual runtime is not installed. Run: powershell -ExecutionPolicy Bypass -File scripts/setup-local-visual-runtime.ps1"
+          }
+          $playwrightVersion = (Get-Content -Raw -LiteralPath $playwrightPackage | ConvertFrom-Json).version
+          $sharpVersion = (Get-Content -Raw -LiteralPath $sharpPackage | ConvertFrom-Json).version
+          if ($playwrightVersion -ne '1.57.0' -or $sharpVersion -ne '0.34.5') {
+            throw "Local Visual runtime versions are stale (playwright=$playwrightVersion, sharp=$sharpVersion). Rerun scripts/setup-local-visual-runtime.ps1"
+          }
+          $env:MAC_VISUAL_RUNTIME_ROOT = $runtimeRoot
+          $env:PLAYWRIGHT_BROWSERS_PATH = $browserRoot
+          "MAC_VISUAL_RUNTIME_ROOT=$runtimeRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PLAYWRIGHT_BROWSERS_PATH=$browserRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          node -e "import('playwright').then(async ({chromium})=>{const browser=await chromium.launch({headless:true});console.log('playwright browser ok');await browser.close();}).catch((error)=>{console.error(error);process.exit(1)})"
+          node -e "import('sharp').then(()=>console.log('sharp ok')).catch((error)=>{console.error(error);process.exit(1)})"
       - name: Capture full pages and classify tone
         shell: powershell
-        run: node .github/scripts/capture-visual-tone.mjs
+        run: |
+          Write-Host "=== MAC_VISUAL_WORKER_START ==="
+          node .github/scripts/capture-visual-tone.mjs
+          Write-Host "=== MAC_VISUAL_WORKER_END ==="

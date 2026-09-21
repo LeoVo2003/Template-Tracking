@@ -1,5 +1,7 @@
 {
-  "version": 2,
+  "version": 3,
+  "taxonomy_semantics": "brand_first_canvas_second",
+  "reviewed_label_policy": "Only manually reviewed entries are benchmark eligible; candidates remain excluded.",
   "minimum_reviewed_labels": 30,
   "notes": "Expected tones are manual gold labels. Null means the site is a candidate awaiting human review and is never used to approve Auto mode. V3.15 fixture expectations are unit-regression cases until their source screenshots are attached to the gold capture set.",
   "v315_regression_fixtures": [
@@ -10,7 +12,7 @@
     { "id": "ginelle", "name": "Ginelle Nail & Spa", "url": "https://ginellenailspa.com/home", "expected_tone": "Hồng trắng", "reviewed": true, "notes": "White structural base with repeated pink UI accents." },
     { "id": "azure", "name": "Azure Nail Lounge", "url": "https://azurenaillounge.com/home", "expected_tone": "Xanh trắng", "reviewed": true, "notes": "Light blue/cyan structural palette." },
     { "id": "tipsy", "name": "Tipsy Nails", "url": "https://tipsynails.macusa.us/home", "expected_tone": "Nâu trắng", "reviewed": true, "notes": "Warm brown and white structural UI." },
-    { "id": "magic", "name": "Magic Nails Spa", "url": "https://magicnailsspa.macusa.us/home", "expected_tone": "Đen vàng", "reviewed": true, "notes": "Black structural sections with repeated gold UI." },
+    { "id": "magic", "name": "Magic Nails Spa", "url": "https://magicnailsspa.macusa.us/home", "expected_tone": "Vàng đen", "reviewed": true, "notes": "Brand-first/canvas-second: repeated gold UI on a dark structural canvas." },
     { "id": "kendall", "name": "Kendall's Nail Lounge", "url": "https://kendallsnailloungelongmont.com/home", "expected_tone": "Hồng trắng", "reviewed": true, "notes": "White base and pale pink panels." },
     { "id": "lavish", "name": "Lavish Nails Lounge", "url": "https://lavishnailsloungejacksonville.com/home", "expected_tone": "Nâu kem", "reviewed": true, "notes": "Cream base with dark brown UI blocks." },
     { "id": "glo", "name": "Glo Nails Lounge", "url": "https://glonailslounge.com/home", "expected_tone": "Nâu trắng", "reviewed": true, "notes": "White panels with repeated beige/brown structural sections." },

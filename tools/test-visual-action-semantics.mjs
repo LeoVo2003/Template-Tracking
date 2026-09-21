@@ -16,7 +16,7 @@ test('a tone job receives its Gemini budget explicitly without out-of-scope conf
   const start = main.indexOf('async function processToneItems');
   const end = main.indexOf('async function writeSummary', start);
   const body = main.slice(start, end);
-  assert.match(body, /async function processToneItems\(items, aiStrategy, autoAccept, geminiDailyBudgetPerKey(?:, classifierMode = 'legacy')?\)/);
+  assert.match(body, /async function processToneItems\(items, aiStrategy, autoAccept, geminiDailyBudgetPerKey, classifierMode = 'direct_vision'\)/);
   assert.match(body, /geminiDailyBudgetPerKey,/);
   assert.doesNotMatch(body, /config\./);
   assert.match(main, /processToneItems\(jobs\.filter[\s\S]*geminiDailyBudgetPerKey[\s\S]*classifierMode\)/);

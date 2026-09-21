@@ -32,8 +32,16 @@ export async function collectUiSamples(page) {
     const structuralTags = new Set(['HEADER', 'NAV', 'MAIN', 'SECTION', 'ARTICLE', 'FOOTER']);
     const excludedTags = new Set(['IMG', 'PICTURE', 'VIDEO', 'CANVAS', 'IFRAME', 'SOURCE', 'OBJECT', 'EMBED']);
     const localSurfaceFor = (element) => /card|panel|tile|table|menu|gallery|price|testimonial|content-container|inner/i.test(String(element.className || '') + ' ' + String(element.getAttribute('role') || ''));
+    const socialFor = (element) => {
+      const anchor = 'A' === element?.tagName ? element : element?.closest?.('a');
+      if (!anchor) return null;
+      const href = String(anchor.getAttribute('href') || '');
+      const hint = `${href} ${anchor.getAttribute('aria-label') || ''} ${anchor.getAttribute('title') || ''} ${anchor.className || ''}`;
+      return /facebook\.com|instagram\.com|youtube\.com|youtu\.be|tiktok\.com|twitter\.com|x\.com|pinterest\.|linkedin\.com|yelp\.|threads\.net|\b(facebook|instagram|youtube|tiktok|twitter|pinterest|linkedin|yelp|threads|social)\b/i.test(hint) ? anchor : null;
+    };
     const roleFor = (element) => {
       const tag = element.tagName;
+      if (socialFor(element)) return 'social';
       if ('BODY' === tag) return 'canvas';
       if ('HEADER' === tag) return 'section';
       if ('NAV' === tag) return 'nav_link';
@@ -64,6 +72,7 @@ export async function collectUiSamples(page) {
       ordinary_link: 0.14,
       text: 0.16,
       icon: 0.18,
+      social: 0.01,
     };
     const parseColor = (value) => {
       const text = String(value || '').trim();
@@ -79,6 +88,11 @@ export async function collectUiSamples(page) {
       if (!parsed || !Number.isFinite(weight) || weight <= 0) return;
       const effectiveOpacity = parsed.alpha * Math.max(0, Math.min(1, Number(elementOpacity) || 0));
       if (effectiveOpacity <= 0.03) return;
+      const sourceAnchor = 'A' === element?.tagName ? element : element?.closest?.('a');
+      let hrefHost = '', hrefPath = '';
+      if (sourceAnchor) {
+        try { const parsed = new URL(sourceAnchor.href, location.href); hrefHost = parsed.hostname.slice(0, 120); hrefPath = parsed.pathname.slice(0, 160); } catch { /* Ignore malformed links. */ }
+      }
       result.push({
         color: parsed.value,
         weight: Number(weight.toFixed(6)),
@@ -91,6 +105,11 @@ export async function collectUiSamples(page) {
         tag: element?.tagName || '',
         section_key: (element?.closest?.('header,nav,main,section,article,footer')?.tagName || 'body') + ':' + Math.round((element?.closest?.('header,nav,main,section,article,footer')?.getBoundingClientRect?.().top || 0) / 180),
         control_key: element?.closest?.('button,a,[role="button"]') ? `${element.closest('button,a,[role="button"]').tagName}:${(element.closest('button,a,[role="button"]').textContent || '').trim().slice(0, 64)}` : '',
+        href_host: hrefHost,
+        href_path: hrefPath,
+        aria_label: String((sourceAnchor || element)?.getAttribute?.('aria-label') || '').slice(0, 120),
+        title: String((sourceAnchor || element)?.getAttribute?.('title') || '').slice(0, 120),
+        class_hint: String((sourceAnchor || element)?.className || '').replace(/\s+/g, ' ').slice(0, 160),
       });
     };
     const nodes = [document.body, ...document.querySelectorAll('header,nav,main,section,article,footer,button,a,h1,h2,h3,h4,p,div,li,input,select,textarea,svg')];
@@ -116,7 +135,7 @@ export async function collectUiSamples(page) {
       // A background image is media evidence, not UI palette evidence. Keep
       // an explicit overlay color only when it is actually translucent.
       const differentBackground = style.backgroundColor !== parentBackground;
-      if (ownBackground && (!hasBackgroundImage || ownBackground.alpha < 0.92) && (differentBackground || structural || ['button', 'cta', 'active_nav', 'control'].includes(role))) {
+      if (ownBackground && (!hasBackgroundImage || ownBackground.alpha < 0.92) && (differentBackground || structural || ['button', 'cta', 'active_nav', 'control', 'social'].includes(role))) {
         const roleFactor = roleWeight[role] || roleWeight.unknown;
         add(style.backgroundColor, areaRatio * roleFactor, role, 'background', element, areaRatio, structural || ['button', 'cta', 'active_nav'].includes(role), opacity);
       }

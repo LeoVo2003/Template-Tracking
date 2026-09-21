@@ -3,7 +3,9 @@ import { appendFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { captureRenderedPage } from './capture.mjs';
 import { classifyTone } from './classify.mjs';
+import { directVisionEligible } from './direct-vision.mjs';
 import { fullRunContinuationTargets, normalizeJobScope } from './job-scope.mjs';
+import { prepareVisionInput } from './vision-input.mjs';
 import { PageValidationError } from './validate-page.mjs';
 
 const siteUrl = String(process.env.MAC_TRACKER_SITE_URL || '').replace(/\/+$/, '');
@@ -168,7 +170,7 @@ async function processCaptureItems(items) {
   return capturedIds;
 }
 
-async function downloadPreview(item, classifierMode = 'legacy') {
+async function downloadPreview(item, classifierMode = 'direct_vision') {
   let bundle = {};
   try { bundle = JSON.parse(item.capture_bundle_json || '{}'); } catch { bundle = {}; }
   // Direct Vision/benchmark receives the real full capture. The stripped AI
@@ -177,19 +179,29 @@ async function downloadPreview(item, classifierMode = 'legacy') {
   if (!previewUrl) throw new Error('Capture bundle has no AI preview or screenshot URL.');
   const response = await fetch(previewUrl);
   if (!response.ok) throw new Error(`AI preview download failed: HTTP ${response.status}`);
-  return { bundle, preview: Buffer.from(await response.arrayBuffer()) };
+  const source = Buffer.from(await response.arrayBuffer());
+  if ('direct_vision' === classifierMode || 'benchmark_only' === classifierMode) {
+    const prepared = await prepareVisionInput(source);
+    return { bundle, preview: prepared.buffer, visionInput: prepared.metadata };
+  }
+  return { bundle, preview: source, visionInput: { transformation: 'legacy_media_stripped_preview', source_bytes: source.length, input_bytes: source.length } };
 }
 
-async function processToneItems(items, aiStrategy, autoAccept, geminiDailyBudgetPerKey, classifierMode = 'legacy') {
+async function processToneItems(items, aiStrategy, autoAccept, geminiDailyBudgetPerKey, classifierMode = 'direct_vision') {
   if ('off' === aiStrategy) { console.log('AI strategy is OFF; no saved screenshots were submitted for analysis.'); return; }
   for (const item of items) {
     try {
+      if ('direct_vision' === classifierMode && !directVisionEligible(item)) {
+        const error = new Error('Active diagnostic/security-block evidence is never valid Direct Vision input.');
+        error.code = 'DIAGNOSTIC_CAPTURE_NOT_AI_INPUT';
+        throw error;
+      }
       await reportRunHeartbeat({ current_snapshot_id: item.id, current_step: 'analysis_preparing', message: `Preparing analysis for #${item.id}`, event_type: 'analysis_started' });
-      const { bundle, preview } = await downloadPreview(item, classifierMode);
+      const { bundle, preview, visionInput } = await downloadPreview(item, classifierMode);
       const evidence = bundle?.ui?.metrics || { text: 'Capture bundle has no deterministic UI metrics.' };
       await reportRunHeartbeat({ current_snapshot_id: item.id, current_step: 'qwen_analyzing', current_provider: 'qwen', message: `Qwen analyzing #${item.id}`, event_type: 'qwen_started' });
-      const outcome = await classifyTone({ previewBuffer: preview, evidence, groqApiKey, geminiApiKey, geminiApiKeys, geminiDailyBudgetPerKey, cloudflareAccount, cloudflareToken, freeOnly, autoAccept, classifierMode, onProviderStep: ({ step, provider }) => reportRunHeartbeat({ current_snapshot_id: item.id, current_step: step, current_provider: provider, message: `${String(provider).replace(/_/g, ' ')} working on #${item.id}`, event_type: step }) });
-      const rawJson = JSON.stringify({ phase: 4, ...outcome, deterministic: evidence });
+      const outcome = await classifyTone({ previewBuffer: preview, evidence, groqApiKey, geminiApiKey, geminiApiKeys, geminiDailyBudgetPerKey, cloudflareAccount, cloudflareToken, freeOnly, autoAccept, classifierMode, aiStrategy, onProviderStep: ({ step, provider }) => reportRunHeartbeat({ current_snapshot_id: item.id, current_step: step, current_provider: provider, message: `${String(provider).replace(/_/g, ' ')} working on #${item.id}`, event_type: step }) });
+      const rawJson = JSON.stringify({ phase: 4, classifier_version: 'direct-vision-v1', authority: outcome.authority || ('direct_vision' === classifierMode ? 'manual_review' : 'legacy'), classifier_mode: classifierMode, vision_input: visionInput, ...outcome, deterministic: evidence });
       if ('benchmark_only' === classifierMode) {
         console.log(`Benchmark-only result #${item.id}: ${outcome.result?.tone_group || outcome.result?.tone || 'needs review'}; no database ingest.`);
         summary.processed += 1;
@@ -231,7 +243,7 @@ try {
   } else {
     const jobs = await claimJobs(scope);
     const geminiDailyBudgetPerKey = Number(config.gemini_daily_budget_per_key || 8);
-    const classifierMode = ['legacy', 'benchmark_only', 'direct_vision'].includes(config.classifier_mode) ? config.classifier_mode : 'legacy';
+    const classifierMode = ['legacy', 'benchmark_only', 'direct_vision'].includes(config.classifier_mode) ? config.classifier_mode : 'direct_vision';
     await processToneItems(jobs.filter((item) => item.stage === 'tone'), config.ai_strategy || 'smart', Number(config.auto_accept_threshold || 0.85), geminiDailyBudgetPerKey, classifierMode);
     const capturedIds = await processCaptureItems(jobs.filter((item) => item.stage === 'capture'));
     // Full mode alone continues a successful capture into tone analysis. It is

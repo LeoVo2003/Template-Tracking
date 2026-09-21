@@ -23,14 +23,14 @@ test('403 diagnostics are multipart-only and cannot become the AI screenshot', (
   assert.match(main, /if \('capture_failed' === mode\) await uploadDiagnostic/);
 });
 
-test('a successful local capture clears stale security retry state but keeps diagnostic history', () => {
+test('a successful local capture clears stale security retry state and active diagnostics', () => {
   assert.match(repository, /pipeline_status' => 'captured'/);
   assert.match(repository, /screenshot_url' => esc_url_raw\( \$url \)/);
   assert.match(repository, /last_error_code' => ''/);
   assert.match(repository, /last_error_message' => null/);
   assert.match(repository, /runner_type' => ''/);
-  assert.match(repository, /diagnostic_screenshot_url/);
-  assert.match(repository, /diagnostic_attachment_id/);
+  assert.match(repository, /diagnostic_screenshot_url' => ''/);
+  assert.match(repository, /diagnostic_attachment_id' => 0/);
 });
 
 test('local retry is exact-target, self-hosted, and dispatch failure remains locally retryable', () => {

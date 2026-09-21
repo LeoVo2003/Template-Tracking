@@ -29,6 +29,9 @@ class MAC_Tracker_Activator {
 		if ( false === get_option( 'mac_tracker_visual_mode', false ) ) {
 			add_option( 'mac_tracker_visual_mode', 'manual', '', false );
 		}
+		if ( false === get_option( 'mac_tracker_visual_classifier_mode', false ) ) {
+			add_option( 'mac_tracker_visual_classifier_mode', 'direct_vision', '', false );
+		}
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 		$charset  = $wpdb->get_charset_collate();
 		$projects = $wpdb->prefix . 'mac_tracker_projects';
@@ -279,6 +282,17 @@ class MAC_Tracker_Activator {
 		if ( version_compare( $previous_version, '0.15.0', '<' ) ) {
 			// Establish one canonical V2 state before a later phase changes capture transport.
 			( new MAC_Tracker_Repository() )->migrate_visual_pipeline_v2();
+		}
+		if ( version_compare( $previous_version, '0.20.22', '<' ) ) {
+			// Direct Vision is now the production authority. Legacy remains an
+			// explicit operator choice, never an inherited historical default.
+			if ( ! get_option( 'mac_tracker_visual_classifier_mode_explicit', false ) ) {
+				update_option( 'mac_tracker_visual_classifier_mode', 'direct_vision', false );
+			}
+			if ( '' !== $previous_version ) {
+				$requeued = ( new MAC_Tracker_Repository() )->requeue_legacy_ai_for_direct_vision();
+				update_option( 'mac_tracker_visual_direct_vision_requeued_count', $requeued, false );
+			}
 		}
 		// Split human approval from the legacy manual tone flag and preserve old locks.
 		$wpdb->query( "UPDATE {$visuals} SET human_locked = 1 WHERE manual_locked = 1 AND human_locked = 0" );

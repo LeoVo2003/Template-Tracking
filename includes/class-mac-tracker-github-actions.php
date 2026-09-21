@@ -75,7 +75,7 @@ class MAC_Tracker_GitHub_Actions {
 		$matching = array();
 		foreach ( (array) ( $response['runners'] ?? array() ) as $runner ) {
 			$labels = array_map( 'strtolower', array_filter( array_map( function( $label ) { return sanitize_key( (string) ( is_array( $label ) ? ( $label['name'] ?? '' ) : $label ) ); }, (array) ( $runner['labels'] ?? array() ) ) ) );
-			if ( in_array( 'windows', $labels, true ) && in_array( 'mac-visual', $labels, true ) && ! empty( $runner['online'] ) ) { $matching[] = $runner; }
+			if ( in_array( 'windows', $labels, true ) && in_array( 'mac-visual', $labels, true ) && 'online' === strtolower( (string) ( $runner['status'] ?? '' ) ) ) { $matching[] = $runner; }
 		}
 		if ( empty( $matching ) ) { return array( 'state' => 'no_matching', 'total' => $total, 'matching_online' => 0, 'required_labels' => $required_labels, 'checked_at' => $checked_at, 'setup_url' => $setup_url, 'message' => sprintf( 'No matching self-hosted runner online (%d runners). Install/register/start a runner with labels self-hosted, windows, mac-visual, then retry. Setup: %s', $total, $setup_url ) ); }
 		$busy = count( array_filter( $matching, function( $runner ) { return ! empty( $runner['busy'] ); } ) );

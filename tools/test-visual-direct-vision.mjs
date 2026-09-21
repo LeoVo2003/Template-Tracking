@@ -15,10 +15,10 @@ const [main, classify, service, monitor, github, benchmark] = await Promise.all(
   readFile('tools/benchmark-visual-tone.mjs', 'utf8'),
 ]);
 
-test('classifier defaults to legacy and direct mode uses full screenshot', () => {
-  assert.match(main, /classifierMode = 'legacy'/);
+test('classifier defaults to Direct Vision and uses full screenshot', () => {
+  assert.match(main, /classifierMode = 'direct_vision'/);
   assert.match(main, /'direct_vision' === classifierMode \|\| 'benchmark_only' === classifierMode/);
-  assert.match(classify, /classifierMode = 'legacy'/);
+  assert.match(classify, /classifierMode = 'direct_vision'/);
   assert.match(classify, /Direct Vision primary/);
   assert.match(service, /mac_tracker_visual_classifier_mode/);
 });
@@ -27,6 +27,7 @@ test('canonical Direct Vision validator rejects free-form labels and accepts tax
   const result = validateDirectVisionResult({ brand: 'gold', canvas: 'black', tone: 'Vàng đen', confidence: 0.94, reason: 'Repeated gold controls sit on dark structural sections.' }, 'fixture', 'fixture-model');
   assert.equal(result.tone, 'Vàng đen');
   assert.throws(() => validateDirectVisionResult({ brand: 'gold', canvas: 'black', tone: 'Gold black', confidence: 0.94, reason: 'free form' }), /canonical taxonomy/);
+  assert.throws(() => validateDirectVisionResult({ brand: 'gold', canvas: 'black', tone: 'Đen vàng', confidence: 0.94, reason: 'reversed semantics' }), /maps to Vàng đen/);
   assert.equal(directVisionEligible({ screenshot_url: 'https://cdn.test/full.jpg', diagnostic_screenshot_url: '', last_error_code: '' }), true);
   assert.equal(directVisionEligible({ screenshot_url: '', diagnostic_screenshot_url: 'https://cdn.test/403.jpg', last_error_code: 'HTTP_403' }), false);
 });
@@ -51,12 +52,14 @@ test('direct mode invokes canonical validator and keeps Vision tone authoritativ
   assert.equal(outcome.authority, 'direct_vision');
   assert.equal(outcome.result.tone, 'Vàng đen');
   assert.equal(outcome.result.tone_group, 'Vàng đen');
+  assert.equal(outcome.result.precise_tone, '');
 });
 
 test('prompt and benchmark are observational and compare legacy with Direct Vision', () => {
   assert.match(directVisionPrompt(), /complete rendered website screenshot/);
   assert.match(directVisionPrompt(), /Vàng đen/);
   assert.match(directVisionPrompt(), /Readable foreground text/);
+  assert.match(directVisionPrompt(), /Social-network icons/);
   assert.match(benchmark, /direct_vision/);
   assert.match(benchmark, /direct_vision_tone_accuracy_percent/);
   assert.match(benchmark, /Direct Vision high-confidence wrong/);

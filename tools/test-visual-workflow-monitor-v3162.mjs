@@ -68,7 +68,7 @@ test('local retry preflight requires an online windows + mac-visual runner', asy
   assert.match(local, /queue_local_visual_retry/);
   assert.match(local, /dispatch_local/);
   assert.ok(local.indexOf('preflight_local_runner') < local.indexOf('queue_local_visual_retry'));
-  assert.match(js, /waiting for a self-hosted runner with windows \+ mac-visual labels/);
+  assert.match(js, /Waiting for local capture machine/);
 });
 
 test('runner preflight distinguishes zero, missing labels, matching online, and unknown states', async () => {

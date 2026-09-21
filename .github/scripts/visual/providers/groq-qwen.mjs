@@ -1,4 +1,4 @@
-import { ProviderError, errorFromResponse, parseJsonStrict, validateToneResult, TONE_SCHEMA } from './common.mjs';
+import { ProviderError, errorFromResponse, extractStructuredContent, validateToneResult, TONE_SCHEMA } from './common.mjs';
 
 const PROVIDER = 'groq';
 const MODEL = 'qwen/qwen3.8-27b';
@@ -29,5 +29,5 @@ export async function classifyWithGroq({ apiKey, prompt, previewBuffer, fetchImp
   if (!response.ok) throw errorFromResponse(PROVIDER, response, body);
   let payload;
   try { payload = JSON.parse(body); } catch { throw new ProviderError('GROQ_INVALID_RESPONSE', 'Groq returned non-JSON HTTP output.', { provider: PROVIDER }); }
-  return validateResult(parseJsonStrict(payload?.choices?.[0]?.message?.content, PROVIDER), PROVIDER, MODEL);
+  return validateResult(extractStructuredContent(payload, PROVIDER), PROVIDER, MODEL);
 }
