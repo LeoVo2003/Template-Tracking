@@ -44,7 +44,14 @@ export function errorFromResponse(provider, response, body = '') {
 export function parseJsonStrict(value, provider) {
   if (value && 'object' === typeof value && !Array.isArray(value)) return value;
   if ('string' !== typeof value) throw new ProviderError(`${provider.toUpperCase()}_INVALID_SCHEMA`, `${provider} returned no JSON object.`, { provider });
-  try { return JSON.parse(value); } catch { throw new ProviderError(`${provider.toUpperCase()}_INVALID_SCHEMA`, `${provider} returned invalid JSON.`, { provider }); }
+  const trimmed = value.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  try { return JSON.parse(trimmed); } catch {
+    const start = trimmed.indexOf('{'), end = trimmed.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      try { return JSON.parse(trimmed.slice(start, end + 1)); } catch { /* fall through */ }
+    }
+    throw new ProviderError(`${provider.toUpperCase()}_INVALID_SCHEMA`, `${provider} returned invalid JSON.`, { provider });
+  }
 }
 
 /** Normalize supported OpenAI-compatible and Workers AI response shapes. */

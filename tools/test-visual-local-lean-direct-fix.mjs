@@ -61,6 +61,7 @@ test('Workers AI uses json_object plus local validation and response parser acce
   assert.doesNotMatch(cfQwen, /strict: true/);
   assert.deepEqual(extractStructuredContent({ result: { choices: [{ message: { parsed: { ok: true } } }] } }, 'fixture'), { ok: true });
   assert.deepEqual(extractStructuredContent({ choices: [{ message: { content: [{ type: 'text', text: '{"ok":true}' }] } }] }, 'fixture'), { ok: true });
+  assert.deepEqual(extractStructuredContent({ choices: [{ message: { content: '```json\n{"ok":true}\n```' } }] }, 'fixture'), { ok: true });
 });
 
 test('migration, diagnostics, benchmark policy and monitor polling follow the consolidated contract', () => {

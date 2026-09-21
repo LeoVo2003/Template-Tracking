@@ -27,9 +27,9 @@ for (const [provider, probe] of probes) {
     results.push({ provider, status: 'success', model: result.model || '', tone: result.tone || '', confidence: result.confidence ?? null });
   } catch (error) {
     const code = String(error.code || 'PROVIDER_ERROR');
-    const status = /UNCONFIGURED/.test(code) ? 'unconfigured' : (/QUOTA/.test(code) || error.quota ? 'quota' : (/INVALID_SCHEMA/.test(code) ? 'unsupported_schema' : (/INVALID_RESPONSE|SEMANTIC_CONFLICT/.test(code) ? 'invalid_response' : 'failed')));
+    const status = /UNCONFIGURED/.test(code) ? 'unconfigured' : (/QUOTA/.test(code) || error.quota ? 'quota' : (/UNAVAILABLE|NETWORK/.test(code) || error.retryable ? 'temporary_unavailable' : (/INVALID_SCHEMA/.test(code) ? 'unsupported_schema' : (/INVALID_RESPONSE|SEMANTIC_CONFLICT/.test(code) ? 'invalid_response' : 'failed'))));
     results.push({ provider, status, code, http_status: Number(error.status || 0), retryable: Boolean(error.retryable) });
   }
 }
 console.log(JSON.stringify({ free_only: true, fixture_bytes: previewBuffer.length, vision_input: prepared.metadata, results }, null, 2));
-if (results.some((result) => !['success', 'quota', 'unconfigured'].includes(result.status))) process.exitCode = 1;
+if (results.some((result) => !['success', 'quota', 'unconfigured', 'temporary_unavailable'].includes(result.status))) process.exitCode = 1;
