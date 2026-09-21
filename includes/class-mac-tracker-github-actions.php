@@ -56,6 +56,10 @@ class MAC_Tracker_GitHub_Actions {
 		return $this->request( 'POST', '/actions/workflows/' . self::WORKFLOW_FILE . '/dispatches', array( 'ref' => 'main', 'inputs' => $inputs ) );
 	}
 
+	public function dispatch_local( array $inputs ) {
+		return $this->request( 'POST', '/actions/workflows/capture-visual-tone-local.yml/dispatches', array( 'ref' => 'main', 'inputs' => $inputs ) );
+	}
+
 	/** List only the tracker workflow. Active results have a short cache. */
 	public function list_visual_runs( $page = 1, $per_page = 5, $force = false ) {
 		$page = max( 1, absint( $page ) );

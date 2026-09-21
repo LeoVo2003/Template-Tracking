@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 import { activateLazyContent, collectUiSamples, hideMediaForPreview } from './extract-ui.mjs';
-import { validatePage, PageValidationError } from './validate-page.mjs';
+import { validatePage, PageValidationError, isSecurityBlockError } from './validate-page.mjs';
 import { homepageCandidates } from './homepage-resolver.mjs';
 import { summarizeUiSamples } from './metrics.mjs';
 import { analyzeUiColor } from './color-engine.mjs';
@@ -45,18 +45,27 @@ async function stabilize(page) {
 async function resolveHomepage(page, requestedUrl) {
   const candidates = homepageCandidates(requestedUrl);
   const rejected = [];
+  let diagnosticScreenshot = null;
+  let diagnosticDetails = {};
   for (const candidate of candidates) {
     try {
       const response = await page.goto(candidate, { waitUntil: 'domcontentloaded', timeout: 30000 });
       const validation = await validatePage(page, response, candidate);
       return { response, validation, candidateUrls: candidates, resolvedCaptureUrl: candidate, resolutionStrategy: candidates.length > 1 ? ('/home/' === new URL(candidate).pathname ? 'root_prefer_home' : 'root_fallback') : 'stored_path' };
     } catch (error) {
+      if (isSecurityBlockError(error)) {
+        try {
+          diagnosticScreenshot = await page.screenshot({ type: 'jpeg', quality: 68, fullPage: false });
+          diagnosticDetails = { requested_url: candidate, resolved_capture_url: candidate, final_url: page.url(), runner_type: process.env.RUNNER_TYPE || 'github-hosted', diagnostic_captured_at: new Date().toISOString() };
+        } catch { /* A blocked page can still refuse screenshots; preserve the error. */ }
+      }
       const code = error?.code || error?.name || 'NAV_ERROR';
       rejected.push({ url: candidate, code, message: String(error?.message || 'Candidate could not be loaded.').replace(/\s+/g, ' ').slice(0, 180) });
     }
   }
   const context = rejected.map((entry) => { try { return `${new URL(entry.url).pathname || '/'} → ${entry.code}`; } catch { return `${entry.url} → ${entry.code}`; } }).join('; ');
-  throw new PageValidationError('HOMEPAGE_RESOLUTION_FAILED', `No valid homepage candidate. ${context}`, { requested_url: requestedUrl, candidate_urls: candidates, candidates: rejected });
+  const last = rejected[rejected.length - 1] || {};
+  throw new PageValidationError(last.code || 'HOMEPAGE_RESOLUTION_FAILED', last.message || `No valid homepage candidate. ${context}`, { requested_url: requestedUrl, candidate_urls: candidates, candidates: rejected, ...diagnosticDetails, diagnostic_screenshot: diagnosticScreenshot });
 }
 
 export async function captureRenderedPage(browser, requestedUrl, snapshotId, runId) {

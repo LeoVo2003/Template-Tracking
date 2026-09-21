@@ -9,6 +9,8 @@
 
 # Internal planning and editor instructions.
 /.cursor/
+/.bangiao/*.md
+!/.bangiao/.gitkeep
 /hướng đi mới.md
 /map-wpm-id-vao-csv.md
 /SPEC-TAI-TAO-0.6.0.md

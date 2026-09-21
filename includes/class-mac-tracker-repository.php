@@ -345,8 +345,8 @@ class MAC_Tracker_Repository {
 
 	/** Remove only local tracker records. Connection settings are intentionally retained. */
 	public function clear_local_data() {
-		$attachment_rows = (array) $this->wpdb->get_results( "SELECT attachment_id, preview_attachment_id FROM {$this->visuals}", ARRAY_A );
-		$attachments = array_values( array_unique( array_filter( array_map( 'absint', array_merge( array_column( $attachment_rows, 'attachment_id' ), array_column( $attachment_rows, 'preview_attachment_id' ) ) ) ) ) );
+		$attachment_rows = (array) $this->wpdb->get_results( "SELECT attachment_id, preview_attachment_id, diagnostic_attachment_id FROM {$this->visuals}", ARRAY_A );
+		$attachments = array_values( array_unique( array_filter( array_map( 'absint', array_merge( array_column( $attachment_rows, 'attachment_id' ), array_column( $attachment_rows, 'preview_attachment_id' ), array_column( $attachment_rows, 'diagnostic_attachment_id' ) ) ) ) ) );
 		$tables = array( $this->colors, $this->visuals, $this->projects, $this->pins, $this->logs );
 		foreach ( $tables as $table ) {
 			if ( false === $this->wpdb->query( "DELETE FROM {$table}" ) ) {
@@ -366,8 +366,8 @@ class MAC_Tracker_Repository {
 
 	/** Reset only Visual Tone data while preserving projects, pins, colors and sync history. */
 	public function clear_visual_data() {
-		$attachment_rows = (array) $this->wpdb->get_results( "SELECT attachment_id, preview_attachment_id FROM {$this->visuals}", ARRAY_A );
-		$attachments = array_values( array_unique( array_filter( array_map( 'absint', array_merge( array_column( $attachment_rows, 'attachment_id' ), array_column( $attachment_rows, 'preview_attachment_id' ) ) ) ) ) );
+		$attachment_rows = (array) $this->wpdb->get_results( "SELECT attachment_id, preview_attachment_id, diagnostic_attachment_id FROM {$this->visuals}", ARRAY_A );
+		$attachments = array_values( array_unique( array_filter( array_map( 'absint', array_merge( array_column( $attachment_rows, 'attachment_id' ), array_column( $attachment_rows, 'preview_attachment_id' ), array_column( $attachment_rows, 'diagnostic_attachment_id' ) ) ) ) ) );
 		$deleted = $this->wpdb->query( "DELETE FROM {$this->visuals}" );
 		if ( false === $deleted ) {
 			return new WP_Error( 'mac_tracker_visual_clear_failed', $this->wpdb->last_error ?: 'Unable to clear Visual Tone data.' );
@@ -730,7 +730,7 @@ class MAC_Tracker_Repository {
 	public function visual_review_rows( $limit = 120 ) {
 		$limit = max( 1, min( 300, absint( $limit ) ) );
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
-		$sql = "SELECT p.*, v.screenshot_url, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND {$this->exclusion_sql('p')} AND (v.screenshot_url <> '' OR v.pipeline_status IN ('idle', 'capture_queued', 'capturing', 'retry_wait', 'blocked', 'failed')) ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d";
+		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND {$this->exclusion_sql('p')} AND (v.screenshot_url <> '' OR v.diagnostic_screenshot_url <> '' OR v.pipeline_status IN ('idle', 'capture_queued', 'capturing', 'retry_wait', 'blocked', 'failed')) ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d";
 		return (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
 	}
 
@@ -880,7 +880,31 @@ class MAC_Tracker_Repository {
 		$bundle['artifacts'] = array_merge( (array) ( $bundle['artifacts'] ?? array() ), array( 'full_screenshot_url' => esc_url_raw( $url ), 'ai_preview_url' => esc_url_raw( $preview_url ) ) );
 		$metrics = (array) ( $bundle['ui']['metrics'] ?? array() );
 		$revision = 1 + (int) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT capture_revision FROM {$this->visuals} WHERE project_id = %d", absint( $snapshot_id ) ) );
-		return $this->save_claimed_visual( $snapshot_id, 'capture', $token, array( 'pipeline_status' => 'captured', 'capture_status' => 'captured', 'attachment_id' => absint( $attachment_id ), 'preview_attachment_id' => absint( $preview_attachment_id ), 'screenshot_url' => esc_url_raw( $url ), 'tone_status' => 'stale', 'tone_token' => '', 'captured_at' => MAC_Tracker_Time::now_utc(), 'capture_revision' => $revision, 'manual_locked' => 0, 'human_locked' => 0, 'approved_capture_revision' => 0, 'approved_by' => 0, 'approved_at' => null, 'lease_until' => null, 'claimed_at' => null, 'job_token' => '', 'final_url' => esc_url_raw( (string) ( $bundle['final_url'] ?? '' ) ), 'http_status' => absint( $bundle['http_status'] ?? 0 ), 'page_title' => sanitize_text_field( (string) ( $bundle['page_title'] ?? '' ) ), 'capture_bundle_json' => wp_json_encode( $bundle ), 'metrics_json' => wp_json_encode( $metrics ), 'last_failed_stage' => '' ) );
+		return $this->save_claimed_visual( $snapshot_id, 'capture', $token, array( 'pipeline_status' => 'captured', 'capture_status' => 'captured', 'attachment_id' => absint( $attachment_id ), 'preview_attachment_id' => absint( $preview_attachment_id ), 'screenshot_url' => esc_url_raw( $url ), 'tone_status' => 'stale', 'tone_token' => '', 'captured_at' => MAC_Tracker_Time::now_utc(), 'capture_revision' => $revision, 'manual_locked' => 0, 'human_locked' => 0, 'approved_capture_revision' => 0, 'approved_by' => 0, 'approved_at' => null, 'lease_until' => null, 'claimed_at' => null, 'job_token' => '', 'final_url' => esc_url_raw( (string) ( $bundle['final_url'] ?? '' ) ), 'http_status' => absint( $bundle['http_status'] ?? 0 ), 'page_title' => sanitize_text_field( (string) ( $bundle['page_title'] ?? '' ) ), 'capture_bundle_json' => wp_json_encode( $bundle ), 'metrics_json' => wp_json_encode( $metrics ), 'last_error_code' => '', 'last_error_message' => null, 'last_error_at' => null, 'last_failed_stage' => '', 'runner_type' => '' ) );
+	}
+
+	/** Save a security-page screenshot as diagnostic evidence only; never AI input. */
+	public function save_visual_diagnostic( $snapshot_id, $attachment_id, $url, $token, $error_code, $message, array $metadata = array() ) {
+		$code = strtoupper( sanitize_key( (string) $error_code ) );
+		if ( ! in_array( $code, array( 'HTTP_401', 'HTTP_403', 'CF_CHALLENGE', 'CAPTCHA' ), true ) ) {
+			return new WP_Error( 'mac_tracker_visual_diagnostic_code', 'Only security-block diagnostics can be stored.' );
+		}
+		if ( ! $this->visual_claim_matches( $snapshot_id, 'capture', $token ) ) {
+			return new WP_Error( 'mac_tracker_visual_stale', 'This visual job is no longer current.', array( 'status' => 409 ) );
+		}
+		$data = array(
+			'diagnostic_attachment_id' => absint( $attachment_id ),
+			'diagnostic_screenshot_url' => esc_url_raw( $url ),
+			'diagnostic_captured_at' => MAC_Tracker_Time::now_utc(),
+			'runner_type' => sanitize_key( (string) ( $metadata['runner_type'] ?? 'github-hosted' ) ),
+			'last_error_code' => $code,
+			'last_error_message' => sanitize_text_field( $message ),
+			'last_error_at' => MAC_Tracker_Time::now_utc(),
+			'last_failed_stage' => 'capture',
+		);
+		if ( ! empty( $metadata['final_url'] ) ) { $data['final_url'] = esc_url_raw( $metadata['final_url'] ); }
+		$updated = $this->wpdb->update( $this->visuals, $data, array( 'project_id' => absint( $snapshot_id ), 'capture_token' => sanitize_text_field( $token ) ) );
+		return false === $updated ? new WP_Error( 'mac_tracker_visual_diagnostic_save', $this->wpdb->last_error ?: 'Unable to save diagnostic screenshot.' ) : true;
 	}
 
 	/** Claim a queue item before returning it to a GitHub worker. */
@@ -1112,9 +1136,9 @@ class MAC_Tracker_Repository {
 		$ids = array_values( array_unique( array_filter( array_map( 'absint', $snapshot_ids ) ) ) );
 		if ( empty( $ids ) ) { return array(); }
 		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
-		$sql = "SELECT attachment_id, preview_attachment_id FROM {$this->visuals} WHERE project_id IN ({$placeholders})";
+		$sql = "SELECT attachment_id, preview_attachment_id, diagnostic_attachment_id FROM {$this->visuals} WHERE project_id IN ({$placeholders})";
 		$rows = (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $ids ), ARRAY_A );
-		return array_values( array_unique( array_filter( array_map( 'absint', array_merge( array_column( $rows, 'attachment_id' ), array_column( $rows, 'preview_attachment_id' ) ) ) ) ) );
+		return array_values( array_unique( array_filter( array_map( 'absint', array_merge( array_column( $rows, 'attachment_id' ), array_column( $rows, 'preview_attachment_id' ), array_column( $rows, 'diagnostic_attachment_id' ) ) ) ) ) );
 	}
 
 	public function requeue_failed_visual_items() {
@@ -1123,11 +1147,34 @@ class MAC_Tracker_Repository {
 		return false === $result ? new WP_Error( 'mac_tracker_visual_retry', $this->wpdb->last_error ?: 'Unable to retry failed visual work.' ) : (int) $result;
 	}
 
+	/** Queue only security-blocked exact targets for the self-hosted runner. */
+	public function queue_local_visual_retry( array $snapshot_ids ) {
+		$ids = array_values( array_unique( array_filter( array_map( 'absint', $snapshot_ids ) ) ) );
+		if ( empty( $ids ) ) { return array(); }
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$codes = array( 'HTTP_401', 'HTTP_403', 'CF_CHALLENGE', 'CAPTCHA' );
+		$code_placeholders = implode( ',', array_fill( 0, count( $codes ), '%s' ) );
+		$sql = "UPDATE {$this->visuals} v SET pipeline_status = 'capture_queued', capture_status = 'pending', capture_token = '', runner_type = 'local', next_retry_at = NULL, last_error_message = NULL, updated_at = %s WHERE project_id IN ({$placeholders}) AND last_error_code IN ({$code_placeholders}) AND manual_locked = 0 AND human_locked = 0 AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP()) AND {$this->visual_exclusion_sql('v')}";
+		$args = array_merge( array( MAC_Tracker_Time::now_utc() ), $ids, $codes );
+		$result = $this->wpdb->query( $this->wpdb->prepare( $sql, $args ) );
+		if ( false === $result ) { return new WP_Error( 'mac_tracker_local_retry_queue', $this->wpdb->last_error ?: 'Unable to queue local retry.' ); }
+		return array_values( array_map( 'absint', (array) $this->wpdb->get_col( $this->wpdb->prepare( "SELECT project_id FROM {$this->visuals} WHERE project_id IN ({$placeholders}) AND pipeline_status = 'capture_queued' AND runner_type = 'local'", $ids ) ) ) );
+	}
+
+	public function recover_local_retry_dispatch( array $snapshot_ids, $message ) {
+		$ids = array_values( array_unique( array_filter( array_map( 'absint', $snapshot_ids ) ) ) );
+		if ( empty( $ids ) ) { return 0; }
+		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		$sql = "UPDATE {$this->visuals} SET pipeline_status = 'retry_wait', capture_status = 'pending', runner_type = 'local', last_error_message = CONCAT(COALESCE(last_error_message, ''), ' Local runner dispatch failed: ', %s), last_error_at = %s, last_failed_stage = 'capture', next_retry_at = NULL, updated_at = %s WHERE project_id IN ({$placeholders}) AND pipeline_status = 'capture_queued'";
+		return (int) $this->wpdb->query( $this->wpdb->prepare( $sql, array_merge( array( sanitize_text_field( $message ), MAC_Tracker_Time::now_utc(), MAC_Tracker_Time::now_utc() ), $ids ) ) );
+	}
+
 	/** Requeue failed work by its persisted stage; never turn a retry into a full run. */
 	public function requeue_failed_visual_items_by_stage() {
-		$rows = (array) $this->wpdb->get_results( "SELECT v.project_id, v.last_failed_stage, v.capture_status, v.tone_status, v.screenshot_url FROM {$this->visuals} v WHERE v.pipeline_status IN ('failed', 'retry_wait', 'blocked') AND v.manual_locked = 0 AND v.human_locked = 0 AND {$this->visual_exclusion_sql('v')}", ARRAY_A );
+		$rows = (array) $this->wpdb->get_results( "SELECT v.project_id, v.last_failed_stage, v.capture_status, v.tone_status, v.screenshot_url, v.runner_type, v.last_error_code FROM {$this->visuals} v WHERE v.pipeline_status IN ('failed', 'retry_wait', 'blocked') AND v.manual_locked = 0 AND v.human_locked = 0 AND {$this->visual_exclusion_sql('v')}", ARRAY_A );
 		$capture = array(); $tone = array(); $skipped = array();
 		foreach ( $rows as $row ) {
+			if ( 'local' === (string) $row['runner_type'] && in_array( (string) $row['last_error_code'], array( 'HTTP_401', 'HTTP_403', 'CF_CHALLENGE', 'CAPTCHA' ), true ) ) { $skipped[] = (int) $row['project_id']; continue; }
 			$stage = (string) $row['last_failed_stage'];
 			if ( 'capture' !== $stage && 'tone' !== $stage ) {
 				$stage = 'failed' === $row['capture_status'] ? 'capture' : ( ( 'failed' === $row['tone_status'] || ( '' !== $row['screenshot_url'] && 'pending' === $row['tone_status'] ) ) ? 'tone' : '' );

@@ -114,10 +114,28 @@ async function uploadCapture(item, captured) {
   return ingest(form);
 }
 
+async function uploadDiagnostic(item, error) {
+  const bytes = error?.details?.diagnostic_screenshot;
+  if (!bytes || !bytes.length) return false;
+  const form = new FormData();
+  form.append('mode', 'diagnostic');
+  form.append('snapshot_id', String(item.id));
+  form.append('job_token', item.job_token);
+  form.append('error_code', String(error.code || 'SECURITY_BLOCK'));
+  form.append('message', String(error.message || 'Security block detected.'));
+  form.append('requested_url', String(error?.details?.requested_url || item.website_url || ''));
+  form.append('resolved_capture_url', String(error?.details?.resolved_capture_url || ''));
+  form.append('final_url', String(error?.details?.final_url || ''));
+  form.append('runner_type', String(process.env.RUNNER_TYPE || 'github-hosted'));
+  form.append('diagnostic', new Blob([bytes], { type: 'image/jpeg' }), `mac-tracker-${item.id}-diagnostic.jpg`);
+  try { await ingest(form); return true; } catch (uploadError) { console.warn(`Diagnostic upload ignored for #${item.id}: ${uploadError.message}`); return false; }
+}
+
 async function reportFailure(mode, item, error) {
   const context = Array.isArray(error?.details?.candidates) ? error.details.candidates.map((candidate) => `${candidate.url} → ${candidate.code}`).join('; ') : '';
   const message = `${error.message || 'Worker error.'}${context && !String(error.message || '').includes(context) ? ` ${context}` : ''}`.slice(0, 900);
-  try { await postJson({ mode, snapshot_id: item.id, job_token: item.job_token, error_code: error.code || (error instanceof PageValidationError ? 'PAGE_VALIDATION_FAILED' : 'WORKER_ERROR'), message }); }
+  if ('capture_failed' === mode) await uploadDiagnostic(item, error);
+  try { await postJson({ mode, snapshot_id: item.id, job_token: item.job_token, error_code: error.code || (error instanceof PageValidationError ? 'PAGE_VALIDATION_FAILED' : 'WORKER_ERROR'), message, runner_type: String(process.env.RUNNER_TYPE || 'github-hosted') }); }
   catch (reportError) { console.warn(`Failure callback ignored for #${item.id}: ${reportError.message}`); }
 }
 

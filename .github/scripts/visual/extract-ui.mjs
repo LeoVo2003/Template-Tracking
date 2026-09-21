@@ -31,12 +31,14 @@ export async function collectUiSamples(page) {
     const pageArea = Math.max(1, pageWidth * pageHeight);
     const structuralTags = new Set(['HEADER', 'NAV', 'MAIN', 'SECTION', 'ARTICLE', 'FOOTER']);
     const excludedTags = new Set(['IMG', 'PICTURE', 'VIDEO', 'CANVAS', 'IFRAME', 'SOURCE', 'OBJECT', 'EMBED']);
+    const localSurfaceFor = (element) => /card|panel|tile|table|menu|gallery|price|testimonial|content-container|inner/i.test(String(element.className || '') + ' ' + String(element.getAttribute('role') || ''));
     const roleFor = (element) => {
       const tag = element.tagName;
       if ('BODY' === tag) return 'canvas';
       if ('HEADER' === tag) return 'section';
       if ('NAV' === tag) return 'nav_link';
-      if (['MAIN', 'SECTION', 'ARTICLE', 'FOOTER'].includes(tag)) return 'section';
+      if (['MAIN', 'SECTION', 'FOOTER'].includes(tag)) return 'section';
+      if ('ARTICLE' === tag) return localSurfaceFor(element) ? 'card' : 'section';
       if ('BUTTON' === tag || element.getAttribute('role') === 'button') return 'button';
       if ('A' === tag && /active|current|selected/i.test(`${element.className} ${element.getAttribute('aria-current') || ''}`)) return 'active_nav';
       if ('A' === tag && /button|btn|cta|book|appointment|contact|call-now/i.test(`${element.className} ${element.getAttribute('role') || ''} ${element.getAttribute('aria-label') || ''}`)) return 'cta';
@@ -45,7 +47,7 @@ export async function collectUiSamples(page) {
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)) return 'control';
       if ('SVG' === tag) return 'icon';
       if (['P', 'LI', 'LABEL', 'SPAN'].includes(tag)) return 'text';
-      if (/card|panel|tile/i.test(String(element.className || ''))) return 'card';
+      if (localSurfaceFor(element)) return 'card';
       return 'unknown';
     };
     const roleWeight = {
@@ -97,7 +99,8 @@ export async function collectUiSamples(page) {
       const rect = element.getBoundingClientRect();
       const style = getComputedStyle(element);
       const role = roleFor(element);
-      const structural = structuralTags.has(element.tagName) || 'BODY' === element.tagName;
+      const localSurface = localSurfaceFor(element) || ['card', 'table', 'menu', 'gallery'].includes(role);
+      const structural = (structuralTags.has(element.tagName) || 'BODY' === element.tagName) && !localSurface;
       const opacity = Number(style.opacity || 1);
       if (style.display === 'none' || style.visibility === 'hidden' || opacity <= 0.03 || rect.width < 2 || rect.height < 2) continue;
       const left = Math.max(0, rect.left + scrollX);

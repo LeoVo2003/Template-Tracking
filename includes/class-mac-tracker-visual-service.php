@@ -118,6 +118,9 @@ class MAC_Tracker_Visual_Service {
 		if ( 'capture' === $mode ) {
 			return $this->ingest_capture( $snapshot_id, $job_token );
 		}
+		if ( 'diagnostic' === $mode ) {
+			return $this->ingest_diagnostic( $snapshot_id, $job_token, $request );
+		}
 		$raw_json = (string) $request->get_param( 'raw_json' );
 		if ( strlen( $raw_json ) > 60000 ) { $raw_json = substr( $raw_json, 0, 60000 ); }
 		$metadata = array(
@@ -196,6 +199,23 @@ class MAC_Tracker_Visual_Service {
 			if ( ! in_array( (int) $old_attachment_id, array( (int) $attachment_id, (int) $preview_id ), true ) ) { wp_delete_attachment( (int) $old_attachment_id, true ); }
 		}
 		return rest_ensure_response( array( 'saved' => true, 'screenshot_url' => $url, 'ai_preview_url' => $preview_url ) );
+	}
+
+	private function ingest_diagnostic( $snapshot_id, $job_token, WP_REST_Request $request ) {
+		$file = $_FILES['diagnostic'] ?? array();
+		if ( empty( $file['tmp_name'] ) ) { return new WP_Error( 'mac_tracker_visual_diagnostic_file', 'Diagnostic screenshot file is required.', array( 'status' => 400 ) ); }
+		if ( (int) $file['size'] > 10 * MB_IN_BYTES ) { return new WP_Error( 'mac_tracker_visual_diagnostic_size', 'Diagnostic screenshot must be 10 MB or smaller.', array( 'status' => 413 ) ); }
+		$code = strtoupper( sanitize_key( (string) $request->get_param( 'error_code' ) ) );
+		if ( ! in_array( $code, array( 'HTTP_401', 'HTTP_403', 'CF_CHALLENGE', 'CAPTCHA' ), true ) ) { return new WP_Error( 'mac_tracker_visual_diagnostic_code', 'This failure is not eligible for a diagnostic screenshot.', array( 'status' => 400 ) ); }
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+		$attachment_id = media_handle_upload( 'diagnostic', 0, array( 'post_title' => 'MAC Tracker diagnostic #' . $snapshot_id . ' · ' . $code ) );
+		if ( is_wp_error( $attachment_id ) ) { return $attachment_id; }
+		$url = (string) wp_get_attachment_url( $attachment_id );
+		$result = $this->repository->save_visual_diagnostic( $snapshot_id, $attachment_id, $url, $job_token, $code, sanitize_text_field( (string) $request->get_param( 'message' ) ), array( 'runner_type' => $request->get_param( 'runner_type' ), 'final_url' => $request->get_param( 'final_url' ) ) );
+		if ( is_wp_error( $result ) ) { wp_delete_attachment( $attachment_id, true ); return $result; }
+		return rest_ensure_response( array( 'saved' => true, 'diagnostic_screenshot_url' => $url ) );
 	}
 
 	private function authorized( WP_REST_Request $request ) {

@@ -7,6 +7,13 @@ export class PageValidationError extends Error {
   }
 }
 
+/** Security blocks are actionable with the self-hosted local runner. */
+export function isSecurityBlockError(error) {
+  const code = String(error?.code || '').toUpperCase();
+  if (['HTTP_401', 'HTTP_403', 'CF_CHALLENGE', 'CAPTCHA'].includes(code)) return true;
+  return /security|cloudflare|captcha|waf|bot verification|access denied/i.test(String(error?.message || ''));
+}
+
 const hostname = (value) => {
   try { return new URL(value).hostname.replace(/^www\./i, '').toLowerCase(); } catch { return ''; }
 };

@@ -1,0 +1,53 @@
+name: Capture visual tone (local runner)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_mode: { required: true, default: targeted }
+      stage: { required: true, default: full }
+      target_ids: { required: true, default: "[]" }
+      source_action: { required: true, default: local_retry }
+      limit: { required: true, default: "1" }
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mac-project-tracker-visual-tone-local
+  cancel-in-progress: false
+
+jobs:
+  capture-and-classify-local:
+    runs-on: [self-hosted, windows, mac-visual]
+    timeout-minutes: 60
+    env:
+      MAC_TRACKER_SITE_URL: ${{ secrets.MAC_TRACKER_SITE_URL }}
+      MAC_TRACKER_AUTOMATION_SECRET: ${{ secrets.MAC_TRACKER_AUTOMATION_SECRET }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_API_KEY_1: ${{ secrets.GEMINI_API_KEY_1 }}
+      GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+      FREE_ONLY: "true"
+      RUNNER_TYPE: self-hosted-windows
+      WORKFLOW_EVENT: workflow_dispatch
+      RUN_MODE: ${{ inputs.run_mode }}
+      VISUAL_STAGE: ${{ inputs.stage }}
+      TARGET_IDS: ${{ inputs.target_ids }}
+      SOURCE_ACTION: ${{ inputs.source_action }}
+      BATCH_LIMIT: ${{ inputs.limit }}
+      GITHUB_RUN_ID: ${{ github.run_id }}
+      GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Install local capture dependencies
+        shell: pwsh
+        run: npm install --no-save playwright@1.57.0 sharp@0.34.5
+      - name: Install Chromium
+        shell: pwsh
+        run: npx playwright install chromium
+      - name: Capture full pages and classify tone
+        shell: pwsh
+        run: node .github/scripts/capture-visual-tone.mjs
