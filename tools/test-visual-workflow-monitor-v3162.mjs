@@ -37,3 +37,26 @@ test('merged monitor pagination loads each source through the requested page and
   assert.match(github, /\$seen_run_ids/);
   assert.match(github, /\$b\['id'\].*\$a\['id'\]/s);
 });
+
+test('monitor summary uses fresh GitHub runs and keeps stale history explicitly unknown', async () => {
+  const [github, admin, js] = await Promise.all([read('includes/class-mac-tracker-github-actions.php'), read('includes/class-mac-tracker-admin.php'), read('assets/visual-workflow-monitor.js')]);
+  assert.match(github, /fresh_summary\['scope'\] = .*github_fresh_page/);
+  assert.match(admin, /'scope' => 'stale_unknown'/);
+  assert.doesNotMatch(admin.slice(admin.indexOf('public function handle_visual_runs_ajax'), admin.indexOf('public function handle_visual_run_detail_ajax')), /visual_run_summary\(\)/);
+  assert.match(js, /Current status from fresh GitHub runs/);
+  assert.match(js, /stale local history only/);
+});
+
+test('local retry preflight requires an online windows + mac-visual runner', async () => {
+  const [github, admin, js] = await Promise.all([read('includes/class-mac-tracker-github-actions.php'), read('includes/class-mac-tracker-admin.php'), read('assets/visual-workflow-monitor.js')]);
+  assert.match(github, /actions\/runners\?per_page=100/);
+  assert.match(github, /in_array\( 'windows', \$labels, true \)/);
+  assert.match(github, /in_array\( 'mac-visual', \$labels, true \)/);
+  assert.match(github, /LOCAL_RUNNER_NOT_READY/);
+  const local = admin.slice(admin.indexOf("preg_match( '/^local_retry_one_"), admin.indexOf("preg_match( '/^(reanalyze_one", admin.indexOf("preg_match( '/^local_retry_one_")));
+  assert.match(local, /preflight_local_runner\(\)/);
+  assert.match(local, /queue_local_visual_retry/);
+  assert.match(local, /dispatch_local/);
+  assert.ok(local.indexOf('preflight_local_runner') < local.indexOf('queue_local_visual_retry'));
+  assert.match(js, /waiting for a self-hosted runner with windows \+ mac-visual labels/);
+});

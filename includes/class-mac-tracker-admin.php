@@ -347,6 +347,7 @@ class MAC_Tracker_Admin {
 		<section class="mac-tracker-workflow-monitor" aria-label="Visual Tone workflow monitor" data-workflow-monitor>
 			<div class="mac-tracker-workflow-monitor__head"><div><p class="mac-tracker-eyebrow">Workflow monitor</p><h2>Visual Tone workflow runs</h2><p>Live execution from GitHub Actions with local Visual Tone progress.</p><p class="mac-tracker-workflow-monitor__refreshed" data-workflow-refreshed>Last refresh: —</p></div><div class="mac-tracker-workflow-monitor__head-actions"><button type="button" class="button" data-workflow-refresh><span class="dashicons dashicons-update"></span>Refresh</button><button type="button" class="button" data-workflow-view-all aria-expanded="false">Show workflows ▾</button></div></div>
 			<div class="mac-tracker-workflow-summary" data-workflow-summary aria-live="polite"><span class="is-running"><i></i>Running <strong>—</strong></span><span class="is-queued"><i></i>Queued <strong>—</strong></span><span class="is-failed"><i></i>Failed <strong>—</strong></span><span class="is-success"><i></i>Completed <strong>—</strong></span></div>
+			<p class="mac-tracker-workflow-monitor__scope" data-workflow-scope>Current status: waiting for GitHub refresh · history totals are separate.</p>
 			<p class="mac-tracker-workflow-monitor__notice" data-workflow-notice hidden></p>
 			<div class="mac-tracker-workflow-list" data-workflow-list hidden></div>
 			<div class="mac-tracker-workflow-pagination" data-workflow-pagination hidden><span data-workflow-showing></span><div class="mac-tracker-workflow-pagination__controls"><button type="button" class="button button-small" data-workflow-prev>‹ Previous</button><span data-workflow-page></span><button type="button" class="button button-small" data-workflow-next>Next ›</button></div></div>
@@ -489,6 +490,10 @@ class MAC_Tracker_Admin {
 		}
 		if ( preg_match( '/^local_retry_one_(\d+)$/', $action, $local_match ) ) {
 			$local_ids = array( absint( $local_match[1] ) );
+			$runner = $this->github_actions->preflight_local_runner();
+			if ( is_wp_error( $runner ) ) {
+				return array( 'result' => $runner, 'message' => $runner->get_error_message(), 'dispatch' => false, 'dispatch_error' => true );
+			}
 			$queued = $this->repository->queue_local_visual_retry( $local_ids );
 			if ( is_wp_error( $queued ) || empty( $queued ) ) {
 				$error = is_wp_error( $queued ) ? $queued : new WP_Error( 'mac_tracker_local_retry_ineligible', 'This card is not eligible for a local security-block retry.' );
@@ -500,7 +505,7 @@ class MAC_Tracker_Admin {
 				return array( 'result' => $dispatch, 'message' => 'Local runner dispatch failed: ' . $dispatch->get_error_message(), 'dispatch' => false, 'dispatch_error' => true );
 			}
 			$this->github_actions->clear_cache();
-			return array( 'result' => count( $queued ), 'message' => 'Local capture queued. Waiting for local capture machine.', 'dispatch' => true );
+			return array( 'result' => count( $queued ), 'message' => ( 'unknown' === ( $runner['state'] ?? '' ) ? 'Local capture dispatched, but runner status is unknown. Check GitHub Actions for the queued run.' : 'Local capture queued. ' . (string) ( $runner['message'] ?? 'Waiting for local capture machine.' ) ), 'dispatch' => true );
 		}
 		if ( preg_match( '/^(reanalyze_one|recapture_one)_(\d+)$/', $action, $one_match ) ) {
 			$action = $one_match[1];
@@ -600,12 +605,12 @@ class MAC_Tracker_Admin {
 		$github_page = $this->github_actions->list_visual_runs( $page, $per_page, $force );
 		if ( is_wp_error( $github_page ) ) {
 			$local_page = $this->repository->visual_runs_page( $page, $per_page );
-			wp_send_json_success( array( 'runs' => $local_page['runs'], 'summary' => $this->repository->visual_run_summary(), 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $local_page['total'], 'total_pages' => $local_page['total_pages'] ), 'github_error' => $github_page->get_error_message(), 'permissions' => array( 'read' => false, 'write' => false ) ) );
+			wp_send_json_success( array( 'runs' => $local_page['runs'], 'summary' => array( 'running' => 0, 'queued' => 0, 'failed' => 0, 'completed' => 0, 'scope' => 'stale_unknown', 'summary_scope' => 'stale_unknown', 'stale_count' => $local_page['total'], 'stale' => true ), 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $local_page['total'], 'total_pages' => $local_page['total_pages'], 'scope' => 'local_history_fallback' ), 'github_error' => $github_page->get_error_message(), 'runner_status' => array( 'state' => 'unknown', 'message' => 'Runner status unavailable while GitHub workflow data is unavailable.' ), 'permissions' => array( 'read' => false, 'write' => false ) ) );
 		}
 		$this->repository->reconcile_visual_runs( (array) ( $github_page['runs'] ?? array() ) );
 		$local_page = $this->repository->visual_runs_for_github_page( (array) ( $github_page['runs'] ?? array() ), $page, $per_page, (int) ( $github_page['total'] ?? 0 ) );
 		$total = (int) ( $github_page['total'] ?? 0 );
-		wp_send_json_success( array( 'runs' => $local_page, 'summary' => $this->repository->visual_run_summary(), 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $total, 'total_pages' => max( 1, (int) ceil( $total / $per_page ) ) ), 'permissions' => array( 'read' => true, 'write' => true ) ) );
+		wp_send_json_success( array( 'runs' => $local_page, 'summary' => (array) ( $github_page['summary'] ?? array( 'running' => 0, 'queued' => 0, 'failed' => 0, 'completed' => 0, 'scope' => 'github_fresh_page' ) ), 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $total, 'total_pages' => max( 1, (int) ceil( $total / $per_page ) ), 'scope' => 'github_workflow_history' ), 'runner_status' => $this->github_actions->local_runner_status(), 'permissions' => array( 'read' => true, 'write' => true ) ) );
 	}
 
 	public function handle_visual_run_detail_ajax() {

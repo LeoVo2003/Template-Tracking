@@ -62,6 +62,28 @@ class MAC_Tracker_GitHub_Actions {
 		return $this->request( 'POST', '/actions/workflows/capture-visual-tone-local.yml/dispatches', array( 'ref' => 'main', 'inputs' => $inputs ) );
 	}
 
+	/** Read the self-hosted runner pool before creating a local retry. */
+	public function local_runner_status() {
+		$response = $this->request( 'GET', '/actions/runners?per_page=100' );
+		if ( is_wp_error( $response ) ) {
+			return array( 'state' => 'unknown', 'message' => 'Local runner status is unavailable. The retry may be queued, but GitHub must confirm runner availability.', 'error_code' => $response->get_error_code() );
+		}
+		$matching = array();
+		foreach ( (array) ( $response['runners'] ?? array() ) as $runner ) {
+			$labels = array_map( 'strtolower', array_filter( array_map( function( $label ) { return sanitize_key( (string) ( is_array( $label ) ? ( $label['name'] ?? '' ) : $label ) ); }, (array) ( $runner['labels'] ?? array() ) ) ) );
+			if ( in_array( 'windows', $labels, true ) && in_array( 'mac-visual', $labels, true ) && ! empty( $runner['online'] ) ) { $matching[] = $runner; }
+		}
+		if ( empty( $matching ) ) { return array( 'state' => 'no_matching', 'message' => 'No online self-hosted runner matches labels windows + mac-visual. Start the runner and verify both labels before retrying.', 'matching_count' => 0 ); }
+		$busy = count( array_filter( $matching, function( $runner ) { return ! empty( $runner['busy'] ); } ) );
+		return array( 'state' => $busy === count( $matching ) ? 'busy' : 'online', 'message' => $busy === count( $matching ) ? 'Matching local runner is online but busy; GitHub will keep the retry queued.' : 'Matching local runner is online and ready.', 'matching_count' => count( $matching ), 'busy_count' => $busy );
+	}
+
+	public function preflight_local_runner() {
+		$status = $this->local_runner_status();
+		if ( 'no_matching' === ( $status['state'] ?? '' ) ) { return new WP_Error( 'LOCAL_RUNNER_NOT_READY', $status['message'], array( 'runner_status' => $status, 'status' => 409 ) ); }
+		return $status;
+	}
+
 	/** List only the tracker workflow. Active results have a short cache. */
 	public function list_visual_runs( $page = 1, $per_page = 5, $force = false ) {
 		$page = max( 1, absint( $page ) );
@@ -69,8 +91,10 @@ class MAC_Tracker_GitHub_Actions {
 		$key = 'mac_tracker_visual_workflow_runs_' . $page . '_' . $per_page;
 		if ( ! $force ) { $cached = get_transient( $key ); if ( is_array( $cached ) ) { return $cached; } }
 		$runs = array();
+		$fresh_runs = array();
 		$seen_run_ids = array();
 		$workflow_totals = array();
+		$fresh_source_count = 0;
 		$success = false;
 		foreach ( array( self::WORKFLOW_FILE, self::LOCAL_WORKFLOW_FILE ) as $workflow_file ) {
 			$source_total = 0;
@@ -93,17 +117,29 @@ class MAC_Tracker_GitHub_Actions {
 					$run_id = absint( $run['id'] ?? 0 );
 					if ( $run_id > 0 && isset( $seen_run_ids[ $run_id ] ) ) { continue; }
 					if ( $run_id > 0 ) { $seen_run_ids[ $run_id ] = true; }
-					$runs[] = $this->normalize_run( $run );
+					$normalized = $this->normalize_run( $run );
+					$runs[] = $normalized;
+					if ( 1 === $source_page ) { $fresh_runs[] = $normalized; }
 				}
 				if ( count( $source_runs ) < $per_page ) { break; }
 			}
-			if ( $source_loaded ) { $workflow_totals[] = $source_total; }
+			if ( $source_loaded ) { $workflow_totals[] = $source_total; ++$fresh_source_count; }
 		}
 		if ( ! $success ) { return new WP_Error( 'GITHUB_UNAVAILABLE', 'Could not refresh Visual Tone workflow status. Showing last known data.', array( 'status' => 503 ) ); }
 		$total = array_sum( $workflow_totals );
 		usort( $runs, function( $a, $b ) { $number = (int) ( $b['run_number'] ?? 0 ) <=> (int) ( $a['run_number'] ?? 0 ); return 0 !== $number ? $number : ( (int) ( $b['id'] ?? 0 ) <=> (int) ( $a['id'] ?? 0 ) ); } );
-		set_transient( $key, array( 'runs' => $runs, 'total' => $total ), 8 );
-		return array( 'runs' => array_slice( $runs, ( $page - 1 ) * $per_page, $per_page ), 'total' => $total );
+		$fresh = array();
+		foreach ( $fresh_runs as $run ) { if ( ! isset( $fresh[ (int) ( $run['id'] ?? 0 ) ] ) ) { $fresh[ (int) ( $run['id'] ?? 0 ) ] = $run; } }
+		$fresh_summary = array( 'running' => 0, 'queued' => 0, 'failed' => 0, 'completed' => 0 );
+		foreach ( $fresh as $run ) { if ( in_array( $run['status'] ?? '', array( 'in_progress', 'cancelling' ), true ) ) { ++$fresh_summary['running']; } elseif ( 'queued' === ( $run['status'] ?? '' ) ) { ++$fresh_summary['queued']; } elseif ( in_array( $run['conclusion'] ?? '', array( 'failure', 'timed_out', 'action_required' ), true ) ) { ++$fresh_summary['failed']; } elseif ( 'completed' === ( $run['status'] ?? '' ) ) { ++$fresh_summary['completed']; } }
+		$fresh_summary['scope'] = $fresh_source_count >= 2 ? 'github_fresh_page' : 'github_fresh_partial';
+		$fresh_summary['updated_at'] = gmdate( 'c' );
+		$fresh_summary['summary_scope'] = $fresh_summary['scope'];
+		$fresh_summary['summary_updated_at'] = $fresh_summary['updated_at'];
+		$fresh_summary['stale_count'] = $fresh_source_count >= 2 ? 0 : 1;
+		$fresh_summary['stale'] = $fresh_source_count < 2;
+		set_transient( $key, array( 'runs' => $runs, 'total' => $total, 'summary' => $fresh_summary ), 8 );
+		return array( 'runs' => array_slice( $runs, ( $page - 1 ) * $per_page, $per_page ), 'total' => $total, 'summary' => $fresh_summary );
 	}
 
 	public function get_visual_run( $run_id, $force = false ) {
