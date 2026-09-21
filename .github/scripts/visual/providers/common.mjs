@@ -45,13 +45,29 @@ export function parseJsonStrict(value, provider) {
   if (value && 'object' === typeof value && !Array.isArray(value)) return value;
   if ('string' !== typeof value) throw new ProviderError(`${provider.toUpperCase()}_INVALID_SCHEMA`, `${provider} returned no JSON object.`, { provider });
   const trimmed = value.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
-  try { return JSON.parse(trimmed); } catch {
-    const start = trimmed.indexOf('{'), end = trimmed.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      try { return JSON.parse(trimmed.slice(start, end + 1)); } catch { /* fall through */ }
+  try { return JSON.parse(trimmed); } catch { /* scan embedded JSON below */ }
+  // Some free reasoning models wrap the object in analysis text or emit more
+  // than one brace-delimited fragment. Parse the first complete valid object,
+  // respecting quoted strings, without accepting a partial/truncated object.
+  for (let start = trimmed.indexOf('{'); start >= 0; start = trimmed.indexOf('{', start + 1)) {
+    let depth = 0, quoted = false, escaped = false;
+    for (let index = start; index < trimmed.length; index += 1) {
+      const char = trimmed[index];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if ('\\' === char) escaped = true;
+        else if ('"' === char) quoted = false;
+        continue;
+      }
+      if ('"' === char) { quoted = true; continue; }
+      if ('{' === char) depth += 1;
+      if ('}' === char) depth -= 1;
+      if (0 === depth) {
+        try { return JSON.parse(trimmed.slice(start, index + 1)); } catch { break; }
+      }
     }
-    throw new ProviderError(`${provider.toUpperCase()}_INVALID_SCHEMA`, `${provider} returned invalid JSON.`, { provider });
   }
+  throw new ProviderError(`${provider.toUpperCase()}_INVALID_SCHEMA`, `${provider} returned invalid JSON.`, { provider });
 }
 
 /** Normalize supported OpenAI-compatible and Workers AI response shapes. */
