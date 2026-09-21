@@ -12,6 +12,16 @@ test('V3.16.2 keeps collapsed monitor list and pagination hidden despite layout 
   assert.match(css, /\.mac-tracker-workflow-pagination\[hidden\]\s*\{[^}]*display:\s*none\s*!important/);
 });
 
+test('monitor uses one neutral status region and preserves actionable errors', async () => {
+  const [css, admin, js] = await Promise.all([read('assets/admin.css'), read('includes/class-mac-tracker-admin.php'), read('assets/visual-workflow-monitor.js')]);
+  assert.doesNotMatch(css, /mac-tracker-workflow-monitor__notice/);
+  assert.doesNotMatch(admin, /mac-tracker-workflow-monitor__notice/);
+  assert.doesNotMatch(js, /mac-tracker-workflow-monitor__notice|is-error/);
+  assert.match(css, /mac-tracker-workflow-monitor__status/);
+  assert.match(css, /is-actionable/);
+  assert.match(js, /setNotice\(text, error\)/);
+});
+
 test('expand waits for AJAX pagination decision and never flashes controls', async () => {
   const js = await read('assets/visual-workflow-monitor.js');
   const handler = js.slice(js.indexOf("data-workflow-view-all"));
@@ -59,4 +69,14 @@ test('local retry preflight requires an online windows + mac-visual runner', asy
   assert.match(local, /dispatch_local/);
   assert.ok(local.indexOf('preflight_local_runner') < local.indexOf('queue_local_visual_retry'));
   assert.match(js, /waiting for a self-hosted runner with windows \+ mac-visual labels/);
+});
+
+test('runner preflight distinguishes zero, missing labels, matching online, and unknown states', async () => {
+  const github = await read('includes/class-mac-tracker-github-actions.php');
+  assert.match(github, /state' => 'no_matching'/);
+  assert.match(github, /No matching self-hosted runner online \(%d runners\)/);
+  assert.match(github, /'state' => \$busy === count\( \$matching \) \? 'busy' : 'online'/);
+  assert.match(github, /state' => 'unknown'/);
+  assert.match(github, /Runner status unavailable/);
+  assert.match(github, /settings\/actions\/runners\/new/);
 });

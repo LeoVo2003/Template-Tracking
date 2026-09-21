@@ -3,6 +3,8 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { directVisionPrompt, validateDirectVisionResult, directVisionEligible } from '../.github/scripts/visual/direct-vision.mjs';
 import { classifyTone } from '../.github/scripts/visual/classify.mjs';
+import { summarizeUiSamples } from '../.github/scripts/visual/metrics.mjs';
+import { brandEvidence, canvasFromFamilyCoverage } from '../.github/scripts/visual/color-engine.mjs';
 
 const [main, classify, service, monitor, github, benchmark] = await Promise.all([
   readFile('.github/scripts/visual/main.mjs', 'utf8'),
@@ -54,10 +56,46 @@ test('direct mode invokes canonical validator and keeps Vision tone authoritativ
 test('prompt and benchmark are observational and compare legacy with Direct Vision', () => {
   assert.match(directVisionPrompt(), /complete rendered website screenshot/);
   assert.match(directVisionPrompt(), /Vàng đen/);
+  assert.match(directVisionPrompt(), /Readable foreground text/);
   assert.match(benchmark, /direct_vision/);
   assert.match(benchmark, /direct_vision_tone_accuracy_percent/);
   assert.match(benchmark, /Direct Vision high-confidence wrong/);
   assert.doesNotMatch(benchmark, /save_visual_tone|wp-json\/mac-tracker/);
+});
+
+test('dark gold canvas ignores readable white text as structural evidence', () => {
+  const samples = [
+    { color: 'rgb(20, 20, 20)', weight: 0.70, kind: 'background', role: 'canvas', structural: true },
+    { color: 'rgb(210, 160, 40)', weight: 0.20, kind: 'background', role: 'button', structural: true },
+    { color: 'rgb(255, 255, 255)', weight: 0.10, kind: 'text', role: 'text' },
+  ];
+  const metrics = summarizeUiSamples(samples);
+  assert.equal(metrics.surface, 'dark');
+  assert.equal(metrics.legacy_candidate, 'Đen vàng');
+  assert.equal(metrics.coverage.light, 0);
+  assert.equal(metrics.foreground_text_contrast.role, 'contrast_only');
+  assert.equal(metrics.foreground_text_contrast.coverage.light, 1);
+  const evidence = brandEvidence(samples);
+  assert.ok(evidence.find((row) => row.family === 'gold' && row.score > 0));
+  assert.equal(evidence.find((row) => row.family === 'white')?.score || 0, 0);
+  assert.equal(canvasFromFamilyCoverage({ black: 0.70, gold: 0.30 }).mode, 'dark');
+});
+
+test('light gold canvas keeps readable dark text out of brand evidence', () => {
+  const samples = [
+    { color: 'rgb(250, 248, 244)', weight: 0.70, kind: 'background', role: 'canvas', structural: true },
+    { color: 'rgb(210, 160, 40)', weight: 0.20, kind: 'background', role: 'button', structural: true },
+    { color: 'rgb(20, 20, 20)', weight: 0.10, kind: 'text', role: 'text' },
+  ];
+  const metrics = summarizeUiSamples(samples);
+  assert.equal(metrics.surface, 'light');
+  assert.equal(metrics.legacy_candidate, 'Vàng trắng');
+  assert.equal(metrics.coverage.dark, 0);
+  assert.equal(metrics.foreground_text_contrast.coverage.dark, 1);
+  const evidence = brandEvidence(samples);
+  assert.ok(evidence.find((row) => row.family === 'gold' && row.score > 0));
+  assert.equal(evidence.find((row) => row.family === 'black')?.score || 0, 0);
+  assert.equal(canvasFromFamilyCoverage({ white: 0.70, gold: 0.30 }).mode, 'light');
 });
 
 test('local workflow source and monitor include self-hosted executions', () => {

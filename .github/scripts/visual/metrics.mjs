@@ -129,6 +129,8 @@ export function summarizeUiSamples(samples) {
   let weightedLuminanceSquared = 0;
   let structuralWeight = 0;
   let surfaceWeight = 0;
+  let foregroundTextWeight = 0;
+  const foregroundTextBuckets = Object.fromEntries(ALL_KEYS.map((key) => [key, 0]));
   for (const sample of samples || []) {
     const rgb = parseRgb(sample.color);
     const weight = Number(sample.weight || sample.area_weight || 0);
@@ -137,6 +139,16 @@ export function summarizeUiSamples(samples) {
     const effectiveWeight = weight * alpha;
     if (effectiveWeight <= 0) continue;
     const key = category(rgb);
+    // Extractors mark readable foreground colors as kind=text. Keep an
+    // explicit background/button sample structural even if a semantic role
+    // happens to be heading/link, so legacy structural fixtures remain valid.
+    const foregroundRole = ['text', 'heading', 'ordinary_link', 'nav_link'].includes(sample.role);
+    const foregroundText = 'text' === sample.kind || (foregroundRole && !['background', 'border', 'button'].includes(sample.kind));
+    if (foregroundText) {
+      foregroundTextBuckets[key] += effectiveWeight;
+      foregroundTextWeight += effectiveWeight;
+      continue;
+    }
     const hsl = rgbToHsl(rgb);
     const lum = luminance(rgb);
     buckets[key] += effectiveWeight;
@@ -171,7 +183,8 @@ export function summarizeUiSamples(samples) {
   const contrastLevel = variance >= 0.075 ? 'high' : (variance >= 0.028 ? 'medium' : 'low');
   const pair = pairFamilies(coverage, surface);
   const percent = (value) => Math.round(clamp(value) * 100);
-  const text = `Deterministic UI evidence (visible area weighted; photos/media excluded): ${surface} surface; light/cream ${percent(coverage.light + coverage.cream)}%, dark ${percent(coverage.dark)}%; red ${percent(coverage.red)}%, pink ${percent(coverage.pink)}%, brown ${percent(coverage.brown)}%, yellow ${percent(coverage.yellow)}%, green ${percent(coverage.green)}%, blue ${percent(coverage.blue)}%, purple ${percent(coverage.purple)}%. Candidate: ${candidate.tone} (${Math.round(confidence * 100)}%); warm/cool ${warmCoolTendency}; contrast ${contrastLevel}.`;
+  const foregroundTextContrast = { sample_weight: Number(foregroundTextWeight.toFixed(4)), coverage: Object.fromEntries(ALL_KEYS.map((key) => [key, Number((foregroundTextWeight ? foregroundTextBuckets[key] / foregroundTextWeight : 0).toFixed(4))])), role: 'contrast_only' };
+  const text = `Deterministic UI evidence (visible area weighted; photos/media excluded): ${surface} surface; light/cream ${percent(coverage.light + coverage.cream)}%, dark ${percent(coverage.dark)}%; red ${percent(coverage.red)}%, pink ${percent(coverage.pink)}%, brown ${percent(coverage.brown)}%, yellow ${percent(coverage.yellow)}%, green ${percent(coverage.green)}%, blue ${percent(coverage.blue)}%, purple ${percent(coverage.purple)}%. Readable foreground text is contrast evidence only, not canvas or brand evidence. Candidate: ${candidate.tone} (${Math.round(confidence * 100)}%); warm/cool ${warmCoolTendency}; contrast ${contrastLevel}.`;
   return {
     metrics_version: 5,
     scope: 'legacy_diagnostic_only',
@@ -201,6 +214,7 @@ export function summarizeUiSamples(samples) {
     weighted_sample_count: colors.size,
     top_colors: dominantColors.map((value) => value.color),
     dominant_structural_colors: dominantColors,
+    foreground_text_contrast: foregroundTextContrast,
     text,
   };
 }

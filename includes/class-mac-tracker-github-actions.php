@@ -64,18 +64,22 @@ class MAC_Tracker_GitHub_Actions {
 
 	/** Read the self-hosted runner pool before creating a local retry. */
 	public function local_runner_status() {
+		$required_labels = array( 'self-hosted', 'windows', 'mac-visual' );
+		$setup_url = 'https://github.com/' . self::OWNER . '/' . self::REPOSITORY . '/settings/actions/runners/new';
+		$checked_at = gmdate( 'c' );
 		$response = $this->request( 'GET', '/actions/runners?per_page=100' );
 		if ( is_wp_error( $response ) ) {
-			return array( 'state' => 'unknown', 'message' => 'Local runner status is unavailable. The retry may be queued, but GitHub must confirm runner availability.', 'error_code' => $response->get_error_code() );
+			return array( 'state' => 'unknown', 'total' => null, 'matching_online' => null, 'required_labels' => $required_labels, 'checked_at' => $checked_at, 'setup_url' => $setup_url, 'message' => 'Runner status unavailable. GitHub could not confirm whether a self-hosted runner is online; the retry can still be dispatched and must be checked in Actions.', 'error_code' => $response->get_error_code() );
 		}
+		$total = array_key_exists( 'total_count', (array) $response ) ? absint( $response['total_count'] ) : count( (array) ( $response['runners'] ?? array() ) );
 		$matching = array();
 		foreach ( (array) ( $response['runners'] ?? array() ) as $runner ) {
 			$labels = array_map( 'strtolower', array_filter( array_map( function( $label ) { return sanitize_key( (string) ( is_array( $label ) ? ( $label['name'] ?? '' ) : $label ) ); }, (array) ( $runner['labels'] ?? array() ) ) ) );
 			if ( in_array( 'windows', $labels, true ) && in_array( 'mac-visual', $labels, true ) && ! empty( $runner['online'] ) ) { $matching[] = $runner; }
 		}
-		if ( empty( $matching ) ) { return array( 'state' => 'no_matching', 'message' => 'No online self-hosted runner matches labels windows + mac-visual. Start the runner and verify both labels before retrying.', 'matching_count' => 0 ); }
+		if ( empty( $matching ) ) { return array( 'state' => 'no_matching', 'total' => $total, 'matching_online' => 0, 'required_labels' => $required_labels, 'checked_at' => $checked_at, 'setup_url' => $setup_url, 'message' => sprintf( 'No matching self-hosted runner online (%d runners). Install/register/start a runner with labels self-hosted, windows, mac-visual, then retry. Setup: %s', $total, $setup_url ) ); }
 		$busy = count( array_filter( $matching, function( $runner ) { return ! empty( $runner['busy'] ); } ) );
-		return array( 'state' => $busy === count( $matching ) ? 'busy' : 'online', 'message' => $busy === count( $matching ) ? 'Matching local runner is online but busy; GitHub will keep the retry queued.' : 'Matching local runner is online and ready.', 'matching_count' => count( $matching ), 'busy_count' => $busy );
+		return array( 'state' => $busy === count( $matching ) ? 'busy' : 'online', 'total' => $total, 'matching_online' => count( $matching ), 'required_labels' => $required_labels, 'checked_at' => $checked_at, 'setup_url' => $setup_url, 'message' => $busy === count( $matching ) ? 'Matching local runner is online but busy; GitHub will keep the retry queued.' : 'Matching local runner is online and ready.', 'busy_count' => $busy );
 	}
 
 	public function preflight_local_runner() {

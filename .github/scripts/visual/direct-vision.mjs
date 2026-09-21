@@ -15,7 +15,7 @@ export const DIRECT_VISION_SCHEMA = {
 };
 
 export function directVisionPrompt() {
-  return `You are a senior UI/branding designer. Inspect the complete rendered website screenshot, including media and long-page structure. Photos are content evidence, not brand colors. Identify repeated interface accents first, then the dominant page-level canvas. Return JSON only with brand, canvas, tone, confidence, reason. brand and canvas use the canonical taxonomy; tone must be one of: ${TONES.join('|')}. Use Vàng đen for repeated gold on a dark structural canvas, Vàng trắng for repeated gold on a genuinely white structural canvas. Do not invent labels.`;
+  return `You are a senior UI/branding designer. Inspect the complete rendered website screenshot, including media and long-page structure. Photos are content evidence, not brand colors. Readable foreground text (including white text on dark sections) is contrast/legibility evidence, not canvas or brand structural evidence. Identify repeated interface accents first, then the dominant page-level canvas from large background/section surfaces. Return JSON only with brand, canvas, tone, confidence, reason. brand and canvas use the canonical taxonomy; tone must be one of: ${TONES.join('|')}. Use Vàng đen for repeated gold on a dark structural canvas, Vàng trắng for repeated gold on a genuinely white structural canvas. Do not invent labels.`;
 }
 
 export function validateDirectVisionResult(value, provider = 'direct_vision', model = '') {

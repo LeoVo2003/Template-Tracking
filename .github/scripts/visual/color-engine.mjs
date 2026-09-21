@@ -59,6 +59,8 @@ export function brandEvidence(samples) {
   const rows = Object.fromEntries(FAMILIES.map((family) => [family, { family, score: 0, roles: new Set(), sections: new Set(), controls: new Set(), coverage: 0, hex: '' }]));
   const seen = new Set();
   for (const sample of samples || []) {
+    const foregroundRole = ['text', 'heading', 'ordinary_link', 'nav_link'].includes(sample.role);
+    if ('text' === sample.kind || (foregroundRole && !['background', 'border', 'button'].includes(sample.kind))) continue;
     const color = parseCssRgb(sample.color); if (!color) continue;
     const family = familyForOklch(rgbToOklch(color.r, color.g, color.b));
     const role = sample.role || 'text', roleWeight = roles[role] || 0;
