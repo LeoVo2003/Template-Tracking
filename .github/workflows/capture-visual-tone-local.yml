@@ -43,11 +43,11 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - name: Install local capture dependencies
-        shell: pwsh
+        shell: powershell
         run: npm install --no-save playwright@1.57.0 sharp@0.34.5
       - name: Install Chromium
-        shell: pwsh
+        shell: powershell
         run: npx playwright install chromium
       - name: Capture full pages and classify tone
-        shell: pwsh
+        shell: powershell
         run: node .github/scripts/capture-visual-tone.mjs
