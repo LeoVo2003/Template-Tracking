@@ -28,7 +28,8 @@ for (const [provider, probe] of probes) {
   } catch (error) {
     const code = String(error.code || 'PROVIDER_ERROR');
     const status = /UNCONFIGURED/.test(code) ? 'unconfigured' : (/QUOTA/.test(code) || error.quota ? 'quota' : (/UNAVAILABLE|NETWORK/.test(code) || error.retryable ? 'temporary_unavailable' : (/INVALID_SCHEMA/.test(code) ? 'unsupported_schema' : (/INVALID_RESPONSE|SEMANTIC_CONFLICT/.test(code) ? 'invalid_response' : 'failed'))));
-    results.push({ provider, status, code, http_status: Number(error.status || 0), retryable: Boolean(error.retryable) });
+    const detail = String(error.message || '').replace(/[\r\n]+/g, ' ').slice(0, 700);
+    results.push({ provider, status, code, http_status: Number(error.status || 0), retryable: Boolean(error.retryable), detail });
   }
 }
 console.log(JSON.stringify({ free_only: true, fixture_bytes: previewBuffer.length, vision_input: prepared.metadata, results }, null, 2));

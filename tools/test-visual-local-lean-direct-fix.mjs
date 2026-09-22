@@ -3,7 +3,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { classifyTone } from '../.github/scripts/visual/classify.mjs';
 import { brandEvidence } from '../.github/scripts/visual/color-engine.mjs';
-import { extractStructuredContent } from '../.github/scripts/visual/providers/common.mjs';
+import { describeStructuredShape, extractStructuredContent } from '../.github/scripts/visual/providers/common.mjs';
 
 const [workflow, setup, main, service, admin, repository, monitor, benchmark, gold, cfQwen, cfLlama] = await Promise.all([
   readFile('.github/workflows/capture-visual-tone-local.yml', 'utf8'), readFile('scripts/setup-local-visual-runtime.ps1', 'utf8'),
@@ -63,6 +63,7 @@ test('Workers AI uses json_object plus local validation and response parser acce
   assert.deepEqual(extractStructuredContent({ choices: [{ message: { content: [{ type: 'text', text: '{"ok":true}' }] } }] }, 'fixture'), { ok: true });
   assert.deepEqual(extractStructuredContent({ choices: [{ message: { content: '```json\n{"ok":true}\n```' } }] }, 'fixture'), { ok: true });
   assert.deepEqual(extractStructuredContent({ choices: [{ message: { content: '<think>check {not json}</think> result: {"ok":true} done' } }] }, 'fixture'), { ok: true });
+  assert.deepEqual(describeStructuredShape({ result: { response: 'secret generated text' }, success: true }), { result: { response: 'string' }, success: 'boolean' });
 });
 
 test('migration, diagnostics, benchmark policy and monitor polling follow the consolidated contract', () => {

@@ -84,6 +84,18 @@ export function extractStructuredContent(payload, provider) {
   return parseJsonStrict(candidate, provider);
 }
 
+/** Describe response containers without leaking generated text or image data. */
+export function describeStructuredShape(value, depth = 0) {
+  if (null === value) return 'null';
+  if (Array.isArray(value)) {
+    if (depth >= 3 || 0 === value.length) return `array(${value.length})`;
+    return { type: `array(${value.length})`, first: describeStructuredShape(value[0], depth + 1) };
+  }
+  if ('object' !== typeof value) return typeof value;
+  if (depth >= 3) return 'object';
+  return Object.fromEntries(Object.entries(value).slice(0, 20).map(([key, child]) => [key, describeStructuredShape(child, depth + 1)]));
+}
+
 export function validateToneResult(value, provider, model) {
   if (!value || 'object' !== typeof value || Array.isArray(value)) throw new ProviderError(`${provider.toUpperCase()}_INVALID_SCHEMA`, `${provider} returned an invalid result object.`, { provider });
   const expected = Object.keys(TONE_SCHEMA.properties);

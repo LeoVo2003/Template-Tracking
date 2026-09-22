@@ -1,4 +1,4 @@
-import { ProviderError, errorFromResponse, extractStructuredContent, validateToneResult, TONE_SCHEMA } from './common.mjs';
+import { ProviderError, describeStructuredShape, errorFromResponse, extractStructuredContent, validateToneResult, TONE_SCHEMA } from './common.mjs';
 
 const PROVIDER = 'cloudflare';
 const MODEL = '@cf/qwen/qwen3.8-27b';
@@ -28,5 +28,12 @@ export async function classifyWithCloudflareQwen({ accountId, apiToken, prompt, 
   if (!response.ok) throw errorFromResponse(PROVIDER, response, body);
   let payload;
   try { payload = JSON.parse(body); } catch { throw new ProviderError('CLOUDFLARE_INVALID_RESPONSE', 'Cloudflare returned non-JSON HTTP output.', { provider: PROVIDER }); }
-  return validateResult(extractStructuredContent(payload, PROVIDER), PROVIDER, MODEL);
+  try {
+    return validateResult(extractStructuredContent(payload, PROVIDER), PROVIDER, MODEL);
+  } catch (error) {
+    if (error instanceof ProviderError && 'CLOUDFLARE_INVALID_SCHEMA' === error.code) {
+      error.message = `${error.message} Response shape: ${JSON.stringify(describeStructuredShape(payload))}`;
+    }
+    throw error;
+  }
 }
