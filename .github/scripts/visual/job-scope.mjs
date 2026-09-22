@@ -19,7 +19,7 @@ export function parseTargetIds(value) {
 export function normalizeJobScope(input = {}) {
   const runMode = String(input.run_mode || 'batch').trim().toLowerCase();
   const stage = String(input.stage || 'full').trim().toLowerCase();
-  const limit = Math.max(1, Math.min(MAX_LIMIT, Number.parseInt(input.limit, 10) || 10));
+  const limit = Math.max(1, Math.min(MAX_LIMIT, Number.parseInt(input.limit, 10) || 11));
   if (!RUN_MODES.has(runMode)) throw new Error('RUN_MODE must be targeted or batch.');
   if (!STAGES.has(stage)) throw new Error('STAGE must be capture, tone, full, or auto.');
 
@@ -34,7 +34,7 @@ export function normalizeJobScope(input = {}) {
 
 /** A batch slot is a website, never a capture slot plus an analysis slot. */
 export function batchCapacity(limit, waitingToneCount) {
-  const total = Math.max(1, Math.min(MAX_LIMIT, Number.parseInt(limit, 10) || 10));
+  const total = Math.max(1, Math.min(MAX_LIMIT, Number.parseInt(limit, 10) || 11));
   const tone = Math.max(0, Math.min(total, Number.parseInt(waitingToneCount, 10) || 0));
   return { total, tone, capture: total - tone };
 }

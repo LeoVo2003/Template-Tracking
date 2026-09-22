@@ -22,9 +22,9 @@ on:
       limit:
         description: "Maximum logical websites this run"
         required: false
-        default: "10"
+        default: "11"
   schedule:
-    - cron: "17,47 * * * *"
+    - cron: "2,17,32,47 * * * *"
 
 permissions:
   contents: read
@@ -55,7 +55,7 @@ jobs:
       VISUAL_STAGE: ${{ inputs.stage || 'full' }}
       TARGET_IDS: ${{ inputs.target_ids || '[]' }}
       SOURCE_ACTION: ${{ github.event_name == 'schedule' && 'scheduled_auto' || inputs.source_action || 'run_batch_now' }}
-      BATCH_LIMIT: ${{ inputs.limit || '10' }}
+      BATCH_LIMIT: ${{ inputs.limit || '11' }}
       GITHUB_RUN_ID: ${{ github.run_id }}
       GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
       GITHUB_WORKFLOW: ${{ github.workflow }}

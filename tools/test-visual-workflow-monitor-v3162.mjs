@@ -48,13 +48,14 @@ test('merged monitor pagination loads each source through the requested page and
   assert.match(github, /\$b\['id'\].*\$a\['id'\]/s);
 });
 
-test('monitor summary uses fresh GitHub runs and keeps stale history explicitly unknown', async () => {
+test('monitor summary uses fresh GitHub active batches and local rolling throughput', async () => {
   const [github, admin, js] = await Promise.all([read('includes/class-mac-tracker-github-actions.php'), read('includes/class-mac-tracker-admin.php'), read('assets/visual-workflow-monitor.js')]);
   assert.match(github, /fresh_summary\['scope'\] = .*github_fresh_page/);
-  assert.match(admin, /'scope' => 'stale_unknown'/);
-  assert.doesNotMatch(admin.slice(admin.indexOf('public function handle_visual_runs_ajax'), admin.indexOf('public function handle_visual_run_detail_ajax')), /visual_run_summary\(\)/);
-  assert.match(js, /Current status from fresh GitHub runs/);
-  assert.match(js, /stale local history only/);
+	assert.match(github, /running_batches/);
+	assert.match(github, /queued_batches/);
+	assert.match(admin, /visual_run_summary\(\)/);
+	assert.match(admin, /'scope' => 'stale_local'/);
+	assert.match(js, /Project totals use the rolling last 60 minutes/);
 });
 
 test('local retry preflight requires an online windows + mac-visual runner', async () => {

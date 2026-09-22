@@ -131,6 +131,8 @@ class MAC_Tracker_Admin {
 		$this->require_capability();
 		$filters = $this->project_filters();
 		$page    = $this->repository->project_page( $filters );
+		$tone_filter_groups = $this->repository->visual_tone_filter_groups();
+		$legacy_tone_filter = in_array( $filters['tone'], $this->tone_options(), true ) ? $filters['tone'] : '';
 		$this->page_start( 'Project snapshots', 'Explore the full local cache. Sorting and filters never call WPM.', 'projects' );
 		?>
 		<section class="mac-tracker-project-intro">
@@ -146,7 +148,7 @@ class MAC_Tracker_Admin {
 			<label><span>Snapshot type</span><select name="kind"><option value="">All types</option><option value="action_design" <?php selected( $filters['kind'], 'action_design' ); ?>>Action Design</option><option value="csv_pin" <?php selected( $filters['kind'], 'csv_pin' ); ?>>CSV pin</option></select></label>
 			<label><span>Website</span><select name="website"><option value="">Any</option><option value="yes" <?php selected( $filters['website'], 'yes' ); ?>>Has website</option><option value="no" <?php selected( $filters['website'], 'no' ); ?>>Missing</option></select></label>
 			<label><span>Layout</span><select name="layout"><option value="">Any</option><option value="yes" <?php selected( $filters['layout'], 'yes' ); ?>>Has layout</option><option value="no" <?php selected( $filters['layout'], 'no' ); ?>>Missing</option></select></label>
-			<label><span>AI tone</span><select name="tone"><option value="">All tones</option><option value="pending" <?php selected( $filters['tone'], 'pending' ); ?>>Waiting for AI</option><?php foreach ( $this->tone_options() as $tone ) : ?><option value="<?php echo esc_attr( $tone ); ?>" <?php selected( $filters['tone'], $tone ); ?>><?php echo esc_html( $tone ); ?></option><?php endforeach; ?></select></label>
+			<label><span>AI tone</span><select name="tone"><option value="">All tones</option><option value="pending" <?php selected( $filters['tone'], 'pending' ); ?>>Waiting for AI</option><?php if ( $legacy_tone_filter ) : ?><option value="<?php echo esc_attr( $legacy_tone_filter ); ?>" selected><?php echo esc_html( 'Exact saved tone: ' . $legacy_tone_filter ); ?></option><?php endif; ?><?php foreach ( $tone_filter_groups as $group ) : ?><optgroup label="<?php echo esc_attr( $group['label'] ); ?>"><option value="<?php echo esc_attr( $group['value'] ); ?>" <?php selected( $filters['tone'], $group['value'] ); ?>><?php echo esc_html( $group['label'] . ' — all variants' ); ?></option><?php foreach ( $group['children'] as $child ) : ?><option value="<?php echo esc_attr( $child['value'] ); ?>" <?php selected( $filters['tone'], $child['value'] ); ?>><?php echo esc_html( '— ' . $child['label'] ); ?></option><?php endforeach; ?></optgroup><?php endforeach; ?></select></label>
 			<label><span>From month</span><input type="month" name="month_from" value="<?php echo esc_attr( $filters['month_from'] ); ?>"></label>
 			<label><span>To month</span><input type="month" name="month_to" value="<?php echo esc_attr( $filters['month_to'] ); ?>"></label>
 			<label><span>Rows</span><select name="per_page"><option value="50" <?php selected( $filters['per_page'], 50 ); ?>>50</option><option value="100" <?php selected( $filters['per_page'], 100 ); ?>>100</option><option value="150" <?php selected( $filters['per_page'], 150 ); ?>>150</option><option value="200" <?php selected( $filters['per_page'], 200 ); ?>>200</option><option value="0" <?php selected( $filters['per_page'], 0 ); ?>>All</option></select></label>
@@ -347,8 +349,8 @@ class MAC_Tracker_Admin {
 		?>
 		<section class="mac-tracker-workflow-monitor" aria-label="Visual Tone workflow monitor" data-workflow-monitor>
 			<div class="mac-tracker-workflow-monitor__head"><div><p class="mac-tracker-eyebrow">Workflow monitor</p><h2>Visual Tone workflow runs</h2><p>Live execution from GitHub Actions with local Visual Tone progress.</p><p class="mac-tracker-workflow-monitor__refreshed" data-workflow-refreshed>Last refresh: —</p></div><div class="mac-tracker-workflow-monitor__head-actions"><button type="button" class="button" data-workflow-refresh><span class="dashicons dashicons-update"></span>Refresh</button><button type="button" class="button" data-workflow-view-all aria-expanded="false">Show workflows ▾</button></div></div>
-			<div class="mac-tracker-workflow-summary" data-workflow-summary aria-live="polite"><span class="is-running"><i></i>Running <strong>—</strong></span><span class="is-queued"><i></i>Queued <strong>—</strong></span><span class="is-failed"><i></i>Failed <strong>—</strong></span><span class="is-success"><i></i>Completed <strong>—</strong></span></div>
-			<p class="mac-tracker-workflow-monitor__scope" data-workflow-scope>Current status: waiting for GitHub refresh · history totals are separate.</p>
+			<div class="mac-tracker-workflow-summary" data-workflow-summary aria-live="polite"><span class="is-running" data-workflow-metric="running_batches"><i></i>Running <strong>—</strong><small>batches</small></span><span class="is-queued" data-workflow-metric="queued_batches"><i></i>Queued <strong>—</strong><small>batches</small></span><span class="is-success" data-workflow-metric="success_projects"><i></i>Done / 60m <strong>—</strong><small>projects</small></span><span class="is-review" data-workflow-metric="needs_review_projects"><i></i>Review / 60m <strong>—</strong><small>projects</small></span><span class="is-failed" data-workflow-metric="failed_projects"><i></i>Failed / 60m <strong>—</strong><small>projects</small></span></div>
+			<p class="mac-tracker-workflow-monitor__scope" data-workflow-scope>Project totals use the rolling last 60 minutes. Running/Queued are active workflow batches.</p>
 			<p class="mac-tracker-workflow-monitor__status" data-workflow-notice hidden></p>
 			<div class="mac-tracker-workflow-list" data-workflow-list hidden></div>
 			<div class="mac-tracker-workflow-pagination" data-workflow-pagination hidden><span data-workflow-showing></span><div class="mac-tracker-workflow-pagination__controls"><button type="button" class="button button-small" data-workflow-prev>‹ Previous</button><span data-workflow-page></span><button type="button" class="button button-small" data-workflow-next>Next ›</button></div></div>
@@ -449,7 +451,7 @@ class MAC_Tracker_Admin {
 	}
 
 	/** Start one cloud batch for a manual visual action, without holding the browser open. */
-	private function dispatch_visual_workflow( $limit = 10, $run_mode = 'batch', $stage = 'full', array $target_ids = array(), $source_action = 'run_batch_now' ) {
+	private function dispatch_visual_workflow( $limit = 11, $run_mode = 'batch', $stage = 'full', array $target_ids = array(), $source_action = 'run_batch_now' ) {
 		$limit = max( 1, min( 25, absint( $limit ) ) );
 		$run_mode = 'targeted' === $run_mode ? 'targeted' : 'batch';
 		$stage = in_array( $stage, array( 'capture', 'tone', 'full', 'auto' ), true ) ? $stage : 'full';
@@ -611,12 +613,18 @@ class MAC_Tracker_Admin {
 		$github_page = $this->github_actions->list_visual_runs( $page, $per_page, $force );
 		if ( is_wp_error( $github_page ) ) {
 			$local_page = $this->repository->visual_runs_page( $page, $per_page );
-			wp_send_json_success( array( 'runs' => $local_page['runs'], 'summary' => array( 'running' => 0, 'queued' => 0, 'failed' => 0, 'completed' => 0, 'scope' => 'stale_unknown', 'summary_scope' => 'stale_unknown', 'stale_count' => $local_page['total'], 'stale' => true ), 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $local_page['total'], 'total_pages' => $local_page['total_pages'], 'scope' => 'local_history_fallback' ), 'github_error' => $github_page->get_error_message(), 'permissions' => array( 'read' => false, 'write' => false ) ) );
+			$summary = $this->repository->visual_run_summary();
+			$summary = array_merge( $summary, array( 'scope' => 'stale_local', 'summary_scope' => 'stale_local', 'stale_count' => $local_page['total'], 'stale' => true ) );
+			wp_send_json_success( array( 'runs' => $local_page['runs'], 'summary' => $summary, 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $local_page['total'], 'total_pages' => $local_page['total_pages'], 'scope' => 'local_history_fallback' ), 'github_error' => $github_page->get_error_message(), 'permissions' => array( 'read' => false, 'write' => false ) ) );
 		}
 		$this->repository->reconcile_visual_runs( (array) ( $github_page['runs'] ?? array() ) );
 		$local_page = $this->repository->visual_runs_for_github_page( (array) ( $github_page['runs'] ?? array() ), $page, $per_page, (int) ( $github_page['total'] ?? 0 ) );
 		$total = (int) ( $github_page['total'] ?? 0 );
-		wp_send_json_success( array( 'runs' => $local_page, 'summary' => (array) ( $github_page['summary'] ?? array( 'running' => 0, 'queued' => 0, 'failed' => 0, 'completed' => 0, 'scope' => 'github_fresh_page' ) ), 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $total, 'total_pages' => max( 1, (int) ceil( $total / $per_page ) ), 'scope' => 'github_workflow_history' ), 'permissions' => array( 'read' => true, 'write' => true ) ) );
+		$summary = (array) ( $github_page['summary'] ?? array( 'active' => array( 'running_batches' => 0, 'queued_batches' => 0 ), 'scope' => 'github_fresh_page' ) );
+		$local_summary = $this->repository->visual_run_summary();
+		$summary['active'] = $local_summary['active'];
+		$summary['last_60m'] = $local_summary['last_60m'];
+		wp_send_json_success( array( 'runs' => $local_page, 'summary' => $summary, 'pagination' => array( 'page' => $page, 'per_page' => $per_page, 'total' => $total, 'total_pages' => max( 1, (int) ceil( $total / $per_page ) ), 'scope' => 'github_workflow_history' ), 'permissions' => array( 'read' => true, 'write' => true ) ) );
 	}
 
 	public function handle_visual_run_detail_ajax() {
@@ -966,6 +974,8 @@ class MAC_Tracker_Admin {
 	private function visual_debug_panel( array $row ) {
 		$raw = json_decode( (string) ( $row['ai_raw'] ?? '' ), true );
 		if ( ! is_array( $raw ) ) { return; }
+		$bundle = json_decode( (string) ( $row['capture_bundle_json'] ?? '' ), true );
+		$overlay_cleanup = is_array( $bundle ) ? (array) ( $bundle['overlay_cleanup'] ?? array() ) : array();
 		$deterministic = (array) ( $raw['deterministic']['semantic_model'] ?? array() );
 		$canvas = (array) ( $deterministic['canvas'] ?? array() );
 		$accent = (array) ( $deterministic['primary_accent'] ?? array() );
@@ -990,6 +1000,7 @@ class MAC_Tracker_Admin {
 		echo '<dt>Canvas</dt><dd>' . esc_html( trim( (string) ( $canvas['primary_surface'] ?? $canvas['family'] ?? '' ) . ' / ' . (string) ( $canvas['secondary_surface'] ?? '' ) . ' / ' . (string) ( $canvas['mode'] ?? '' ) . ' · confidence ' . (string) ( $canvas['surface_confidence'] ?? $canvas['confidence'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
 		echo '<dt>Deterministic sanity</dt><dd>' . esc_html( trim( (string) ( $brand['brand_primary_family'] ?? $accent['family'] ?? '' ) . ' ' . (string) ( $brand['brand_primary_score'] ?? $accent['score'] ?? '' ) . ' · sections ' . (string) ( $brand['brand_evidence'][0]['section_count'] ?? '' ) . ' · roles ' . implode( ', ', (array) ( $brand['brand_evidence'][0]['roles'] ?? array() ) ) ) ?: 'Not available' ) . '</dd>';
 		echo '<dt>Primary accent</dt><dd>' . esc_html( trim( (string) ( $accent['family'] ?? '' ) . ' ' . (string) ( $accent['hex'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
+		if ( $overlay_cleanup ) { echo '<dt>Overlay cleanup</dt><dd>' . esc_html( wp_json_encode( array( 'detected' => absint( $overlay_cleanup['detected'] ?? 0 ), 'closed' => absint( $overlay_cleanup['closed'] ?? 0 ), 'removed' => absint( $overlay_cleanup['removed'] ?? 0 ), 'scroll_restored' => ! empty( $overlay_cleanup['scroll_restored'] ), 'types' => array_slice( array_map( 'sanitize_key', (array) ( $overlay_cleanup['types'] ?? array() ) ), 0, 12 ) ) ) ) . '</dd>'; }
 		echo '<dt>Provider decisions</dt><dd>' . esc_html( wp_json_encode( array_map( static function( $attempt ) { return array( 'provider' => $attempt['provider'] ?? '', 'model' => $attempt['model'] ?? '', 'brand' => $attempt['brand'] ?? $attempt['primary_family'] ?? '', 'canvas' => $attempt['canvas'] ?? $attempt['primary_surface'] ?? '', 'tone' => $attempt['tone'] ?? $attempt['tone_group'] ?? '', 'confidence' => $attempt['confidence'] ?? '', 'reason' => $attempt['reason'] ?? '', 'mode' => $attempt['canvas_mode'] ?? '' ); }, (array) ( $raw['attempts'] ?? array() ) ) ) ) . '</dd>';
 		echo '<dt>Final reason</dt><dd>' . esc_html( (string) ( $outcome['reason'] ?? $row['tone_reason'] ?? 'Pending' ) ) . '</dd>';
 		echo '<dt>Provider errors</dt><dd>' . esc_html( wp_json_encode( (array) ( $raw['errors'] ?? array() ) ) ) . '</dd></dl></details>';

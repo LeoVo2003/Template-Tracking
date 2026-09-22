@@ -4,6 +4,7 @@ import { validatePage, PageValidationError, isSecurityBlockError } from './valid
 import { homepageCandidates } from './homepage-resolver.mjs';
 import { summarizeUiSamples } from './metrics.mjs';
 import { analyzeUiColor } from './color-engine.mjs';
+import { classifyOverlayEvidence } from './overlay-policy.mjs';
 
 const bounded = (promise, timeoutMs, fallback) => Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(fallback), timeoutMs))]);
 
@@ -42,6 +43,129 @@ async function stabilize(page) {
   await page.waitForTimeout(220);
 }
 
+const overlayCloseSelectors = [
+  '[aria-label="Close"]',
+  '[aria-label="close"]',
+  '[data-dismiss="modal"]',
+  '[data-bs-dismiss="modal"]',
+  '.dialog-close-button',
+  '.pum-close',
+  '.mfp-close',
+  '.modal .close',
+  '.dialog-close',
+];
+
+async function scanOverlayEvidence(page) {
+  return page.evaluate((closeSelectors) => {
+    const selectors = [
+      '[role="dialog"]', '[aria-modal="true"]', '.elementor-popup-modal',
+      '.pum', '.pum-container', '.pum-overlay', '.modal', '.modal-backdrop',
+      '.mfp-wrap', '.mfp-bg', '.dialog-overlay', '[class*="popup"]',
+      '[class*="modal"]', '[class*="overlay"]', '[style*="position: fixed"]',
+      '[style*="position:fixed"]',
+    ];
+    const elements = [...new Set(document.querySelectorAll(selectors.join(',')))];
+    const viewportArea = Math.max(1, innerWidth * innerHeight);
+    const rows = [];
+    let sequence = 0;
+    for (const element of elements.slice(0, 400)) {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      const visible = style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0.03 && rect.width > 10 && rect.height > 10;
+      if (!visible) continue;
+      const hint = `${element.className || ''} ${element.id || ''}`.toLowerCase();
+      let type = 'generic_overlay';
+      if (/elementor-popup-modal/.test(hint)) type = 'elementor_popup';
+      else if (/pum-overlay/.test(hint)) type = 'pum_backdrop';
+      else if (/\bpum\b|pum-container/.test(hint)) type = 'pum_popup';
+      else if (/modal-backdrop/.test(hint)) type = 'modal_backdrop';
+      else if (/mfp-bg/.test(hint)) type = 'mfp_backdrop';
+      else if (/mfp-wrap/.test(hint)) type = 'mfp_popup';
+      else if (element.getAttribute('aria-modal') === 'true') type = 'aria_modal';
+      else if (/(^|\s)modal(\s|$)/.test(hint)) type = 'bootstrap_modal';
+      const token = element.getAttribute('data-mac-overlay-token') || `mac-overlay-${Date.now()}-${sequence++}`;
+      element.setAttribute('data-mac-overlay-token', token);
+      const clippedWidth = Math.max(0, Math.min(innerWidth, rect.right) - Math.max(0, rect.left));
+      const clippedHeight = Math.max(0, Math.min(innerHeight, rect.bottom) - Math.max(0, rect.top));
+      rows.push({
+        token,
+        type,
+        visible,
+        fixed: style.position === 'fixed',
+        sticky: style.position === 'sticky',
+        z_index: Number.parseInt(style.zIndex, 10) || 0,
+        coverage: Number(((clippedWidth * clippedHeight) / viewportArea).toFixed(4)),
+        has_close_control: closeSelectors.some((selector) => Boolean(element.matches(selector) || element.querySelector(selector))),
+        aria_modal: element.getAttribute('aria-modal') === 'true',
+        role_dialog: element.getAttribute('role') === 'dialog',
+      });
+    }
+    return rows;
+  }, overlayCloseSelectors);
+}
+
+/** Close or remove only verified obstructive overlays after lazy scrolling. */
+export async function dismissObstructiveOverlays(page) {
+  const initial = await bounded(scanOverlayEvidence(page), 3500, []);
+  const detected = (Array.isArray(initial) ? initial : []).filter((row) => classifyOverlayEvidence(row).obstructive);
+  const detectedTokens = new Set(detected.map((row) => row.token));
+  const types = new Set(detected.map((row) => classifyOverlayEvidence(row).type));
+
+  if (detected.length) {
+    await bounded(page.evaluate(({ tokens, closeSelectors }) => {
+      for (const token of tokens) {
+        const element = document.querySelector(`[data-mac-overlay-token="${token}"]`);
+        if (!element) continue;
+        const close = closeSelectors.map((selector) => element.matches(selector) ? element : element.querySelector(selector)).find(Boolean);
+        if (close && 'function' === typeof close.click) close.click();
+      }
+    }, { tokens: [...detectedTokens], closeSelectors: overlayCloseSelectors }), 2500, null);
+    await page.keyboard.press('Escape').catch(() => null);
+    await page.waitForTimeout(320);
+  }
+
+  const afterClose = await bounded(scanOverlayEvidence(page), 3500, []);
+  const remaining = (Array.isArray(afterClose) ? afterClose : []).filter((row) => classifyOverlayEvidence(row).obstructive);
+  const remainingTokens = new Set(remaining.map((row) => row.token));
+  const closed = detected.filter((row) => !remainingTokens.has(row.token)).length;
+  remaining.forEach((row) => types.add(classifyOverlayEvidence(row).type));
+  const removed = await bounded(page.evaluate((tokens) => {
+    let count = 0;
+    for (const token of tokens) {
+      const element = document.querySelector(`[data-mac-overlay-token="${token}"]`);
+      if (!element || !element.isConnected) continue;
+      element.remove();
+      count += 1;
+    }
+    return count;
+  }, remaining.map((row) => row.token)), 2500, 0);
+
+  const scrollRestored = await bounded(page.evaluate(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const canScroll = Math.max(html?.scrollHeight || 0, body?.scrollHeight || 0) > innerHeight + 40;
+    const locked = canScroll && [html, body].some((element) => element && /hidden|clip/.test(getComputedStyle(element).overflowY || getComputedStyle(element).overflow));
+    if (locked) {
+      [html, body].forEach((element) => {
+        if (!element) return;
+        element.style.removeProperty('overflow');
+        element.style.removeProperty('overflow-y');
+        if (/hidden|clip/.test(getComputedStyle(element).overflowY || getComputedStyle(element).overflow)) element.style.setProperty('overflow-y', 'auto', 'important');
+      });
+    }
+    document.querySelectorAll('[data-mac-overlay-token]').forEach((element) => element.removeAttribute('data-mac-overlay-token'));
+    return !canScroll || ![html, body].some((element) => element && /hidden|clip/.test(getComputedStyle(element).overflowY || getComputedStyle(element).overflow));
+  }), 2500, false);
+
+  return {
+    detected: Math.max(detected.length, closed + Number(removed || 0)),
+    closed,
+    removed: Number(removed || 0),
+    scroll_restored: Boolean(scrollRestored),
+    types: [...types].filter(Boolean).slice(0, 12),
+  };
+}
+
 async function resolveHomepage(page, requestedUrl) {
   const candidates = homepageCandidates(requestedUrl);
   const rejected = [];
@@ -77,6 +201,10 @@ export async function captureRenderedPage(browser, requestedUrl, snapshotId, run
     const { response, validation: firstValidation, candidateUrls, resolvedCaptureUrl, resolutionStrategy } = resolved;
     await activateLazyContent(page);
     await stabilize(page);
+    const overlayCleanup = await dismissObstructiveOverlays(page);
+    await page.waitForTimeout(360);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(240);
     const validation = await validatePage(page, response, resolvedCaptureUrl);
     const samples = await collectUiSamples(page);
     const pageHeight = await page.evaluate(() => Math.max(document.body?.scrollHeight || 0, document.documentElement?.scrollHeight || 0));
@@ -91,7 +219,7 @@ export async function captureRenderedPage(browser, requestedUrl, snapshotId, run
       full,
       preview,
       bundle: {
-        version: 4,
+        version: 5,
         snapshot_id: snapshotId,
         run_id: runId,
         requested_url: requestedUrl,
@@ -107,6 +235,7 @@ export async function captureRenderedPage(browser, requestedUrl, snapshotId, run
         captured_at: capturedAt,
         render_ms: Date.now() - started,
         validation: { ...validation, initial: firstValidation },
+        overlay_cleanup: overlayCleanup,
         ui: { samples, metrics },
         artifacts: { full_screenshot_url: null, ai_preview_url: null },
       },

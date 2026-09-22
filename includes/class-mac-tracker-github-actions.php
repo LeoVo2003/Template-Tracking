@@ -134,8 +134,11 @@ class MAC_Tracker_GitHub_Actions {
 		usort( $runs, function( $a, $b ) { $number = (int) ( $b['run_number'] ?? 0 ) <=> (int) ( $a['run_number'] ?? 0 ); return 0 !== $number ? $number : ( (int) ( $b['id'] ?? 0 ) <=> (int) ( $a['id'] ?? 0 ) ); } );
 		$fresh = array();
 		foreach ( $fresh_runs as $run ) { if ( ! isset( $fresh[ (int) ( $run['id'] ?? 0 ) ] ) ) { $fresh[ (int) ( $run['id'] ?? 0 ) ] = $run; } }
-		$fresh_summary = array( 'running' => 0, 'queued' => 0, 'failed' => 0, 'completed' => 0 );
-		foreach ( $fresh as $run ) { if ( in_array( $run['status'] ?? '', array( 'in_progress', 'cancelling' ), true ) ) { ++$fresh_summary['running']; } elseif ( 'queued' === ( $run['status'] ?? '' ) ) { ++$fresh_summary['queued']; } elseif ( in_array( $run['conclusion'] ?? '', array( 'failure', 'timed_out', 'action_required' ), true ) ) { ++$fresh_summary['failed']; } elseif ( 'completed' === ( $run['status'] ?? '' ) ) { ++$fresh_summary['completed']; } }
+		$fresh_summary = array( 'active' => array( 'running_batches' => 0, 'queued_batches' => 0 ) );
+		foreach ( $fresh as $run ) {
+			if ( in_array( $run['status'] ?? '', array( 'in_progress', 'cancelling' ), true ) ) { ++$fresh_summary['active']['running_batches']; }
+			elseif ( 'queued' === ( $run['status'] ?? '' ) ) { ++$fresh_summary['active']['queued_batches']; }
+		}
 		$fresh_summary['scope'] = $fresh_source_count >= 2 ? 'github_fresh_page' : 'github_fresh_partial';
 		$fresh_summary['updated_at'] = gmdate( 'c' );
 		$fresh_summary['summary_scope'] = $fresh_summary['scope'];

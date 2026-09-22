@@ -438,7 +438,16 @@ class MAC_Tracker_Repository {
 
 		$tone = sanitize_text_field( (string) ( $filters['tone'] ?? '' ) );
 		$allowed_tones = $this->visual_tones();
-		if ( in_array( $tone, $allowed_tones, true ) ) {
+		if ( 0 === strpos( $tone, 'brand:' ) ) {
+			$matching_tones = $this->visual_tones_for_filter( $tone );
+			if ( empty( $matching_tones ) ) {
+				$where[] = '1 = 0';
+			} else {
+				$where[] = 'v.tone IN (' . implode( ',', array_fill( 0, count( $matching_tones ), '%s' ) ) . ')';
+				$args = array_merge( $args, $matching_tones );
+			}
+		} elseif ( in_array( $tone, $allowed_tones, true ) ) {
+			// Backward compatibility for bookmarked pre-normalization URLs.
 			$where[] = 'v.tone = %s';
 			$args[]  = $tone;
 		} elseif ( 'pending' === $tone ) {
@@ -695,10 +704,29 @@ class MAC_Tracker_Repository {
 
 	public function visual_runs( $limit = 10 ) { return $this->visual_runs_page( 1, $limit )['runs']; }
 
+	/** Rolling project throughput; one cumulative row is counted once per GitHub run. */
+	public function visual_run_throughput_summary() {
+		$sql = "SELECT COUNT(*) AS run_count, COALESCE(SUM(processed_count),0) AS processed_projects, COALESCE(SUM(success_count),0) AS success_projects, COALESCE(SUM(needs_review_count),0) AS needs_review_projects, COALESCE(SUM(failed_count),0) AS failed_projects FROM (SELECT github_run_id, MAX(processed_count) AS processed_count, MAX(success_count) AS success_count, MAX(needs_review_count) AS needs_review_count, MAX(failed_count) AS failed_count FROM {$this->visual_runs} WHERE COALESCE(completed_at, heartbeat_at, updated_at, started_at, created_at) >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 60 MINUTE) GROUP BY github_run_id) latest_runs";
+		$row = (array) $this->wpdb->get_row( $sql, ARRAY_A );
+		$processed = max( 0, (int) ( $row['processed_projects'] ?? 0 ) );
+		return array(
+			'window_minutes' => 60,
+			'run_count' => max( 0, (int) ( $row['run_count'] ?? 0 ) ),
+			'processed_projects' => $processed,
+			'success_projects' => max( 0, (int) ( $row['success_projects'] ?? 0 ) ),
+			'needs_review_projects' => max( 0, (int) ( $row['needs_review_projects'] ?? 0 ) ),
+			'failed_projects' => max( 0, (int) ( $row['failed_projects'] ?? 0 ) ),
+			'average_projects_per_hour' => $processed,
+		);
+	}
+
 	public function visual_run_summary() {
 		$rows = (array) $this->wpdb->get_results( "SELECT status, conclusion FROM {$this->visual_runs}", ARRAY_A );
-		$summary = array( 'running' => 0, 'queued' => 0, 'failed' => 0, 'completed' => 0 );
-		foreach ( $rows as $row ) { if ( in_array( $row['status'], array( 'in_progress', 'cancelling' ), true ) ) { ++$summary['running']; } elseif ( 'queued' === $row['status'] ) { ++$summary['queued']; } elseif ( in_array( $row['conclusion'], array( 'failure', 'timed_out', 'action_required' ), true ) ) { ++$summary['failed']; } elseif ( 'completed' === $row['status'] ) { ++$summary['completed']; } }
+		$summary = array( 'active' => array( 'running_batches' => 0, 'queued_batches' => 0 ), 'last_60m' => $this->visual_run_throughput_summary() );
+		foreach ( $rows as $row ) {
+			if ( in_array( $row['status'], array( 'in_progress', 'cancelling' ), true ) ) { ++$summary['active']['running_batches']; }
+			elseif ( 'queued' === $row['status'] ) { ++$summary['active']['queued_batches']; }
+		}
 		return $summary;
 	}
 
@@ -730,12 +758,12 @@ class MAC_Tracker_Repository {
 	public function visual_review_rows( $limit = 120 ) {
 		$limit = max( 1, min( 300, absint( $limit ) ) );
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
-		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND {$this->exclusion_sql('p')} AND (v.screenshot_url <> '' OR v.diagnostic_screenshot_url <> '' OR v.pipeline_status IN ('idle', 'capture_queued', 'capturing', 'retry_wait', 'blocked', 'failed')) ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d";
+		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.capture_bundle_json, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND {$this->exclusion_sql('p')} AND (v.screenshot_url <> '' OR v.diagnostic_screenshot_url <> '' OR v.pipeline_status IN ('idle', 'capture_queued', 'capturing', 'retry_wait', 'blocked', 'failed')) ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d";
 		return (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
 	}
 
 	/** Atomically claim safe local queue data for one authenticated worker. */
-	public function visual_queue( $stage, $limit = 10 ) {
+	public function visual_queue( $stage, $limit = 11 ) {
 		$limit = max( 1, min( 25, absint( $limit ) ) );
 		$stage = 'tone' === $stage ? 'tone' : 'capture';
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design'))) AND {$this->exclusion_sql('p')}";
@@ -803,7 +831,7 @@ class MAC_Tracker_Repository {
 	 * A targeted plan never falls back to the shared queue. A batch plan spends its
 	 * limit on websites: analysis-ready records first, then new captures.
 	 */
-	public function visual_claim_jobs( $run_mode, $stage, array $target_ids = array(), $limit = 10 ) {
+	public function visual_claim_jobs( $run_mode, $stage, array $target_ids = array(), $limit = 11 ) {
 		$run_mode = 'targeted' === $run_mode ? 'targeted' : 'batch';
 		$stage = in_array( $stage, array( 'capture', 'tone', 'full', 'auto' ), true ) ? $stage : 'full';
 		$limit = max( 1, min( 25, absint( $limit ) ) );
@@ -1257,6 +1285,67 @@ class MAC_Tracker_Repository {
 
 	public function visual_tones() {
 		return array_keys( $this->visual_tone_palette() );
+	}
+
+	/** Canonical Projects-filter interpretation without changing stored tones. */
+	public function normalize_visual_tone_for_filter( $tone ) {
+		$parts = preg_split( '/\s+/u', trim( (string) $tone ) );
+		$brand_map = array(
+			'Vàng' => 'yellow', 'Đỏ' => 'red', 'Hồng' => 'pink', 'Xanh' => 'blue',
+			'Tím' => 'purple', 'Cam' => 'orange', 'Nâu' => 'brown', 'Đen' => 'black',
+			'Xám' => 'gray', 'Trắng' => 'white', 'Kem' => 'cream', 'Be' => 'beige',
+		);
+		$surface_map = array( 'đen' => 'black', 'xám' => 'gray', 'kem' => 'cream', 'be' => 'cream', 'trắng' => 'white' );
+		$brand = $brand_map[ $parts[0] ?? '' ] ?? '';
+		if ( '' === $brand ) { return array( 'brand' => '', 'surface' => '' ); }
+		$surface = '';
+		foreach ( array_slice( $parts, 1 ) as $part ) {
+			if ( isset( $surface_map[ $part ] ) ) { $surface = $surface_map[ $part ]; break; }
+		}
+		return array( 'brand' => $brand, 'surface' => $surface );
+	}
+
+	/** Parent/child options generated from the canonical saved taxonomy only. */
+	public function visual_tone_filter_groups() {
+		$brands = array(
+			'yellow' => 'Vàng', 'red' => 'Đỏ', 'pink' => 'Hồng', 'blue' => 'Xanh',
+			'purple' => 'Tím', 'orange' => 'Cam', 'brown' => 'Nâu', 'black' => 'Đen',
+			'gray' => 'Xám', 'white' => 'Trắng', 'cream' => 'Kem', 'beige' => 'Be',
+		);
+		$surfaces = array( 'black' => 'đen', 'gray' => 'xám', 'cream' => 'kem', 'white' => 'trắng' );
+		$available = array();
+		foreach ( $this->visual_tones() as $tone ) {
+			$normalized = $this->normalize_visual_tone_for_filter( $tone );
+			if ( '' === $normalized['brand'] ) { continue; }
+			$available[ $normalized['brand'] ] = $available[ $normalized['brand'] ] ?? array();
+			if ( '' !== $normalized['surface'] ) { $available[ $normalized['brand'] ][ $normalized['surface'] ] = true; }
+		}
+		$groups = array();
+		foreach ( $brands as $brand_key => $brand_label ) {
+			if ( ! isset( $available[ $brand_key ] ) ) { continue; }
+			$children = array();
+			foreach ( $surfaces as $surface_key => $surface_label ) {
+				if ( empty( $available[ $brand_key ][ $surface_key ] ) ) { continue; }
+				$children[] = array( 'value' => 'brand:' . $brand_key . '|surface:' . $surface_key, 'label' => $brand_label . ' ' . $surface_label );
+			}
+			$groups[] = array( 'brand' => $brand_key, 'label' => $brand_label, 'value' => 'brand:' . $brand_key, 'children' => $children );
+		}
+		return $groups;
+	}
+
+	/** Resolve a normalized key to an allow-listed set used by prepared IN SQL. */
+	public function visual_tones_for_filter( $filter ) {
+		$filter = sanitize_text_field( (string) $filter );
+		if ( ! preg_match( '/^brand:([a-z]+)(?:\|surface:(black|gray|cream|white))?$/', $filter, $match ) ) { return array(); }
+		$brand = $match[1];
+		$surface = $match[2] ?? '';
+		$tones = array();
+		foreach ( $this->visual_tones() as $tone ) {
+			$normalized = $this->normalize_visual_tone_for_filter( $tone );
+			if ( $brand !== $normalized['brand'] || ( '' !== $surface && $surface !== $normalized['surface'] ) ) { continue; }
+			$tones[] = $tone;
+		}
+		return $tones;
 	}
 
 	/** Canonical source of truth for every manual and AI tone swatch. */

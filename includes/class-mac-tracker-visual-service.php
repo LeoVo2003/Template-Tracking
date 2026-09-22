@@ -28,7 +28,7 @@ class MAC_Tracker_Visual_Service {
 			'methods'             => WP_REST_Server::CREATABLE,
 			'callback'            => array( $this, 'claim_jobs' ),
 			'permission_callback' => '__return_true',
-			'args'                => array( 'run_mode' => array( 'default' => 'batch' ), 'stage' => array( 'default' => 'full' ), 'target_ids' => array( 'default' => array() ), 'limit' => array( 'default' => 10 ) ),
+			'args'                => array( 'run_mode' => array( 'default' => 'batch' ), 'stage' => array( 'default' => 'full' ), 'target_ids' => array( 'default' => array() ), 'limit' => array( 'default' => 11 ) ),
 		) );
 		register_rest_route( self::NAMESPACE, '/visual/jobs/promote-captures', array(
 			'methods'             => WP_REST_Server::CREATABLE,
@@ -42,7 +42,7 @@ class MAC_Tracker_Visual_Service {
 			'methods'             => WP_REST_Server::CREATABLE,
 			'callback'            => array( $this, 'queue' ),
 			'permission_callback' => '__return_true',
-			'args'                => array( 'stage' => array( 'default' => 'capture' ), 'limit' => array( 'default' => 10 ) ),
+			'args'                => array( 'stage' => array( 'default' => 'capture' ), 'limit' => array( 'default' => 11 ) ),
 		) );
 		register_rest_route( self::NAMESPACE, '/visual/ingest', array(
 			'methods'             => WP_REST_Server::CREATABLE,
