@@ -4,7 +4,7 @@ import { classifyWithLlamaScout } from './providers/cloudflare-llama-scout.mjs';
 import { classifyWithGemini } from './providers/gemini.mjs';
 import { ProviderError, FAMILIES, CANVAS_FAMILIES } from './providers/common.mjs';
 import { resolveTone } from './tone-map.mjs';
-import { DIRECT_VISION_SCHEMA, directVisionPrompt, validateDirectVisionResult } from './direct-vision.mjs';
+import { DIRECT_VISION_SCHEMA, directVisionJudgePrompt, directVisionPrompt, validateDirectVisionResult } from './direct-vision.mjs';
 
 export const AUTO_ACCEPT = 0.85;
 const JUDGE_ACCEPT = 0.8;
@@ -24,7 +24,128 @@ function agrees(a, b) { if (!a || !b || a.primary_surface !== b.primary_surface 
 function resultFrom(semantic, reason) { const resolved = resolveTone(semantic); return { ...semantic, ...resolved, tone: resolved.tone_group, reason: reason || semantic.reason, needs_review: semantic.needs_review || 'Cần duyệt' === resolved.tone_group }; }
 function directResultFrom(semantic, reason) { const review = 'Cần duyệt' === semantic.tone; return { ...semantic, tone_group: semantic.tone, precise_tone: '', tone: semantic.tone, canvas_family: semantic.canvas, primary_surface: semantic.canvas, primary_family: semantic.brand, secondary_family: 'neutral', canvas_mode: ['black', 'charcoal', 'gray', 'navy', 'brown'].includes(semantic.canvas) ? 'dark' : 'light', needs_review: review, reason: reason || semantic.reason }; }
 function directNeedsReview(provider = '', model = '', reason = 'Direct Vision was not sufficiently consistent for automatic classification.') { return { tone: 'Cần duyệt', tone_group: 'Cần duyệt', precise_tone: '', confidence: 0, provider, model, reason, needs_review: true }; }
-function directConflictsWithEvidence(result, deterministic) { return Boolean(result && deterministic.brand_primary_score >= 0.38 && result.brand !== deterministic.primary_family); }
+
+const CANVAS_GROUPS = {
+  light_white: ['white', 'ivory'],
+  light_warm: ['cream', 'beige', 'greige'],
+  light_gray: ['gray'],
+  dark: ['black', 'charcoal'],
+  dark_blue: ['navy'],
+  warm_dark: ['brown'],
+};
+const BRAND_GROUPS = {
+  warm_metallic: ['gold', 'champagne', 'yellow'],
+  warm_earth: ['brown', 'taupe'],
+  pink: ['pink', 'rose', 'dusty_rose'],
+  red: ['red', 'burgundy', 'terracotta'],
+  orange: ['orange', 'peach'],
+  blue: ['blue', 'navy', 'teal', 'aqua'],
+  green: ['green', 'sage', 'olive'],
+  light_neutral: ['white', 'ivory', 'cream', 'beige', 'greige'],
+  dark_neutral: ['black', 'charcoal', 'gray'],
+  purple: ['purple', 'lavender'],
+};
+
+function familyGroup(family, groups) { return Object.entries(groups).find(([, values]) => values.includes(String(family || '')))?.[0] || ''; }
+function canvasModeForFamily(family) { return ['black', 'charcoal', 'navy', 'brown'].includes(String(family || '')) ? 'dark' : 'light'; }
+export function canvasCompatible(vision, deterministic) {
+  if (!vision || !deterministic || vision === deterministic) return Boolean(vision && deterministic);
+  const a = familyGroup(vision, CANVAS_GROUPS), b = familyGroup(deterministic, CANVAS_GROUPS);
+  if (a && a === b) return true;
+  return ['light_white', 'light_warm', 'light_gray'].includes(a) && ['light_white', 'light_warm', 'light_gray'].includes(b);
+}
+export function brandCompatibility(vision, deterministic) {
+  if (!vision || !deterministic) return 'unknown';
+  if (vision === deterministic) return 'exact';
+  const a = familyGroup(vision, BRAND_GROUPS), b = familyGroup(deterministic, BRAND_GROUPS);
+  if (a && a === b) return 'compatible';
+  const pair = new Set([a, b]);
+  if ((pair.has('warm_metallic') && pair.has('warm_earth')) || (pair.has('pink') && pair.has('red'))) return 'nearby';
+  return 'incompatible';
+}
+
+export function brandEvidenceStrength(candidate = {}) {
+  const score = Number(candidate.score ?? candidate.brand_primary_score ?? 0);
+  const roles = [...new Set((candidate.roles || []).map(String).filter(Boolean))];
+  const sources = Array.isArray(candidate.sources) ? candidate.sources : [];
+  const sourceSections = new Set(sources.map((source) => String(source?.section_key || '')).filter(Boolean));
+  const sourceRoles = new Set(sources.map((source) => String(source?.role || '')).filter(Boolean));
+  const sectionCount = Math.max(Number(candidate.section_count || 0), sourceSections.size);
+  const roleCount = Math.max(roles.length, sourceRoles.size);
+  const controlCount = Number(candidate.control_count || 0);
+  const themeToken = roles.includes('token_accent') || sources.some((source) => 'token_accent' === source?.role);
+  const recurrentProvenance = sources.length >= 2 && (sourceSections.size >= 2 || sourceRoles.size >= 2);
+  const meaningful = score >= 0.18 && (sectionCount >= 2 || roleCount >= 2 || themeToken || recurrentProvenance || controlCount >= 3);
+  return { meaningful, level: meaningful ? (score >= 0.38 || themeToken ? 'strong' : 'material') : 'weak', score, section_count: sectionCount, role_count: roleCount, control_count: controlCount, roles, theme_token: themeToken, provenance_count: sources.length, recurrent_provenance: recurrentProvenance };
+}
+
+function deterministicFromEvidence(pixel = {}) {
+  const canvas = pixel.canvas || {}, brand = pixel.brand || {};
+  const primaryFamily = brand.brand_primary_family || pixel.primary_accent?.family || 'neutral';
+  const candidate = (brand.brand_evidence || []).find((entry) => entry.family === primaryFamily) || { family: primaryFamily, score: brand.brand_primary_score || pixel.primary_accent?.score || 0, roles: [], section_count: 0, control_count: 0, sources: [], hex: pixel.primary_accent?.hex || '' };
+  return {
+    canvas_mode: canvas.mode || 'light',
+    canvas_family: canvas.family || canvas.primary_surface || 'white',
+    primary_surface: canvas.primary_surface || canvas.family || 'white',
+    secondary_surface: canvas.secondary_surface || 'other',
+    surface_confidence: Number(canvas.surface_confidence ?? canvas.confidence ?? 0),
+    light_surface_ratio: Number(canvas.light_surface_ratio || 0),
+    dark_surface_ratio: Number(canvas.dark_surface_ratio || 0),
+    primary_family: primaryFamily,
+    secondary_family: brand.brand_secondary_family || pixel.secondary_accent?.family || 'neutral',
+    brand_primary_score: Number(brand.brand_primary_score || candidate.score || 0),
+    brand_secondary_score: Number(brand.brand_secondary_score || 0),
+    brand_candidate: { ...candidate, family: primaryFamily },
+    confidence: Math.min(Number(brand.brand_confidence || 0), Number(canvas.surface_confidence ?? canvas.confidence ?? 0)),
+  };
+}
+
+export function evaluateDirectVisionConflict(result, deterministic = {}, evidence = {}) {
+  const pixel = evidence?.semantic_model || evidence || {};
+  const source = deterministic.primary_surface ? deterministic : deterministicFromEvidence(pixel);
+  const canvasFamily = source.primary_surface || source.canvas_family || 'white';
+  const canvasMode = source.canvas_mode || 'light';
+  const canvasConfidence = Number(source.surface_confidence ?? source.canvas_confidence ?? source.confidence ?? 0);
+  const candidate = source.brand_candidate || (pixel.brand?.brand_evidence || []).find((entry) => entry.family === source.primary_family) || { family: source.primary_family || 'neutral', score: source.brand_primary_score || 0 };
+  const strength = brandEvidenceStrength(candidate);
+  const deterministicSummary = {
+    canvas: { family: canvasFamily, mode: canvasMode, confidence: canvasConfidence, primary_surface: source.primary_surface || canvasFamily, secondary_surface: source.secondary_surface || '', light_surface_ratio: Number(source.light_surface_ratio || 0), dark_surface_ratio: Number(source.dark_surface_ratio || 0) },
+    brand: { family: candidate.family || source.primary_family || 'neutral', hex: candidate.hex || '', score: strength.score, sections: strength.section_count, roles: strength.roles, role_count: strength.role_count, controls: strength.control_count, theme_token: strength.theme_token, provenance_count: strength.provenance_count, strength: strength.level },
+  };
+  if (!result) return { has_conflict: false, severity: 'none', canvas_conflict: false, brand_conflict: false, reasons: [], deterministic_summary: deterministicSummary };
+  const reasons = [];
+  const visionCanvas = result.canvas || result.primary_surface || result.canvas_family || '';
+  const visionBrand = result.brand || result.primary_family || '';
+  const canvasMismatch = Boolean(visionCanvas) && (!canvasCompatible(visionCanvas, canvasFamily) || (['light', 'dark'].includes(canvasMode) && canvasModeForFamily(visionCanvas) !== canvasMode));
+  const hardCanvas = canvasMismatch && canvasConfidence >= 0.85;
+  if (canvasMismatch) reasons.push(`Vision canvas ${visionCanvas} conflicts with deterministic ${canvasFamily}/${canvasMode} canvas at ${canvasConfidence.toFixed(2)} confidence.`);
+  const compatibility = brandCompatibility(visionBrand, deterministicSummary.brand.family);
+  const brandConflict = strength.meaningful && 'incompatible' === compatibility;
+  if (brandConflict) reasons.push(`Vision brand ${visionBrand} conflicts with repeated deterministic ${deterministicSummary.brand.family} UI evidence (score ${strength.score.toFixed(4)}, sections ${strength.section_count}, roles ${strength.roles.join(', ') || 'unknown'}).`);
+  return {
+    has_conflict: canvasMismatch || brandConflict,
+    severity: hardCanvas ? 'hard' : ((canvasMismatch || brandConflict) ? 'soft' : 'none'),
+    canvas_conflict: canvasMismatch,
+    brand_conflict: brandConflict,
+    reasons,
+    deterministic_summary: deterministicSummary,
+    brand_compatibility: compatibility,
+  };
+}
+
+function materialDirectConflict(conflict) { return Boolean(conflict && ('hard' === conflict.severity || conflict.brand_conflict)); }
+function judgeContext(conflict, primary, threshold) {
+  if (conflict?.reasons?.length) return conflict;
+  return { ...(conflict || {}), reasons: [primary ? `Primary Vision confidence ${Number(primary.confidence || 0).toFixed(2)} was below the ${Number(threshold).toFixed(2)} automatic threshold.` : 'The primary Vision provider did not return a usable canonical result.'] };
+}
+function resolutionReason(conflict, stage = 'judge') {
+  const prefix = 'final' === stage ? 'Direct Vision final judge' : 'Direct Vision judge';
+  if ('hard' === conflict?.severity && conflict.canvas_conflict) return `${prefix} resolved a hard canvas contradiction.`;
+  if (conflict?.brand_conflict) return `${prefix} resolved a repeated-brand disagreement.`;
+  return `${prefix} confirmed a low-confidence primary decision without a material sanity conflict.`;
+}
+function resolvedConflict(conflict, evaluator, authority) { return { ...conflict, resolved: true, resolved_by: authority, resolution_evaluation: evaluator }; }
+function unresolvedConflict(conflict, evaluator = null) { return { ...conflict, resolved: false, ...(evaluator ? { resolution_evaluation: evaluator } : {}) }; }
 function serial(error) { return { provider: error.provider || 'unknown', code: error.code || 'PROVIDER_ERROR', status: error.status || 0, quota: !!error.quota, retryable: !!error.retryable, message: String(error.message || '').slice(0, 300) }; }
 async function tryProvider(fn, errors) { try { return await fn(); } catch (error) { errors.push(serial(error)); return null; } }
 
@@ -34,9 +155,9 @@ export async function classifyTone({ previewBuffer, evidence, groqApiKey, gemini
   const errors = [], directVision = 'direct_vision' === classifierMode, prompt = directVision ? directVisionPrompt() : tonePrompt(evidence), options = { previewBuffer, prompt }, directOptions = directVision ? { responseSchema: DIRECT_VISION_SCHEMA, validateResult: validateDirectVisionResult } : {};
   const groq = providers.groq || classifyWithGroq, cfQwen = providers.cloudflare || classifyWithCloudflareQwen, llama = providers.llama || classifyWithLlamaScout, gemini = providers.gemini || classifyWithGemini;
   const reportStep = async (step, provider) => { try { if (onProviderStep) await onProviderStep({ step, provider }); } catch { /* Telemetry is non-critical. */ } };
-  const pixel = evidence.semantic_model || {};
-  const deterministic = { canvas_mode: pixel.canvas?.mode || 'light', canvas_family: pixel.canvas?.family || 'white', primary_surface: pixel.canvas?.primary_surface || pixel.canvas?.family || 'white', secondary_surface: pixel.canvas?.secondary_surface || 'other', primary_family: pixel.brand?.brand_primary_family || pixel.primary_accent?.family || 'neutral', secondary_family: pixel.brand?.brand_secondary_family || pixel.secondary_accent?.family || 'neutral', brand_primary_score: pixel.brand?.brand_primary_score || 0, brand_secondary_score: pixel.brand?.brand_secondary_score || 0, confidence: Math.min(pixel.brand?.brand_confidence || 0, pixel.canvas?.surface_confidence || pixel.canvas?.confidence || 0) };
-  if ('off' === aiStrategy) return { state: 'needs_review', result: directVision ? directNeedsReview('', '', 'AI strategy is off.') : resultFrom({ ...deterministic, needs_review: true, confidence: 0, reason: 'AI strategy is off.' }), attempts: [], errors, authority: directVision ? 'manual_review' : 'legacy' };
+  const pixel = evidence?.semantic_model || {};
+  const deterministic = deterministicFromEvidence(pixel);
+  if ('off' === aiStrategy) return { state: 'needs_review', result: directVision ? directNeedsReview('', '', 'AI strategy is off.') : resultFrom({ ...deterministic, needs_review: true, confidence: 0, reason: 'AI strategy is off.' }), attempts: [], errors, authority: directVision ? 'manual_review' : 'legacy', ...(directVision ? { conflict: evaluateDirectVisionConflict(null, deterministic, evidence) } : {}) };
 
   const today = new Date().toISOString().slice(0, 10);
   const keys = [...geminiApiKeys, geminiApiKey].filter((key, index, values) => key && values.indexOf(key) === index).slice(0, 2).map((key, index) => ({ key, slot: index + 1 }));
@@ -66,26 +187,55 @@ export async function classifyTone({ previewBuffer, evidence, groqApiKey, gemini
   } else if ('gemini' === aiStrategy) {
     qwen = await runGemini(prompt, 'gemini_analyzing');
   }
-  const strongBrandConflict = qwen && deterministic.brand_primary_score >= 0.38 && qwen.primary_family !== deterministic.primary_family;
-  const directConflict = directConflictsWithEvidence(qwen, deterministic);
-  if (directVision && qwen && 'Cần duyệt' !== qwen.tone && !directConflict && qwen.confidence >= Math.max(0.90, autoAccept)) return { state: 'classified', result: directResultFrom(qwen, 'Direct Vision primary; deterministic colors are coarse sanity evidence only.'), attempts: [qwen], errors, authority: 'direct_vision' };
-  if (qwen && !strongBrandConflict && agrees(qwen, deterministic) && qwen.confidence >= autoAccept && !qwen.needs_review) return { state: 'classified', result: resultFrom(qwen, 'Brand + canvas evidence and Qwen agreement.'), attempts: [qwen], errors };
+  const primaryConflict = directVision ? evaluateDirectVisionConflict(qwen, deterministic, evidence) : null;
+  const directThreshold = Math.max(0.90, autoAccept);
+  if (directVision && qwen && 'Cần duyệt' !== qwen.tone && !materialDirectConflict(primaryConflict) && qwen.confidence >= directThreshold) {
+    return { state: 'classified', result: directResultFrom(qwen, 'Direct Vision primary accepted; no material sanity conflict.'), attempts: [qwen], errors, authority: 'direct_vision', conflict: { ...primaryConflict, resolved: true, resolved_by: 'direct_vision' } };
+  }
   if ('qwen' === aiStrategy || 'gemini' === aiStrategy) {
     const temporary = errors.length && errors.every((error) => error.retryable || error.quota);
     if (!qwen && temporary) return { state: 'retry_wait', result: null, attempts: [], errors, retry_code: errors.every((error) => error.quota) ? 'FREE_QUOTA_EXHAUSTED' : 'FREE_PROVIDER_UNAVAILABLE' };
-    return { state: 'needs_review', result: directVision ? (qwen ? directResultFrom({ ...qwen, confidence: 0, tone: qwen.tone || 'Cần duyệt' }, 'Selected provider could not produce a safe automatic classification.') : directNeedsReview()) : resultFrom(qwen || { ...deterministic, needs_review: true, confidence: 0, reason: 'Selected provider could not produce a confident result.' }), attempts: [qwen].filter(Boolean), errors, ...(directVision ? { authority: 'manual_review' } : {}) };
+    return { state: 'needs_review', result: directVision ? (qwen ? directResultFrom({ ...qwen, confidence: 0, tone: qwen.tone || 'Cần duyệt' }, materialDirectConflict(primaryConflict) ? 'Direct Vision remained contradictory and requires review.' : 'Selected provider did not reach the automatic confidence threshold.') : directNeedsReview()) : resultFrom(qwen || { ...deterministic, needs_review: true, confidence: 0, reason: 'Selected provider could not produce a confident result.' }), attempts: [qwen].filter(Boolean), errors, ...(directVision ? { authority: 'manual_review', conflict: unresolvedConflict(primaryConflict) } : {}) };
   }
-  await reportStep('llama_judging', 'cloudflare_llama');
-  const judgePrompt = directVision ? `${directVisionPrompt()} Act as an independent judge. Re-check the previous answer and return canonical JSON only.` : llamaPrompt(evidence, qwen);
-  const scout = await tryProvider(() => llama({ previewBuffer, prompt: judgePrompt, ...directOptions, accountId: cloudflareAccount, apiToken: cloudflareToken }), errors);
+
   if (directVision) {
-    if (scout && 'Cần duyệt' !== scout.tone && !directConflictsWithEvidence(scout, deterministic) && scout.confidence >= JUDGE_ACCEPT) return { state: 'classified', result: directResultFrom(scout, 'Direct Vision judge resolved a primary/evidence contradiction.'), attempts: [qwen, scout].filter(Boolean), errors, authority: 'direct_vision_judge' };
-  } else if (scout && scout.confidence >= JUDGE_ACCEPT && !scout.needs_review && !strongBrandConflict && (agrees(scout, qwen) || agrees(scout, deterministic))) return { state: 'classified', result: resultFrom(scout, 'Llama Scout resolved brand + canvas disagreement.'), attempts: [qwen, scout].filter(Boolean), errors };
-  const finalJudge = await runGemini(directVision ? `${directVisionPrompt()} Act as the final independent judge. Return canonical JSON only.` : llamaPrompt(evidence, scout || qwen));
-  if (finalJudge && finalJudge.confidence >= JUDGE_ACCEPT && (!finalJudge.needs_review || directVision) && (!directVision || ('Cần duyệt' !== finalJudge.tone && !directConflictsWithEvidence(finalJudge, deterministic)))) return { state: 'classified', result: directVision ? directResultFrom(finalJudge, 'Direct Vision final judge resolved the hard disagreement.') : resultFrom(finalJudge, 'Gemini final judge resolved the hard disagreement.'), attempts: [qwen, scout, finalJudge].filter(Boolean), errors, ...(directVision ? { authority: 'direct_vision_judge' } : {}) };
+    const suppliedConflict = judgeContext(primaryConflict, qwen, directThreshold);
+    await reportStep('llama_judging', 'cloudflare_llama');
+    const judgePrompt = directVisionJudgePrompt({ previousResult: qwen, deterministic: primaryConflict?.deterministic_summary || evaluateDirectVisionConflict(null, deterministic, evidence).deterministic_summary, conflict: suppliedConflict });
+    const scout = await tryProvider(() => llama({ previewBuffer, prompt: judgePrompt, ...directOptions, accountId: cloudflareAccount, apiToken: cloudflareToken }), errors);
+    const judgeConflict = evaluateDirectVisionConflict(scout, deterministic, evidence);
+    if (scout && 'Cần duyệt' !== scout.tone && scout.confidence >= JUDGE_ACCEPT && !materialDirectConflict(judgeConflict)) {
+      return { state: 'classified', result: directResultFrom(scout, resolutionReason(primaryConflict, 'judge')), attempts: [qwen, scout].filter(Boolean), errors, authority: 'direct_vision_judge', conflict: resolvedConflict(primaryConflict, judgeConflict, 'direct_vision_judge') };
+    }
+    const finalConflictContext = {
+      ...suppliedConflict,
+      severity: 'hard' === primaryConflict?.severity || 'hard' === judgeConflict.severity ? 'hard' : (primaryConflict?.has_conflict || judgeConflict.has_conflict ? 'soft' : 'none'),
+      reasons: [...(suppliedConflict.reasons || []), ...(judgeConflict.reasons || []).map((reason) => `Vision judge remained inconsistent: ${reason}`)],
+    };
+    const finalPrompt = directVisionJudgePrompt({ previousResult: qwen, judgeResult: scout, deterministic: primaryConflict?.deterministic_summary || judgeConflict.deterministic_summary, conflict: finalConflictContext, final: true });
+    const finalJudge = await runGemini(finalPrompt);
+    const finalConflict = evaluateDirectVisionConflict(finalJudge, deterministic, evidence);
+    if (finalJudge && 'Cần duyệt' !== finalJudge.tone && finalJudge.confidence >= JUDGE_ACCEPT && !materialDirectConflict(finalConflict)) {
+      return { state: 'classified', result: directResultFrom(finalJudge, resolutionReason(primaryConflict, 'final')), attempts: [qwen, scout, finalJudge].filter(Boolean), errors, authority: 'direct_vision_final_judge', conflict: resolvedConflict(primaryConflict, finalConflict, 'direct_vision_final_judge') };
+    }
+    const temporary = errors.length && errors.every((error) => error.retryable || error.quota);
+    if (temporary && !qwen && !scout) return { state: 'retry_wait', result: null, attempts: [], errors, retry_code: errors.every((error) => error.quota) ? 'FREE_QUOTA_EXHAUSTED' : 'FREE_PROVIDER_UNAVAILABLE', conflict: unresolvedConflict(primaryConflict, finalConflict) };
+    const unresolved = finalJudge || scout || qwen;
+    const reviewReason = materialDirectConflict(primaryConflict) || materialDirectConflict(judgeConflict) || materialDirectConflict(finalConflict) ? 'Direct Vision remained contradictory and requires review.' : 'Direct Vision did not reach a consistent high-confidence result and requires review.';
+    return { state: 'needs_review', result: unresolved ? directResultFrom({ ...unresolved, confidence: 0, tone: unresolved.tone || 'Cần duyệt' }, reviewReason) : directNeedsReview('', '', reviewReason), attempts: [qwen, scout, finalJudge].filter(Boolean), errors, authority: 'manual_review', conflict: unresolvedConflict(primaryConflict, finalConflict) };
+  }
+
+  const strongBrandConflict = qwen && deterministic.brand_primary_score >= 0.38 && qwen.primary_family !== deterministic.primary_family;
+  if (qwen && !strongBrandConflict && agrees(qwen, deterministic) && qwen.confidence >= autoAccept && !qwen.needs_review) return { state: 'classified', result: resultFrom(qwen, 'Brand + canvas evidence and Qwen agreement.'), attempts: [qwen], errors };
+  await reportStep('llama_judging', 'cloudflare_llama');
+  const judgePrompt = llamaPrompt(evidence, qwen);
+  const scout = await tryProvider(() => llama({ previewBuffer, prompt: judgePrompt, ...directOptions, accountId: cloudflareAccount, apiToken: cloudflareToken }), errors);
+  if (scout && scout.confidence >= JUDGE_ACCEPT && !scout.needs_review && !strongBrandConflict && (agrees(scout, qwen) || agrees(scout, deterministic))) return { state: 'classified', result: resultFrom(scout, 'Llama Scout resolved brand + canvas disagreement.'), attempts: [qwen, scout].filter(Boolean), errors };
+  const finalJudge = await runGemini(llamaPrompt(evidence, scout || qwen));
+  if (finalJudge && finalJudge.confidence >= JUDGE_ACCEPT && !finalJudge.needs_review) return { state: 'classified', result: resultFrom(finalJudge, 'Gemini final judge resolved the hard disagreement.'), attempts: [qwen, scout, finalJudge].filter(Boolean), errors };
   const temporary = errors.length && errors.every((error) => error.retryable || error.quota);
   if (temporary && !qwen && !scout) return { state: 'retry_wait', result: null, attempts: [], errors, retry_code: errors.every((error) => error.quota) ? 'FREE_QUOTA_EXHAUSTED' : 'FREE_PROVIDER_UNAVAILABLE' };
   const unresolved = finalJudge || scout || qwen;
-  return { state: 'needs_review', result: directVision ? (unresolved ? directResultFrom({ ...unresolved, confidence: 0, tone: unresolved.tone || 'Cần duyệt' }, 'Direct Vision contradiction or invalid confidence requires review.') : directNeedsReview()) : resultFrom(unresolved || { ...deterministic, needs_review: true, confidence: 0, provider: '', model: '', reason: 'No confident independent resolution.' }), attempts: [qwen, scout, finalJudge].filter(Boolean), errors };
+  return { state: 'needs_review', result: resultFrom(unresolved || { ...deterministic, needs_review: true, confidence: 0, provider: '', model: '', reason: 'No confident independent resolution.' }), attempts: [qwen, scout, finalJudge].filter(Boolean), errors };
 }
 export { ProviderError };

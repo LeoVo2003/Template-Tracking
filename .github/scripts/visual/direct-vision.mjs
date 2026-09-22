@@ -16,7 +16,27 @@ export const DIRECT_VISION_SCHEMA = {
 };
 
 export function directVisionPrompt() {
-  return `You are a senior UI/branding designer. Inspect the complete rendered website screenshot, including its hero, repeated sections and footer. Photos, skin, nails, products and models are content evidence, not brand colors. Readable foreground text (including white text on dark sections) is contrast evidence, never a canvas or brand color. Social-network icons and their native Facebook/Instagram/YouTube/TikTok/X colors are third-party content and must never determine the brand. A lone neutral black/gray/white CTA is a control treatment, not the brand, unless the same neutral is repeated as a genuine design-system accent across independent UI roles and sections. Identify the repeated interface accent first, then the dominant page-level canvas from large background/section surfaces. Return exactly one JSON object with exactly these keys: {"brand":"gold","canvas":"black","tone":"Vàng đen","confidence":0.94,"reason":"short evidence"}. brand must be one of: ${FAMILIES.join('|')}. canvas must be one of: ${CANVAS_FAMILIES.join('|')}. tone must be one of: ${TONES.join('|')}. Tone is brand-first and canvas-second: repeated gold on a dark structural canvas is Vàng đen; repeated gold on a genuinely white structural canvas is Vàng trắng. Use Cần duyệt when evidence is not internally consistent. No markdown, commentary or extra keys. Do not invent labels.`;
+  return `You are a senior UI/branding designer. Inspect the complete rendered website screenshot, including its hero, repeated sections and footer. Photos, skin, nails, products and models are content evidence, not brand colors. Readable foreground text (including white text on dark sections) is contrast evidence, never a canvas or brand color. Social-network icons and their native Facebook/Instagram/YouTube/TikTok/X colors are third-party content and must never determine the brand. A logo or wordmark color is supporting evidence only. Never choose a color as BRAND PRIMARY solely because it appears in the logo or brand mark. A brand-primary color must also recur meaningfully across the rendered interface, such as buttons, active navigation, headings, borders, controls, section accents or decorative UI. If a color appears mainly in the logo while another color clearly repeats through the interface, choose the repeated interface color. Do not ignore logos completely when their color also recurs throughout the UI. A lone neutral black/gray/white CTA is a control treatment, not the brand, unless the same neutral is repeated as a genuine design-system accent across independent UI roles and sections. Identify the repeated interface accent first, then the dominant page-level canvas from large background/section surfaces. Return exactly one JSON object with exactly these keys: {"brand":"gold","canvas":"black","tone":"Vàng đen","confidence":0.94,"reason":"short evidence"}. brand must be one of: ${FAMILIES.join('|')}. canvas must be one of: ${CANVAS_FAMILIES.join('|')}. tone must be one of: ${TONES.join('|')}. Tone is brand-first and canvas-second: repeated gold on a dark structural canvas is Vàng đen; repeated gold on a genuinely white structural canvas is Vàng trắng. Use Cần duyệt when evidence is not internally consistent. No markdown, commentary or extra keys. Do not invent labels.`;
+}
+
+function judgeResultSummary(result = {}) {
+  return {
+    provider: result.provider || '',
+    model: result.model || '',
+    brand: result.brand || result.primary_family || '',
+    canvas: result.canvas || result.primary_surface || result.canvas_family || '',
+    tone: result.tone || result.tone_group || '',
+    confidence: Number(result.confidence || 0),
+    reason: String(result.reason || '').slice(0, 320),
+  };
+}
+
+/** A real Vision judge receives the exact disagreement instead of starting over. */
+export function directVisionJudgePrompt({ previousResult = null, judgeResult = null, deterministic = {}, conflict = {}, final = false } = {}) {
+  const previous = judgeResultSummary(previousResult || {});
+  const priorJudge = judgeResult ? judgeResultSummary(judgeResult) : null;
+  const reasons = Array.isArray(conflict.reasons) ? conflict.reasons.map((reason) => String(reason).slice(0, 320)) : [];
+  return `${directVisionPrompt()}\n\nYou are the ${final ? 'final ' : ''}independent Vision judge. Reinspect the same full screenshot independently. Do not blindly trust the previous Vision answer or deterministic sanity evidence. Resolve the exact disagreement below. Deterministic evidence is a disagreement detector only and must not choose the final tone. Logo-only color cannot define BRAND PRIMARY. A hard structural-canvas contradiction must be resolved before acceptance.\nPrevious Vision result: ${JSON.stringify(previous)}${priorJudge ? `\nPrevious Vision judge result: ${JSON.stringify(priorJudge)}` : ''}\nDeterministic canvas evidence: ${JSON.stringify(deterministic.canvas || {})}\nDeterministic brand evidence: ${JSON.stringify(deterministic.brand || {})}\nConflict severity: ${String(conflict.severity || 'none')}\nExact conflict reasons: ${JSON.stringify(reasons)}\nReturn canonical JSON only.`;
 }
 
 export function validateDirectVisionResult(value, provider = 'direct_vision', model = '') {

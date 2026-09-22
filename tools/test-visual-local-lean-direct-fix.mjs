@@ -31,7 +31,7 @@ test('Direct Vision is visible and is the runtime/config default', () => {
   assert.match(admin, /name="classifier_mode"/);
   assert.match(admin, />Direct Vision</);
   assert.match(admin, /complete rendered screenshot/);
-  assert.match(main, /classifier_version: 'direct-vision-v1'/);
+  assert.match(main, /classifier_version: 'direct-vision-v2-conflict-judge'/);
   assert.match(main, /vision_input/);
 });
 

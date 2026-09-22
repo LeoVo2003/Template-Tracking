@@ -971,6 +971,7 @@ class MAC_Tracker_Admin {
 		$accent = (array) ( $deterministic['primary_accent'] ?? array() );
 		$brand = (array) ( $deterministic['brand'] ?? array() );
 		$outcome = (array) ( $raw['result'] ?? array() );
+		$conflict = (array) ( $raw['conflict'] ?? array() );
 		$is_direct = 'direct_vision' === (string) ( $raw['classifier_mode'] ?? '' ) || 'direct-vision-v1' === (string) ( $raw['classifier_version'] ?? '' );
 		echo '<details class="mac-tracker-visual-debug"><summary>Evidence &amp; provider trace</summary><dl>';
 		if ( $is_direct ) {
@@ -978,11 +979,18 @@ class MAC_Tracker_Admin {
 			echo '<dt>AI decision</dt><dd>' . esc_html( trim( (string) ( $outcome['provider'] ?? $row['ai_provider'] ?? '' ) . ' / ' . (string) ( $outcome['model'] ?? $row['ai_model'] ?? '' ) . ' · brand ' . (string) ( $outcome['brand'] ?? $outcome['primary_family'] ?? '' ) . ' · canvas ' . (string) ( $outcome['canvas'] ?? $outcome['primary_surface'] ?? '' ) . ' · tone ' . (string) ( $outcome['tone_group'] ?? $outcome['tone'] ?? '' ) . ' · confidence ' . (string) ( $outcome['confidence'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
 			echo '<dt>Decision path</dt><dd>' . esc_html( (string) ( $raw['authority'] ?? 'manual_review' ) ) . '</dd>';
 			echo '<dt>Vision input</dt><dd>' . esc_html( wp_json_encode( (array) ( $raw['vision_input'] ?? array() ) ) ) . '</dd>';
+			$conflict_types = array();
+			if ( ! empty( $conflict['canvas_conflict'] ) ) { $conflict_types[] = 'canvas'; }
+			if ( ! empty( $conflict['brand_conflict'] ) ) { $conflict_types[] = 'brand'; }
+			$conflict_label = strtoupper( (string) ( $conflict['severity'] ?? 'none' ) ) . ( $conflict_types ? ' · ' . implode( ' + ', $conflict_types ) : '' );
+			echo '<dt>Sanity conflict</dt><dd>' . esc_html( $conflict_label ) . '</dd>';
+			echo '<dt>Conflict reason</dt><dd>' . esc_html( ! empty( $conflict['reasons'] ) ? implode( ' ', array_map( 'strval', (array) $conflict['reasons'] ) ) : 'No material sanity conflict.' ) . '</dd>';
+			if ( array_key_exists( 'resolved', $conflict ) ) { echo '<dt>Conflict resolution</dt><dd>' . esc_html( ! empty( $conflict['resolved'] ) ? 'Resolved by ' . (string) ( $conflict['resolved_by'] ?? 'Vision' ) : 'Unresolved · human review required' ) . '</dd>'; }
 		}
 		echo '<dt>Canvas</dt><dd>' . esc_html( trim( (string) ( $canvas['primary_surface'] ?? $canvas['family'] ?? '' ) . ' / ' . (string) ( $canvas['secondary_surface'] ?? '' ) . ' / ' . (string) ( $canvas['mode'] ?? '' ) . ' · confidence ' . (string) ( $canvas['surface_confidence'] ?? $canvas['confidence'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
 		echo '<dt>Deterministic sanity</dt><dd>' . esc_html( trim( (string) ( $brand['brand_primary_family'] ?? $accent['family'] ?? '' ) . ' ' . (string) ( $brand['brand_primary_score'] ?? $accent['score'] ?? '' ) . ' · sections ' . (string) ( $brand['brand_evidence'][0]['section_count'] ?? '' ) . ' · roles ' . implode( ', ', (array) ( $brand['brand_evidence'][0]['roles'] ?? array() ) ) ) ?: 'Not available' ) . '</dd>';
 		echo '<dt>Primary accent</dt><dd>' . esc_html( trim( (string) ( $accent['family'] ?? '' ) . ' ' . (string) ( $accent['hex'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
-		echo '<dt>Provider decisions</dt><dd>' . esc_html( wp_json_encode( array_map( static function( $attempt ) { return array( 'provider' => $attempt['provider'] ?? '', 'brand' => $attempt['primary_family'] ?? '', 'canvas' => $attempt['primary_surface'] ?? '', 'mode' => $attempt['canvas_mode'] ?? '' ); }, (array) ( $raw['attempts'] ?? array() ) ) ) ) . '</dd>';
+		echo '<dt>Provider decisions</dt><dd>' . esc_html( wp_json_encode( array_map( static function( $attempt ) { return array( 'provider' => $attempt['provider'] ?? '', 'model' => $attempt['model'] ?? '', 'brand' => $attempt['brand'] ?? $attempt['primary_family'] ?? '', 'canvas' => $attempt['canvas'] ?? $attempt['primary_surface'] ?? '', 'tone' => $attempt['tone'] ?? $attempt['tone_group'] ?? '', 'confidence' => $attempt['confidence'] ?? '', 'reason' => $attempt['reason'] ?? '', 'mode' => $attempt['canvas_mode'] ?? '' ); }, (array) ( $raw['attempts'] ?? array() ) ) ) ) . '</dd>';
 		echo '<dt>Final reason</dt><dd>' . esc_html( (string) ( $outcome['reason'] ?? $row['tone_reason'] ?? 'Pending' ) ) . '</dd>';
 		echo '<dt>Provider errors</dt><dd>' . esc_html( wp_json_encode( (array) ( $raw['errors'] ?? array() ) ) ) . '</dd></dl></details>';
 	}

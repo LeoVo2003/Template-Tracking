@@ -201,7 +201,7 @@ async function processToneItems(items, aiStrategy, autoAccept, geminiDailyBudget
       const evidence = bundle?.ui?.metrics || { text: 'Capture bundle has no deterministic UI metrics.' };
       await reportRunHeartbeat({ current_snapshot_id: item.id, current_step: 'qwen_analyzing', current_provider: 'qwen', message: `Qwen analyzing #${item.id}`, event_type: 'qwen_started' });
       const outcome = await classifyTone({ previewBuffer: preview, evidence, groqApiKey, geminiApiKey, geminiApiKeys, geminiDailyBudgetPerKey, cloudflareAccount, cloudflareToken, freeOnly, autoAccept, classifierMode, aiStrategy, onProviderStep: ({ step, provider }) => reportRunHeartbeat({ current_snapshot_id: item.id, current_step: step, current_provider: provider, message: `${String(provider).replace(/_/g, ' ')} working on #${item.id}`, event_type: step }) });
-      const rawJson = JSON.stringify({ phase: 4, classifier_version: 'direct-vision-v1', authority: outcome.authority || ('direct_vision' === classifierMode ? 'manual_review' : 'legacy'), classifier_mode: classifierMode, vision_input: visionInput, ...outcome, deterministic: evidence });
+      const rawJson = JSON.stringify({ phase: 4, classifier_version: 'direct-vision-v2-conflict-judge', authority: outcome.authority || ('direct_vision' === classifierMode ? 'manual_review' : 'legacy'), classifier_mode: classifierMode, vision_input: visionInput, ...outcome, deterministic: evidence });
       if ('benchmark_only' === classifierMode) {
         console.log(`Benchmark-only result #${item.id}: ${outcome.result?.tone_group || outcome.result?.tone || 'needs review'}; no database ingest.`);
         summary.processed += 1;
