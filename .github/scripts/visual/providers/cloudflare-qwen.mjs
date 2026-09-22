@@ -32,7 +32,8 @@ export async function classifyWithCloudflareQwen({ accountId, apiToken, prompt, 
     return validateResult(extractStructuredContent(payload, PROVIDER), PROVIDER, MODEL);
   } catch (error) {
     if (error instanceof ProviderError && 'CLOUDFLARE_INVALID_SCHEMA' === error.code) {
-      error.message = `${error.message} Response shape: ${JSON.stringify(describeStructuredShape(payload))}`;
+      const message = (payload?.result || payload)?.choices?.[0]?.message;
+      error.message = `${error.message} Response shape: ${JSON.stringify(describeStructuredShape(payload))}. Message shape: ${JSON.stringify(describeStructuredShape(message))}`;
     }
     throw error;
   }
