@@ -63,6 +63,7 @@ test('Workers AI uses json_object plus local validation and response parser acce
   assert.deepEqual(extractStructuredContent({ choices: [{ message: { content: [{ type: 'text', text: '{"ok":true}' }] } }] }, 'fixture'), { ok: true });
   assert.deepEqual(extractStructuredContent({ choices: [{ message: { content: '```json\n{"ok":true}\n```' } }] }, 'fixture'), { ok: true });
   assert.deepEqual(extractStructuredContent({ choices: [{ message: { content: '<think>check {not json}</think> result: {"ok":true} done' } }] }, 'fixture'), { ok: true });
+  assert.deepEqual(extractStructuredContent({ choices: [{ message: { content: null, reasoning: 'analysis then {"ok":true}' } }] }, 'fixture'), { ok: true });
   assert.deepEqual(describeStructuredShape({ result: { response: 'secret generated text' }, success: true }), { result: { response: 'string' }, success: 'boolean' });
 });
 

@@ -80,7 +80,9 @@ export function extractStructuredContent(payload, provider) {
     const text = message.content.map((part) => part?.text || part?.content || '').filter(Boolean).join('');
     if (text) return parseJsonStrict(text, provider);
   }
-  const candidate = message.content ?? root?.response ?? root?.result?.response ?? root?.output_text;
+  // Cloudflare reasoning models can place the complete JSON object in
+  // `reasoning` while returning a null `content` field.
+  const candidate = message.content ?? message.reasoning ?? root?.response ?? root?.result?.response ?? root?.output_text;
   return parseJsonStrict(candidate, provider);
 }
 
