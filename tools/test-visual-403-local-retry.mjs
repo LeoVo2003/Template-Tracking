@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
-const [main, capture, service, repository, admin, workflow, color, tone] = await Promise.all([
+const [main, capture, service, repository, admin, adminJs, workflow, color, tone] = await Promise.all([
   readFile('.github/scripts/visual/main.mjs', 'utf8'),
   readFile('.github/scripts/visual/capture.mjs', 'utf8'),
   readFile('includes/class-mac-tracker-visual-service.php', 'utf8'),
   readFile('includes/class-mac-tracker-repository.php', 'utf8'),
   readFile('includes/class-mac-tracker-admin.php', 'utf8'),
+  readFile('assets/admin.js', 'utf8'),
   readFile('.github/workflows/capture-visual-tone-local.yml', 'utf8'),
   readFile('.github/scripts/visual/color-engine.mjs', 'utf8'),
   readFile('.github/scripts/visual/tone-map.mjs', 'utf8'),
@@ -41,9 +42,19 @@ test('local retry is exact-target, self-hosted, and dispatch failure remains loc
   assert.match(repository, /runner_type = 'local'/);
   assert.match(repository, /Local runner dispatch failed/);
   assert.match(admin, /local_retry_one_/);
+  assert.match(admin, /local_retry_selected/);
   assert.match(admin, /dispatch_local/);
   assert.match(workflow, /self-hosted, windows, mac-visual/);
   assert.match(workflow, /TARGET_IDS/);
+});
+
+test('selecting only blocked security cards replaces bulk recapture with local capture', () => {
+  assert.match(admin, /data-visual-local-retry/);
+  assert.match(adminJs, /localSelected=selected>0&&boxes\.every/);
+  assert.match(adminJs, /capture\.value=localSelected\?'local_retry_selected':'recapture_selected'/);
+  assert.match(adminJs, /Chụp bằng local mục chọn/);
+  assert.match(adminJs, /local_retry\)_one_/);
+  assert.match(adminJs, /queue\(ids,captureAction\)/);
 });
 
 test('manual and human locks cannot expose local retry; Retry failed skips local security rows', () => {
