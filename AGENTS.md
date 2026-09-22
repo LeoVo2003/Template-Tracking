@@ -1,5 +1,10 @@
 # Project Working Style
 
+For all UI/layout work in this repository, read docs/MAC-BOTANICAL-UI.md first.
+The MAC Botanical UI design system is the visual source of truth.
+Do not use the generic Premium TypeUI skill as the primary UI authority for this project.
+Do not change business logic during UI work unless the user explicitly requests it.
+
 Work directly in one continuous task. Do not use the Planner -> Coder -> Tester -> Reviewer subagent pipeline unless the user explicitly asks for delegation.
 
 ## Markdown-first implementation

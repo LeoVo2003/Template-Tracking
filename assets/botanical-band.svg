@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" role="img" aria-label="Abstract botanical branches">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#26372D"/><stop offset="1" stop-color="#4B4D39"/></linearGradient>
+    <radialGradient id="glow" cx="75%" cy="30%" r="70%"><stop stop-color="#93A267" stop-opacity=".34"/><stop offset="1" stop-color="#26372D" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1200" height="320" fill="url(#bg)"/><rect width="1200" height="320" fill="url(#glow)"/>
+  <g fill="none" stroke="#CADBB7" stroke-opacity=".32" stroke-width="2">
+    <path d="M60 330C185 245 208 120 285-20M170 290C250 240 344 165 380 32M1180 340C1060 260 1012 150 960-10M1080 300C998 235 918 180 870 45"/>
+  </g>
+  <g fill="#CADBB7" fill-opacity=".2">
+    <ellipse cx="123" cy="260" rx="42" ry="14" transform="rotate(-38 123 260)"/><ellipse cx="180" cy="211" rx="46" ry="15" transform="rotate(26 180 211)"/><ellipse cx="223" cy="153" rx="44" ry="14" transform="rotate(-45 223 153)"/><ellipse cx="278" cy="92" rx="43" ry="14" transform="rotate(28 278 92)"/>
+    <ellipse cx="1075" cy="265" rx="44" ry="14" transform="rotate(38 1075 265)"/><ellipse cx="1027" cy="206" rx="46" ry="15" transform="rotate(-29 1027 206)"/><ellipse cx="976" cy="144" rx="42" ry="14" transform="rotate(44 976 144)"/><ellipse cx="933" cy="84" rx="40" ry="13" transform="rotate(-25 933 84)"/>
+  </g>
+  <circle cx="744" cy="75" r="2" fill="#EDE5D8" fill-opacity=".45"/><circle cx="785" cy="48" r="1.5" fill="#EDE5D8" fill-opacity=".4"/><circle cx="830" cy="92" r="1" fill="#EDE5D8" fill-opacity=".35"/>
+</svg>
