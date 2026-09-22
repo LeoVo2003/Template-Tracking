@@ -36,6 +36,16 @@ export function classifyOverlayEvidence(descriptor = {}) {
     return { obstructive, type: 'aria_dialog', reason: obstructive ? 'dialog_evidence' : 'weak_dialog_evidence' };
   }
 
+  if ('cookie_banner' === type) {
+    const obstructive = fixed && coverage >= 0.06 && (closeControl || zIndex >= 100);
+    return { obstructive, type, reason: obstructive ? 'verified_cookie_banner' : 'inline_cookie_notice' };
+  }
+
+  if ('third_party_chat' === type) {
+    const obstructive = fixed && coverage >= 0.08 && zIndex >= 100;
+    return { obstructive, type, reason: obstructive ? 'obstructive_third_party_chat' : 'small_chat_launcher' };
+  }
+
   const obstructive = fixed && zIndex >= 1000 && coverage >= 0.15 && closeControl;
   return { obstructive, type, reason: obstructive ? 'fixed_high_coverage_with_close' : 'ordinary_page_ui' };
 }

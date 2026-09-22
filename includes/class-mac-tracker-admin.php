@@ -10,6 +10,7 @@ class MAC_Tracker_Admin {
 	private $colors;
 	private $github_actions;
 	private $current_screen = '';
+	private $standalone = false;
 
 	public function __construct( MAC_Tracker_Repository $repository, MAC_Tracker_Sync_Service $sync, MAC_Tracker_Elementor_Color_Service $colors ) {
 		$this->repository = $repository;
@@ -52,6 +53,10 @@ class MAC_Tracker_Admin {
 		add_action( 'wp_ajax_mac_tracker_visual_run_action', array( $this, 'handle_visual_run_action_ajax' ) );
 	}
 
+	public function set_standalone( $standalone ) {
+		$this->standalone = (bool) $standalone;
+	}
+
 	public function register_menu() {
 		add_menu_page( 'Projects', 'MAC Tracker', 'manage_options', 'mac-project-tracker', array( $this, 'render_projects' ), 'dashicons-chart-area', 30 );
 		add_submenu_page( 'mac-project-tracker', 'Projects', 'Projects', 'manage_options', 'mac-project-tracker', array( $this, 'render_projects' ) );
@@ -76,9 +81,22 @@ class MAC_Tracker_Admin {
 		if ( false === strpos( (string) $hook_suffix, 'mac-project-tracker' ) ) {
 			return;
 		}
+		$this->enqueue_common_assets( false );
+	}
+
+	/** Standalone routes intentionally do not load the legacy wp-admin stylesheet. */
+	public function enqueue_standalone_assets() {
+		$this->enqueue_common_assets( true );
+	}
+
+	private function enqueue_common_assets( $standalone ) {
 		wp_enqueue_style( 'mac-tracker-fonts', 'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap', array(), null );
-		wp_enqueue_style( 'mac-project-tracker-admin', MAC_TRACKER_URL . 'assets/admin.css', array( 'mac-tracker-fonts' ), MAC_TRACKER_VERSION );
-		wp_enqueue_style( 'mac-project-tracker-botanical', MAC_TRACKER_URL . 'assets/botanical.css', array( 'mac-project-tracker-admin' ), MAC_TRACKER_VERSION );
+		if ( $standalone ) {
+			wp_enqueue_style( 'mac-project-tracker-standalone', MAC_TRACKER_URL . 'assets/standalone.css', array( 'mac-tracker-fonts', 'dashicons' ), MAC_TRACKER_VERSION );
+		} else {
+			wp_enqueue_style( 'mac-project-tracker-admin', MAC_TRACKER_URL . 'assets/admin.css', array( 'mac-tracker-fonts' ), MAC_TRACKER_VERSION );
+			wp_enqueue_style( 'mac-project-tracker-botanical', MAC_TRACKER_URL . 'assets/botanical.css', array( 'mac-project-tracker-admin' ), MAC_TRACKER_VERSION );
+		}
 		wp_enqueue_script( 'mac-project-tracker-admin', MAC_TRACKER_URL . 'assets/admin.js', array(), MAC_TRACKER_VERSION, true );
 		wp_enqueue_script( 'mac-project-tracker-botanical', MAC_TRACKER_URL . 'assets/botanical-ui.js', array(), MAC_TRACKER_VERSION, true );
 		wp_enqueue_script( 'mac-tracker-visual-workflow-monitor', MAC_TRACKER_URL . 'assets/visual-workflow-monitor.js', array(), MAC_TRACKER_VERSION, true );
@@ -123,7 +141,7 @@ class MAC_Tracker_Admin {
 		?>
 		<section class="mac-tracker-dashboard-hero" aria-label="Dashboard date range">
 			<div><p class="mac-tracker-eyebrow">Design operations overview</p><h2>Project intelligence, without the noise.</h2><p>All analytics below are read-only views of the current local snapshot.</p></div>
-			<form class="mac-tracker-date-range" method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>"><input type="hidden" name="page" value="mac-project-tracker-dashboard"><label><span>From month</span><input type="month" name="month_from" value="<?php echo esc_attr( $month_from ); ?>"></label><label><span>To month</span><input type="month" name="month_to" value="<?php echo esc_attr( $month_to ); ?>"></label><button class="button" type="submit">Apply range</button><a href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-dashboard' ) ); ?>">All time</a></form>
+			<form class="mac-tracker-date-range" method="get" action="<?php echo esc_url( $this->app_url( 'dashboard' ) ); ?>"><label><span>From month</span><input type="month" name="month_from" value="<?php echo esc_attr( $month_from ); ?>"></label><label><span>To month</span><input type="month" name="month_to" value="<?php echo esc_attr( $month_to ); ?>"></label><button class="button" type="submit">Apply range</button><a href="<?php echo esc_url( $this->app_url( 'dashboard' ) ); ?>">All time</a></form>
 		</section>
 		<?php $this->notices(); ?>
 		<section class="mac-tracker-metric-grid" aria-label="Key metrics">
@@ -160,8 +178,8 @@ class MAC_Tracker_Admin {
 		</section>
 		<?php $this->notices(); ?>
 
-		<form class="mac-tracker-filters" method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>">
-			<input type="hidden" name="page" value="mac-project-tracker">
+		<form class="mac-tracker-filters" method="get" action="<?php echo esc_url( $this->app_url( 'projects' ) ); ?>">
+			<?php if ( ! $this->standalone ) : ?><input type="hidden" name="page" value="mac-project-tracker"><?php endif; ?>
 			<label><span>Search</span><input name="search" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="Project, website, ZIP or WPM ID"></label>
 			<label><span>Assignee</span><select name="assignee"><option value="">All assignees</option><?php foreach ( $this->repository->list_assignees() as $name ) : ?><option value="<?php echo esc_attr( $name ); ?>" <?php selected( $filters['assignee'], $name ); ?>><?php echo esc_html( $name ); ?></option><?php endforeach; ?></select></label>
 			<label><span>Source</span><select name="kind"><option value="">All sources</option><option value="action_design" <?php selected( $filters['kind'], 'action_design' ); ?>>Action Design</option><option value="csv_pin" <?php selected( $filters['kind'], 'csv_pin' ); ?>>CSV pin</option></select></label>
@@ -172,7 +190,7 @@ class MAC_Tracker_Admin {
 			<label><span>To month</span><input type="month" name="month_to" value="<?php echo esc_attr( $filters['month_to'] ); ?>"></label>
 			<label><span>Rows</span><select name="per_page"><option value="50" <?php selected( $filters['per_page'], 50 ); ?>>50</option><option value="100" <?php selected( $filters['per_page'], 100 ); ?>>100</option><option value="150" <?php selected( $filters['per_page'], 150 ); ?>>150</option><option value="200" <?php selected( $filters['per_page'], 200 ); ?>>200</option><option value="0" <?php selected( $filters['per_page'], 0 ); ?>>All</option></select></label>
 			<input type="hidden" name="orderby" value="<?php echo esc_attr( $filters['orderby'] ); ?>"><input type="hidden" name="order" value="<?php echo esc_attr( $filters['order'] ); ?>">
-			<div class="mac-tracker-filter-actions"><button type="submit" class="button button-primary">Apply filters</button><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker' ) ); ?>">Clear</a></div>
+			<div class="mac-tracker-filter-actions"><button type="submit" class="button button-primary">Apply filters</button><a class="button" href="<?php echo esc_url( $this->app_url( 'projects' ) ); ?>">Clear</a></div>
 		</form>
 
 		<section class="mac-tracker-table-shell">
@@ -259,7 +277,7 @@ class MAC_Tracker_Admin {
 		?>
 		<section class="mac-tracker-panel mac-tracker-panel--narrow"><div class="mac-tracker-panel__head"><div><p class="mac-tracker-eyebrow">Master roster import</p><h2><?php echo esc_html( number_format_i18n( $this->repository->pin_count() ) ); ?> saved CSV pins</h2><p>Import the original CSV baseline. Run Compare baseline once to overlay matching WPM Action Design records; the source CSV rows stay preserved locally.</p></div></div>
 		<form class="mac-tracker-upload" method="post" enctype="multipart/form-data" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-			<?php wp_nonce_field( 'mac_tracker_import_pins' ); ?><input type="hidden" name="action" value="mac_tracker_import_pins"><label><span>CSV file</span><input type="file" name="pin_csv" accept=".csv,text/csv" required></label><button class="button button-primary" type="submit">Import pins</button>
+			<?php wp_nonce_field( 'mac_tracker_import_pins' ); ?><input type="hidden" name="action" value="mac_tracker_import_pins"><span class="dashicons dashicons-upload" aria-hidden="true"></span><strong>Drop the master CSV here</strong><p>or choose a file from this computer</p><label><span class="screen-reader-text">CSV file</span><input type="file" name="pin_csv" accept=".csv,text/csv" required></label><button class="button button-primary" type="submit">Import pins</button>
 		</form></section>
 		<?php
 	}
@@ -274,6 +292,7 @@ class MAC_Tracker_Admin {
 		$auto_accept = max( 0.75, min( 0.99, (float) get_option( 'mac_tracker_visual_auto_accept', 0.85 ) ) );
 		$max_retries = max( 0, min( 3, absint( get_option( 'mac_tracker_visual_max_capture_retries', 3 ) ) ) );
 		$classifier_mode = in_array( get_option( 'mac_tracker_visual_classifier_mode', 'direct_vision' ), array( 'legacy', 'benchmark_only', 'direct_vision' ), true ) ? get_option( 'mac_tracker_visual_classifier_mode', 'direct_vision' ) : 'direct_vision';
+		$automation = method_exists( $this->repository, 'visual_automation_observability' ) ? $this->repository->visual_automation_observability() : array();
 		$queue_count = 0;
 		$review_count = 0;
 		$locked_count = 0;
@@ -309,6 +328,7 @@ class MAC_Tracker_Admin {
 				<h2 data-visual-mode-heading><?php echo 'auto' === $visual_mode ? 'Auto processing enabled' : 'Manual review first'; ?></h2>
 				<p>Mode: <strong data-visual-mode-label><?php echo 'auto' === $visual_mode ? 'AUTO' : 'MANUAL'; ?></strong> · AI: <strong><?php echo esc_html( 'smart' === $ai_strategy ? 'Qwen → Llama → Gemini judge' : strtoupper( $ai_strategy ) ); ?></strong> · Classifier: <strong><?php echo esc_html( 'direct_vision' === $classifier_mode ? 'Direct Vision' : ( 'benchmark_only' === $classifier_mode ? 'Benchmark only' : 'Legacy evidence' ) ); ?></strong>. Manual buttons always remain available.</p>
 				<div class="mac-tracker-visual-auto__signal <?php echo 'auto' === $visual_mode ? '' : 'is-manual'; ?>" data-visual-schedule-signal role="status"><i></i><strong data-visual-schedule-status><?php echo 'auto' === $visual_mode ? 'Automation on' : 'Automation paused'; ?></strong><span data-visual-schedule-detail><?php echo 'auto' === $visual_mode ? 'Scheduled Visual Tone runs are enabled.' : 'Select Auto to enable scheduled Visual Tone runs.'; ?></span></div>
+				<dl class="mac-tracker-automation-observability" aria-label="Automation observations"><div><dt>Last scheduled run</dt><dd><?php echo esc_html( ! empty( $automation['last_scheduled_at'] ) ? MAC_Tracker_Time::bangkok_label( $automation['last_scheduled_at'] ) : 'No scheduled run recorded' ); ?></dd></div><div><dt>Last successful batch</dt><dd><?php echo esc_html( ! empty( $automation['last_success_at'] ) ? MAC_Tracker_Time::bangkok_label( $automation['last_success_at'] ) : 'No successful batch recorded' ); ?></dd></div><div><dt>Cadence</dt><dd>Every 15 min · :02, :17, :32, :47</dd></div><div><dt>Processed / 60m</dt><dd><?php echo esc_html( number_format_i18n( (int) ( $automation['processed_60m'] ?? 0 ) ) ); ?></dd></div><div><dt>Queue size</dt><dd><?php echo esc_html( number_format_i18n( (int) ( $automation['queue_size'] ?? 0 ) ) ); ?></dd></div></dl>
 			</div>
 			<div class="mac-tracker-visual-auto__actions">
 				<form class="mac-tracker-visual-mode" data-visual-controls method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -318,7 +338,7 @@ class MAC_Tracker_Admin {
 					<label class="screen-reader-text" for="mac-tracker-classifier-mode">Classifier</label><select id="mac-tracker-classifier-mode" name="classifier_mode"><option value="direct_vision"<?php selected( 'direct_vision', $classifier_mode ); ?>>Direct Vision</option><option value="legacy"<?php selected( 'legacy', $classifier_mode ); ?>>Legacy evidence</option><option value="benchmark_only"<?php selected( 'benchmark_only', $classifier_mode ); ?>>Benchmark only</option></select>
 					<label>Accept ≥ <input type="number" name="auto_accept" min="0.75" max="0.99" step="0.01" value="<?php echo esc_attr( $auto_accept ); ?>"></label><label>Retries <input type="number" name="max_capture_retries" min="0" max="3" step="1" value="<?php echo esc_attr( $max_retries ); ?>"></label><span class="mac-tracker-auto-save-status" data-visual-controls-status aria-live="polite">Saved</span>
 				</form>
-				<?php if ( get_option( 'mac_tracker_github_dispatch_token', '' ) ) : ?><form class="mac-tracker-visual-run" method="post" action="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-visuals' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_run_visual_workflow' ); ?><input type="hidden" name="action" value="mac_tracker_run_visual_workflow"><button class="button button-primary" type="submit"><span class="dashicons dashicons-controls-play"></span>Run batch now</button></form><?php else : ?><a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-settings#mac-tracker-github-dispatch' ) ); ?>">Enable manual run</a><?php endif; ?>
+				<?php if ( get_option( 'mac_tracker_github_dispatch_token', '' ) ) : ?><form class="mac-tracker-visual-run" method="post" action="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-visuals' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_run_visual_workflow' ); ?><input type="hidden" name="action" value="mac_tracker_run_visual_workflow"><button class="button button-primary" type="submit"><span class="dashicons dashicons-controls-play"></span>Run batch now</button></form><?php else : ?><a class="button" href="<?php echo esc_url( $this->app_url( 'settings', array(), 'connections' ) ); ?>">Enable manual run</a><?php endif; ?>
 			</div>
 		</section>
 		<form class="mac-tracker-visual-work" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
@@ -338,7 +358,7 @@ class MAC_Tracker_Admin {
 				<?php endforeach; endif; ?>
 			</section>
 		</form>
-			<p class="mac-tracker-ai-data-link"><a href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-settings#data-management' ) ); ?>">Clear Visual Tone data in Settings <span class="dashicons dashicons-arrow-right-alt"></span></a></p>
+			<p class="mac-tracker-ai-data-link"><a href="<?php echo esc_url( $this->app_url( 'settings', array(), 'data-management' ) ); ?>">Clear Visual Tone data in Settings <span class="dashicons dashicons-arrow-right-alt"></span></a></p>
 		</section>
 		<section class="mac-tracker-ai-panel" data-ai-panel="workflow" role="tabpanel" hidden><?php $this->render_visual_workflow_monitor(); ?></section>
 		<?php $this->page_end();
@@ -368,7 +388,7 @@ class MAC_Tracker_Admin {
 			</form></div>
 			<section class="mac-tracker-connection-check" aria-label="Connection test"><div><p class="mac-tracker-eyebrow">Safe check</p><h2>Test before syncing</h2><p>Checks one WPM response only. It does not create, update, or remove project snapshots.</p></div><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_test_connection' ); ?><input type="hidden" name="action" value="mac_tracker_test_connection"><button class="button" type="submit">Test connection</button></form></section>
 		</section>
-		<section class="mac-tracker-settings-panel" data-settings-panel="automation" role="tabpanel" hidden><div class="mac-tracker-automation-summary"><div><p class="mac-tracker-eyebrow">Current configuration</p><h2>Visual Tone automation</h2><p>These are the controls already supported by the Visual Tone pipeline. Change them in AI Analysis to keep one operational control surface.</p></div><dl><div><dt>Mode</dt><dd><?php echo esc_html( strtoupper( $visual_mode ) ); ?></dd></div><div><dt>AI strategy</dt><dd><?php echo esc_html( 'smart' === $ai_strategy ? 'Qwen → Llama → Gemini judge' : strtoupper( $ai_strategy ) ); ?></dd></div><div><dt>Classifier</dt><dd><?php echo esc_html( 'direct_vision' === $classifier_mode ? 'Direct Vision' : ( 'benchmark_only' === $classifier_mode ? 'Benchmark only' : 'Legacy evidence' ) ); ?></dd></div><div><dt>Retries</dt><dd><?php echo esc_html( max( 0, min( 3, absint( get_option( 'mac_tracker_visual_max_capture_retries', 3 ) ) ) ) ); ?></dd></div></dl><a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-visuals' ) ); ?>">Open AI Analysis controls</a></div></section>
+		<section class="mac-tracker-settings-panel" data-settings-panel="automation" role="tabpanel" hidden><div class="mac-tracker-automation-summary"><div><p class="mac-tracker-eyebrow">Current configuration</p><h2>Visual Tone automation</h2><p>These are the controls already supported by the Visual Tone pipeline. Change them in AI Analysis to keep one operational control surface.</p></div><dl><div><dt>Mode</dt><dd><?php echo esc_html( strtoupper( $visual_mode ) ); ?></dd></div><div><dt>AI strategy</dt><dd><?php echo esc_html( 'smart' === $ai_strategy ? 'Qwen → Llama → Gemini judge' : strtoupper( $ai_strategy ) ); ?></dd></div><div><dt>Classifier</dt><dd><?php echo esc_html( 'direct_vision' === $classifier_mode ? 'Direct Vision' : ( 'benchmark_only' === $classifier_mode ? 'Benchmark only' : 'Legacy evidence' ) ); ?></dd></div><div><dt>Retries</dt><dd><?php echo esc_html( max( 0, min( 3, absint( get_option( 'mac_tracker_visual_max_capture_retries', 3 ) ) ) ) ); ?></dd></div></dl><a class="button button-primary" href="<?php echo esc_url( $this->app_url( 'analysis' ) ); ?>">Open AI Analysis controls</a></div></section>
 		<section class="mac-tracker-settings-panel" id="data-management" data-settings-panel="data" role="tabpanel" hidden><?php $this->render_data_management_content(); ?></section>
 		<?php $this->page_end();
 	}
@@ -386,7 +406,7 @@ class MAC_Tracker_Admin {
 				<tbody>
 				<?php if ( empty( $rows ) ) : ?><tr><td colspan="7">No skipped projects.</td></tr>
 				<?php else : foreach ( $rows as $row ) : ?><tr data-skipped-row>
-					<td><a href="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker&search=' . rawurlencode( (string) $row['wpm_project_id'] ) ) ); ?>"><?php echo esc_html( $row['project_name'] ); ?></a></td>
+					<td><a href="<?php echo esc_url( $this->app_url( 'projects', array( 'search' => (string) $row['wpm_project_id'] ) ) ); ?>"><?php echo esc_html( $row['project_name'] ); ?></a></td>
 					<td><?php echo (int) $row['wpm_project_id']; ?></td>
 					<td><?php echo esc_html( $row['website_url'] ); ?></td>
 					<td><?php echo esc_html( $row['reason'] ); ?></td>
@@ -881,7 +901,7 @@ class MAC_Tracker_Admin {
 		$user   = wp_get_current_user();
 		$nav_screen = in_array( $this->current_screen, array( 'colors', 'visuals' ), true ) ? 'visuals' : ( in_array( $this->current_screen, array( 'pins', 'settings' ), true ) ? 'settings' : $this->current_screen );
 		?>
-		<div class="wrap mac-tracker-wrap mac-tracker-wrap--<?php echo esc_attr( sanitize_html_class( $screen ) ); ?>">
+		<div class="<?php echo esc_attr( $this->standalone ? 'mac-tracker-root' : 'wrap mac-tracker-wrap' ); ?> mac-tracker-wrap--<?php echo esc_attr( sanitize_html_class( $screen ) ); ?>">
 			<div class="mac-tracker-app">
 				<aside class="mac-tracker-sidebar" id="mac-tracker-sidebar" aria-label="MAC Tracker navigation">
 					<div class="mac-tracker-sidebar__identity"><span class="mac-tracker-leaf-mark" aria-hidden="true"><i></i><i></i><i></i></span><div><strong>MAC</strong><span>Project Tracker</span></div></div>
@@ -891,12 +911,13 @@ class MAC_Tracker_Admin {
 				<div class="mac-tracker-app__workspace">
 					<header class="mac-tracker-topbar">
 						<button class="mac-tracker-sidebar-toggle" type="button" aria-controls="mac-tracker-sidebar" aria-expanded="false" data-mac-sidebar-toggle><span class="dashicons dashicons-menu-alt"></span><span class="screen-reader-text">Open navigation</span></button>
-						<div class="mac-tracker-topbar__context"><span>Workspace</span><strong><?php echo esc_html( $title ); ?></strong></div>
-						<form class="mac-tracker-global-search" method="get" action="<?php echo esc_url( admin_url( 'admin.php' ) ); ?>"><input type="hidden" name="page" value="mac-project-tracker"><label><span class="screen-reader-text">Search projects</span><span class="dashicons dashicons-search" aria-hidden="true"></span><input type="search" name="search" placeholder="Search project, WPM ID or domain"></label></form>
-						<div class="mac-tracker-topbar__user"><?php echo get_avatar( $user->ID, 32 ); ?><span><strong><?php echo esc_html( $user->display_name ); ?></strong><small>Administrator</small></span></div>
+						<div class="mac-tracker-topbar__context"><span>MAC Project Tracker</span><strong><?php echo esc_html( $title ); ?></strong></div>
+						<form class="mac-tracker-global-search" method="get" action="<?php echo esc_url( $this->app_url( 'projects' ) ); ?>"><?php if ( ! $this->standalone ) : ?><input type="hidden" name="page" value="mac-project-tracker"><?php endif; ?><label><span class="screen-reader-text">Search projects</span><span class="dashicons dashicons-search" aria-hidden="true"></span><input type="search" name="search" placeholder="Search projects…"></label></form>
+						<a class="mac-tracker-topbar__notification" href="<?php echo esc_url( $this->app_url( 'analysis', array(), 'workflow' ) ); ?>" aria-label="Open workflow activity"><span class="dashicons dashicons-bell"></span></a>
+						<div class="mac-tracker-topbar__user"><?php echo get_avatar( $user->ID, 32 ); ?><span><strong><?php echo esc_html( $user->display_name ); ?></strong><small>Administrator</small></span><span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span></div>
 					</header>
 					<main class="mac-tracker-main" id="mac-tracker-main">
-						<header class="mac-tracker-masthead"><div class="mac-tracker-masthead__title"><p class="mac-tracker-brand">MAC / PROJECT TRACKER</p><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><div class="mac-tracker-sync-strip mac-tracker-sync-strip--<?php echo esc_attr( $state ); ?>"><div class="mac-tracker-sync-route" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div><strong><?php echo esc_html( 'syncing' === $state ? 'Syncing cache' : ( 'queued' === $state ? 'Sync queued' : 'Cache ready' ) ); ?></strong><span><?php echo esc_html( $latest ? 'Last run ' . MAC_Tracker_Time::bangkok_label( $latest['started_at'] ) : 'No sync run yet' ); ?></span></div></div></header>
+						<header class="mac-tracker-masthead"><div class="mac-tracker-masthead__title"><p class="mac-tracker-brand">MAC / DESIGN OPERATIONS</p><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><div class="mac-tracker-sync-strip mac-tracker-sync-strip--<?php echo esc_attr( $state ); ?>"><div class="mac-tracker-sync-route" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div><strong><?php echo esc_html( 'syncing' === $state ? 'Syncing cache' : ( 'queued' === $state ? 'Sync queued' : 'Cache ready' ) ); ?></strong><span><?php echo esc_html( $latest ? 'Last run ' . MAC_Tracker_Time::bangkok_label( $latest['started_at'] ) : 'No sync run yet' ); ?></span></div></div></header>
 						<div class="mac-tracker-page-content">
 		<?php
 	}
@@ -917,7 +938,7 @@ class MAC_Tracker_Admin {
 			'settings'  => array( 'Settings', 'dashicons-admin-generic', 'mac-project-tracker-settings' ),
 		);
 		foreach ( $items as $key => $item ) {
-			printf( '<a class="%1$s" href="%2$s"%3$s><span class="dashicons %4$s" aria-hidden="true"></span><span>%5$s</span></a>', esc_attr( $key === $active ? 'is-active' : '' ), esc_url( admin_url( 'admin.php?page=' . $item[2] ) ), $key === $active ? ' aria-current="page"' : '', esc_attr( $item[1] ), esc_html( $item[0] ) );
+			printf( '<a class="%1$s" href="%2$s"%3$s><span class="dashicons %4$s" aria-hidden="true"></span><span>%5$s</span></a>', esc_attr( $key === $active ? 'is-active' : '' ), esc_url( $this->app_url( $key ) ), $key === $active ? ' aria-current="page"' : '', esc_attr( $item[1] ), esc_html( $item[0] ) );
 		}
 	}
 
@@ -933,8 +954,19 @@ class MAC_Tracker_Admin {
 		);
 		$quote = $quotes[ $screen ] ?? $quotes['dashboard'];
 		?>
-		<footer class="mac-tracker-editorial-band" aria-label="MAC Project Tracker editorial note"><div><p>MAC / DESIGN OPERATIONS</p><blockquote><?php echo esc_html( $quote ); ?></blockquote><span>Built for calm, visible progress.</span></div><span class="mac-tracker-editorial-band__botanical" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></footer>
+		<footer class="mac-tracker-editorial-band mac-tracker-editorial-band--<?php echo esc_attr( $screen ); ?>" aria-label="MAC Project Tracker editorial note"><div><p>MAC / DESIGN OPERATIONS</p><blockquote><?php echo esc_html( $quote ); ?></blockquote><span>Built for calm, visible progress.</span></div></footer>
 		<?php
+	}
+
+	private function app_url( $screen, array $args = array(), $fragment = '' ) {
+		$screen = sanitize_key( $screen );
+		if ( $this->standalone && class_exists( 'MAC_Tracker_App' ) ) {
+			$url = MAC_Tracker_App::url( $screen, $args );
+		} else {
+			$pages = array( 'dashboard' => 'mac-project-tracker-dashboard', 'projects' => 'mac-project-tracker', 'analysis' => 'mac-project-tracker-visuals', 'visuals' => 'mac-project-tracker-visuals', 'colors' => 'mac-project-tracker-visuals', 'skipped' => 'mac-project-tracker-skipped', 'settings' => 'mac-project-tracker-settings', 'pins' => 'mac-project-tracker-settings' );
+			$url = add_query_arg( array_merge( array( 'page' => $pages[ $screen ] ?? 'mac-project-tracker-dashboard' ), $args ), admin_url( 'admin.php' ) );
+		}
+		return $fragment ? $url . '#' . sanitize_key( $fragment ) : $url;
 	}
 
 	private function sync_buttons() {
@@ -1065,15 +1097,15 @@ class MAC_Tracker_Admin {
 	private function sort_header( $field, $label, array $filters, $class = '' ) {
 		$current = $filters['orderby'] === $field;
 		$order   = $current && 'desc' === strtolower( $filters['order'] ) ? 'asc' : 'desc';
-		$args    = array_merge( $filters, array( 'orderby' => $field, 'order' => $order, 'paged' => 1, 'page' => 'mac-project-tracker' ) );
-		$url = add_query_arg( $args, admin_url( 'admin.php' ) );
+		$args    = array_merge( $filters, array( 'orderby' => $field, 'order' => $order, 'paged' => 1 ) );
+		$url = $this->app_url( 'projects', $args );
 		echo '<th scope="col" class="mac-tracker-sort ' . esc_attr( $class ) . ( $current ? ' is-active' : '' ) . '"><a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '<span aria-hidden="true" class="dashicons ' . ( $current && 'asc' === strtolower( $filters['order'] ) ? 'dashicons-arrow-up-alt2' : 'dashicons-arrow-down-alt2' ) . '"></span></a></th>';
 	}
 
 	private function pagination( array $page, array $filters ) {
 		if ( (int) $page['total_pages'] <= 1 ) { return; }
-		$base_args = array_merge( $filters, array( 'page' => 'mac-project-tracker', 'paged' => '%#%' ) );
-		$base      = str_replace( '%25%23%25', '%#%', add_query_arg( $base_args, admin_url( 'admin.php' ) ) );
+		$base_args = array_merge( $filters, array( 'paged' => '%#%' ) );
+		$base      = str_replace( '%25%23%25', '%#%', $this->app_url( 'projects', $base_args ) );
 		$links = paginate_links( array( 'base' => $base, 'format' => '', 'current' => (int) $page['paged'], 'total' => (int) $page['total_pages'], 'type' => 'list', 'prev_text' => '‹', 'next_text' => '›' ) );
 		if ( $links ) { echo '<nav class="mac-tracker-pagination" aria-label="Project pages">' . wp_kses_post( $links ) . '</nav>'; }
 	}
@@ -1104,14 +1136,14 @@ class MAC_Tracker_Admin {
 	private function palette_cell( array $row ) {
 		$colors = $this->row_colors( $row );
 		if ( ! empty( $colors ) ) {
-			echo '<a class="mac-tracker-palette-link" href="' . esc_url( admin_url( 'admin.php?page=mac-project-tracker-visuals#action' ) ) . '" title="Open AI Analysis action queue">';
+			echo '<a class="mac-tracker-palette-link" href="' . esc_url( $this->app_url( 'analysis', array(), 'action' ) ) . '" title="Open AI Analysis action queue">';
 			foreach ( array_slice( $colors, 0, 4 ) as $color ) {
 				echo '<i style="--mac-tracker-swatch: ' . esc_attr( $color ) . '"></i>';
 			}
 			echo '<span>' . esc_html( ! empty( $row['color_locked'] ) ? 'Approved' : 'Review' ) . '</span></a>';
 			return;
 		}
-		echo '<a class="mac-tracker-palette-link mac-tracker-palette-link--empty" href="' . esc_url( admin_url( 'admin.php?page=mac-project-tracker-visuals#action' ) ) . '">Color review</a>';
+		echo '<a class="mac-tracker-palette-link mac-tracker-palette-link--empty" href="' . esc_url( $this->app_url( 'analysis', array(), 'action' ) ) . '">Color review</a>';
 	}
 
 	private function tone_options() {
@@ -1141,7 +1173,7 @@ class MAC_Tracker_Admin {
 		$title = trim( (string) ( $row['tone_reason'] ?? '' ) );
 		$content = '<i aria-hidden="true"></i><span>' . esc_html( $tone ) . '</span>';
 		if ( $link ) {
-			echo '<a class="' . esc_attr( $classes ) . '" style="' . esc_attr( $style ) . '" href="' . esc_url( admin_url( 'admin.php?page=mac-project-tracker-visuals#visual-' . (int) $row['id'] ) ) . '" title="' . esc_attr( $title ?: 'Open stored screenshot' ) . '">' . $content . '</a>';
+			echo '<a class="' . esc_attr( $classes ) . '" style="' . esc_attr( $style ) . '" href="' . esc_url( $this->app_url( 'analysis', array(), 'visual-' . (int) $row['id'] ) ) . '" title="' . esc_attr( $title ?: 'Open stored screenshot' ) . '">' . $content . '</a>';
 			return;
 		}
 		$manual = ! empty( $row['manual_locked'] ) || '' !== trim( (string) ( $row['manual_tone'] ?? '' ) );
@@ -1190,7 +1222,7 @@ class MAC_Tracker_Admin {
 		echo '<dt>Canvas</dt><dd>' . esc_html( trim( (string) ( $canvas['primary_surface'] ?? $canvas['family'] ?? '' ) . ' / ' . (string) ( $canvas['secondary_surface'] ?? '' ) . ' / ' . (string) ( $canvas['mode'] ?? '' ) . ' · confidence ' . (string) ( $canvas['surface_confidence'] ?? $canvas['confidence'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
 		echo '<dt>Deterministic sanity</dt><dd>' . esc_html( trim( (string) ( $brand['brand_primary_family'] ?? $accent['family'] ?? '' ) . ' ' . (string) ( $brand['brand_primary_score'] ?? $accent['score'] ?? '' ) . ' · sections ' . (string) ( $brand['brand_evidence'][0]['section_count'] ?? '' ) . ' · roles ' . implode( ', ', (array) ( $brand['brand_evidence'][0]['roles'] ?? array() ) ) ) ?: 'Not available' ) . '</dd>';
 		echo '<dt>Primary accent</dt><dd>' . esc_html( trim( (string) ( $accent['family'] ?? '' ) . ' ' . (string) ( $accent['hex'] ?? '' ) ) ?: 'Not available' ) . '</dd>';
-		if ( $overlay_cleanup ) { echo '<dt>Overlay cleanup</dt><dd>' . esc_html( wp_json_encode( array( 'detected' => absint( $overlay_cleanup['detected'] ?? 0 ), 'closed' => absint( $overlay_cleanup['closed'] ?? 0 ), 'removed' => absint( $overlay_cleanup['removed'] ?? 0 ), 'scroll_restored' => ! empty( $overlay_cleanup['scroll_restored'] ), 'types' => array_slice( array_map( 'sanitize_key', (array) ( $overlay_cleanup['types'] ?? array() ) ), 0, 12 ) ) ) ) . '</dd>'; }
+		if ( $overlay_cleanup ) { echo '<dt>Overlay cleanup</dt><dd>' . esc_html( wp_json_encode( array( 'detected' => absint( $overlay_cleanup['detected'] ?? 0 ), 'closed' => absint( $overlay_cleanup['closed'] ?? 0 ), 'removed' => absint( $overlay_cleanup['removed'] ?? 0 ), 'remaining' => absint( $overlay_cleanup['remaining'] ?? 0 ), 'passes' => absint( $overlay_cleanup['passes'] ?? 1 ), 'scroll_restored' => ! empty( $overlay_cleanup['scroll_restored'] ), 'types' => array_slice( array_map( 'sanitize_key', (array) ( $overlay_cleanup['types'] ?? array() ) ), 0, 12 ) ) ) ) . '</dd>'; }
 		echo '<dt>Provider decisions</dt><dd>' . esc_html( wp_json_encode( array_map( static function( $attempt ) { return array( 'provider' => $attempt['provider'] ?? '', 'model' => $attempt['model'] ?? '', 'brand' => $attempt['brand'] ?? $attempt['primary_family'] ?? '', 'canvas' => $attempt['canvas'] ?? $attempt['primary_surface'] ?? '', 'tone' => $attempt['tone'] ?? $attempt['tone_group'] ?? '', 'confidence' => $attempt['confidence'] ?? '', 'reason' => $attempt['reason'] ?? '', 'mode' => $attempt['canvas_mode'] ?? '' ); }, (array) ( $raw['attempts'] ?? array() ) ) ) ) . '</dd>';
 		echo '<dt>Final reason</dt><dd>' . esc_html( (string) ( $outcome['reason'] ?? $row['tone_reason'] ?? 'Pending' ) ) . '</dd>';
 		echo '<dt>Provider errors</dt><dd>' . esc_html( wp_json_encode( (array) ( $raw['errors'] ?? array() ) ) ) . '</dd></dl></details>';

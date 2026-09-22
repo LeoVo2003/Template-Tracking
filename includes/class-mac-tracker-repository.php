@@ -730,6 +730,20 @@ class MAC_Tracker_Repository {
 		return $summary;
 	}
 
+	/** Read-only AUTO telemetry for the control room; no queue state is changed. */
+	public function visual_automation_observability() {
+		$throughput = $this->visual_run_throughput_summary();
+		$last_scheduled = (string) $this->wpdb->get_var( "SELECT MAX(COALESCE(started_at, created_at)) FROM {$this->visual_runs} WHERE source_action = 'scheduled_auto'" );
+		$last_success = (string) $this->wpdb->get_var( "SELECT MAX(COALESCE(completed_at, updated_at)) FROM {$this->visual_runs} WHERE status = 'completed' AND (conclusion = 'success' OR success_count > 0)" );
+		$queue_size = (int) $this->wpdb->get_var( "SELECT COUNT(*) FROM {$this->visuals} WHERE manual_locked = 0 AND human_locked = 0 AND pipeline_status IN ('idle','capture_queued','captured','analysis_queued','retry_wait','failed','needs_review')" );
+		return array(
+			'last_scheduled_at' => $last_scheduled,
+			'last_success_at'   => $last_success,
+			'processed_60m'     => max( 0, (int) ( $throughput['processed_projects'] ?? 0 ) ),
+			'queue_size'        => max( 0, $queue_size ),
+		);
+	}
+
 	public function visual_run_detail( $run_id ) {
 		$run = $this->visual_run_row( $run_id );
 		if ( ! $run ) { return null; }

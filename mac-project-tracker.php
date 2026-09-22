@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MAC Project Tracker
  * Description: Internal WPM project tracker.
- * Version: 0.20.28
+ * Version: 0.20.29
  * Requires at least: 6.5
  * Requires PHP: 7.4
  * Author: MAC Marketing
@@ -12,7 +12,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'MAC_TRACKER_VERSION', '0.20.28' );
+define( 'MAC_TRACKER_VERSION', '0.20.29' );
 define( 'MAC_TRACKER_AD_COMPLETED_CUTOFF', '2026-07-01' );
 // Projects outside the approved CSV roster join only from this WPM era onward.
 define( 'MAC_TRACKER_PROJECT_SYNC_START', '2026-04-01 00:00:00' );
@@ -32,6 +32,7 @@ require_once MAC_TRACKER_DIR . 'includes/class-mac-tracker-pin-import.php';
 require_once MAC_TRACKER_DIR . 'includes/class-mac-tracker-wpm-client.php';
 require_once MAC_TRACKER_DIR . 'includes/class-mac-tracker-sync-service.php';
 require_once MAC_TRACKER_DIR . 'includes/class-mac-tracker-admin.php';
+require_once MAC_TRACKER_DIR . 'includes/class-mac-tracker-app.php';
 require_once MAC_TRACKER_DIR . 'includes/class-mac-tracker-github-updater.php';
 
 register_activation_hook( MAC_TRACKER_FILE, array( 'MAC_Tracker_Activator', 'activate' ) );
@@ -45,13 +46,13 @@ function mac_tracker_boot() {
 	$sync       = new MAC_Tracker_Sync_Service( $repository );
 	$colors     = new MAC_Tracker_Elementor_Color_Service( $repository );
 	$visuals    = new MAC_Tracker_Visual_Service( $repository );
+	$admin      = new MAC_Tracker_Admin( $repository, $sync, $colors );
 	$sync->register();
 	$colors->register();
 	$visuals->register();
 	( new MAC_Tracker_GitHub_Updater() )->register();
-	if ( is_admin() ) {
-		( new MAC_Tracker_Admin( $repository, $sync, $colors ) )->register();
-	}
+	( new MAC_Tracker_App( $admin ) )->register();
+	if ( is_admin() ) { $admin->register(); }
 }
 
 function mac_tracker_import_pin_csv( $path ) {

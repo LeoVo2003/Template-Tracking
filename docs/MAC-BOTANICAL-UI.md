@@ -9,23 +9,28 @@ MAC Tracker is a quiet, premium design-operations workspace: botanical and edito
 ## Tokens
 
 ```css
---mac-forest-900: #26372D;
---mac-forest-800: #2F4A3A;
---mac-olive-800: #4B4D39;
---mac-sage-600: #6E7C61;
---mac-sage-400: #93A267;
---mac-sage-200: #CADBB7;
---mac-linen-100: #EDE5D8;
---mac-beige-200: #D8C8B4;
---mac-taupe-400: #9B8D7A;
---mac-paper: #F8F5EF;
---mac-surface: #FCFAF6;
---mac-white: #FFFFFF;
---mac-ink-900: #1F271F;
---mac-ink-700: #3E473E;
---mac-ink-500: #687067;
---mac-line: rgba(47, 74, 58, 0.14);
+--mac-forest-950: #343529;
+--mac-forest-900: #464735;
+--mac-forest-800: #52543D;
+--mac-moss: #7F8765;
+--mac-olive: #9AA872;
+--mac-sage: #CAD8B7;
+--mac-linen: #E8E1CF;
+--mac-paper: #F5F0E4;
+--mac-surface: #FFFDF8;
+--mac-wash: #EEE7DA;
+--mac-mushroom: #756F64;
+--mac-ink: #2D3026;
+--mac-line: rgba(70, 71, 53, 0.16);
+
+/* Legacy admin stylesheet aliases retained for compatibility. */
+--mac-sage-600: var(--mac-moss);
+--mac-linen-100: var(--mac-linen);
 ```
+
+The identity is olive rather than blue-green: dark olive provides structure,
+linen cream and warm beige carry most surfaces, mushroom taupe handles muted
+copy, and forest green appears only as a supporting accent.
 
 Semantic states use text plus color: muted green for success/locked, amber for review/warning, blue for running/info, red for failed/blocked, and taupe for idle/neutral.
 
@@ -46,7 +51,7 @@ Never use the serif face in dense tables or forms.
 
 ## App shell and navigation
 
-MAC Tracker routes use a plugin-owned full-page shell: fixed forest sidebar, light quiet topbar, paper content canvas. The sidebar contains exactly Dashboard, Projects, AI Analysis, Skipped Projects, and Settings. Provide a small WordPress Admin escape link and version information. Scope every chrome-neutralizing rule to the MAC Tracker body class so normal wp-admin screens remain untouched.
+MAC Tracker routes use a plugin-owned full-page shell at `/mac-project-tracker/`: fixed linen sidebar, quiet topbar, and paper content canvas. The clean child routes are `/projects/`, `/analysis/`, `/skipped/`, and `/settings/`. The sidebar contains exactly Dashboard, Projects, AI Analysis, Skipped Projects, and Settings. Provide a small WordPress Admin escape link and version information. Scope every chrome-neutralizing rule to the MAC Tracker body class so normal wp-admin screens remain untouched.
 
 At tablet widths the sidebar becomes a drawer. At mobile widths content stacks, tables scroll horizontally, and decoration never covers controls.
 

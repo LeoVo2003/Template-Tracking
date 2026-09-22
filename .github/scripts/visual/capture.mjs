@@ -53,7 +53,13 @@ const overlayCloseSelectors = [
   '.mfp-close',
   '.modal .close',
   '.dialog-close',
+  '.cookie-close',
+  '.cookie-consent-close',
+  '[data-cookiebanner="accept_button"]',
+  '[data-testid="cookie-policy-manage-dialog-decline-button"]',
 ];
+
+const overlayCloseText = /^(close|dismiss|no thanks|not now|accept|accept all|agree|allow all|got it|continue|continue without accepting)$/i;
 
 async function scanOverlayEvidence(page) {
   return page.evaluate((closeSelectors) => {
@@ -61,7 +67,9 @@ async function scanOverlayEvidence(page) {
       '[role="dialog"]', '[aria-modal="true"]', '.elementor-popup-modal',
       '.pum', '.pum-container', '.pum-overlay', '.modal', '.modal-backdrop',
       '.mfp-wrap', '.mfp-bg', '.dialog-overlay', '[class*="popup"]',
-      '[class*="modal"]', '[class*="overlay"]', '[style*="position: fixed"]',
+      '[class*="modal"]', '[class*="overlay"]', '[class*="cookie"]', '[class*="consent"]',
+      '[class*="intercom"]', '[class*="chat-widget"]', 'iframe[title*="chat" i]',
+      '[style*="position: fixed"]',
       '[style*="position:fixed"]',
     ];
     const elements = [...new Set(document.querySelectorAll(selectors.join(',')))];
@@ -83,6 +91,8 @@ async function scanOverlayEvidence(page) {
       else if (/mfp-wrap/.test(hint)) type = 'mfp_popup';
       else if (element.getAttribute('aria-modal') === 'true') type = 'aria_modal';
       else if (/(^|\s)modal(\s|$)/.test(hint)) type = 'bootstrap_modal';
+      else if (/cookie|consent|gdpr/.test(hint)) type = 'cookie_banner';
+      else if (/intercom|chat-widget|chatbot/.test(hint) || (element.tagName === 'IFRAME' && /chat/i.test(element.getAttribute('title') || ''))) type = 'third_party_chat';
       const token = element.getAttribute('data-mac-overlay-token') || `mac-overlay-${Date.now()}-${sequence++}`;
       element.setAttribute('data-mac-overlay-token', token);
       const clippedWidth = Math.max(0, Math.min(innerWidth, rect.right) - Math.max(0, rect.left));
@@ -95,7 +105,7 @@ async function scanOverlayEvidence(page) {
         sticky: style.position === 'sticky',
         z_index: Number.parseInt(style.zIndex, 10) || 0,
         coverage: Number(((clippedWidth * clippedHeight) / viewportArea).toFixed(4)),
-        has_close_control: closeSelectors.some((selector) => Boolean(element.matches(selector) || element.querySelector(selector))),
+        has_close_control: closeSelectors.some((selector) => Boolean(element.matches(selector) || element.querySelector(selector))) || [...element.querySelectorAll('button,[role="button"],a')].some((control) => /^(close|dismiss|no thanks|not now|accept|accept all|agree|allow all|got it|continue|continue without accepting)$/i.test((control.textContent || '').trim())),
         aria_modal: element.getAttribute('aria-modal') === 'true',
         role_dialog: element.getAttribute('role') === 'dialog',
       });
@@ -106,39 +116,59 @@ async function scanOverlayEvidence(page) {
 
 /** Close or remove only verified obstructive overlays after lazy scrolling. */
 export async function dismissObstructiveOverlays(page) {
-  const initial = await bounded(scanOverlayEvidence(page), 3500, []);
-  const detected = (Array.isArray(initial) ? initial : []).filter((row) => classifyOverlayEvidence(row).obstructive);
-  const detectedTokens = new Set(detected.map((row) => row.token));
-  const types = new Set(detected.map((row) => classifyOverlayEvidence(row).type));
+  const types = new Set();
+  const seenTokens = new Set();
+  let detectedCount = 0;
+  let closed = 0;
+  let removed = 0;
+  let remaining = [];
+  let passes = 0;
 
-  if (detected.length) {
-    await bounded(page.evaluate(({ tokens, closeSelectors }) => {
+  // One normal pass plus one bounded residue pass for late cookie/modal layers.
+  for (let pass = 0; pass < 2; pass += 1) {
+    const scan = await bounded(scanOverlayEvidence(page), 3500, []);
+    const detected = (Array.isArray(scan) ? scan : []).filter((row) => classifyOverlayEvidence(row).obstructive);
+    if (!detected.length) { remaining = []; break; }
+    passes += 1;
+    detected.forEach((row) => {
+      if (!seenTokens.has(row.token)) { detectedCount += 1; seenTokens.add(row.token); }
+      types.add(classifyOverlayEvidence(row).type);
+    });
+
+    await bounded(page.evaluate(({ tokens, closeSelectors, closeTextSource }) => {
+      const closeText = new RegExp(closeTextSource, 'i');
       for (const token of tokens) {
         const element = document.querySelector(`[data-mac-overlay-token="${token}"]`);
         if (!element) continue;
-        const close = closeSelectors.map((selector) => element.matches(selector) ? element : element.querySelector(selector)).find(Boolean);
+        const controls = [...closeSelectors.map((selector) => element.matches(selector) ? element : element.querySelector(selector)), ...element.querySelectorAll('button,[role="button"],a')].filter(Boolean);
+        const close = controls.find((control) => closeSelectors.some((selector) => control.matches?.(selector))) || controls.find((control) => closeText.test((control.textContent || '').trim()));
         if (close && 'function' === typeof close.click) close.click();
       }
-    }, { tokens: [...detectedTokens], closeSelectors: overlayCloseSelectors }), 2500, null);
+    }, { tokens: detected.map((row) => row.token), closeSelectors: overlayCloseSelectors, closeTextSource: overlayCloseText.source }), 2500, null);
     await page.keyboard.press('Escape').catch(() => null);
     await page.waitForTimeout(320);
+
+    const afterClose = await bounded(scanOverlayEvidence(page), 3500, []);
+    remaining = (Array.isArray(afterClose) ? afterClose : []).filter((row) => classifyOverlayEvidence(row).obstructive);
+    const remainingTokens = new Set(remaining.map((row) => row.token));
+    closed += detected.filter((row) => !remainingTokens.has(row.token)).length;
+    const removedThisPass = await bounded(page.evaluate((tokens) => {
+      let count = 0;
+      for (const token of tokens) {
+        const element = document.querySelector(`[data-mac-overlay-token="${token}"]`);
+        if (!element || !element.isConnected) continue;
+        element.remove();
+        count += 1;
+      }
+      return count;
+    }, remaining.map((row) => row.token)), 2500, 0);
+    removed += Number(removedThisPass || 0);
+    await page.waitForTimeout(180);
   }
 
-  const afterClose = await bounded(scanOverlayEvidence(page), 3500, []);
-  const remaining = (Array.isArray(afterClose) ? afterClose : []).filter((row) => classifyOverlayEvidence(row).obstructive);
-  const remainingTokens = new Set(remaining.map((row) => row.token));
-  const closed = detected.filter((row) => !remainingTokens.has(row.token)).length;
+  const finalScan = await bounded(scanOverlayEvidence(page), 3500, []);
+  remaining = (Array.isArray(finalScan) ? finalScan : []).filter((row) => classifyOverlayEvidence(row).obstructive);
   remaining.forEach((row) => types.add(classifyOverlayEvidence(row).type));
-  const removed = await bounded(page.evaluate((tokens) => {
-    let count = 0;
-    for (const token of tokens) {
-      const element = document.querySelector(`[data-mac-overlay-token="${token}"]`);
-      if (!element || !element.isConnected) continue;
-      element.remove();
-      count += 1;
-    }
-    return count;
-  }, remaining.map((row) => row.token)), 2500, 0);
 
   const scrollRestored = await bounded(page.evaluate(() => {
     const html = document.documentElement;
@@ -158,10 +188,12 @@ export async function dismissObstructiveOverlays(page) {
   }), 2500, false);
 
   return {
-    detected: Math.max(detected.length, closed + Number(removed || 0)),
+    detected: Math.max(detectedCount, closed + removed),
     closed,
-    removed: Number(removed || 0),
+    removed,
     scroll_restored: Boolean(scrollRestored),
+    remaining: remaining.length,
+    passes,
     types: [...types].filter(Boolean).slice(0, 12),
   };
 }
@@ -202,9 +234,10 @@ export async function captureRenderedPage(browser, requestedUrl, snapshotId, run
     await activateLazyContent(page);
     await stabilize(page);
     const overlayCleanup = await dismissObstructiveOverlays(page);
-    await page.waitForTimeout(360);
+    await page.waitForLoadState('networkidle', { timeout: 2500 }).catch(() => null);
+    await page.waitForTimeout(520);
     await page.evaluate(() => window.scrollTo(0, 0));
-    await page.waitForTimeout(240);
+    await page.waitForTimeout(320);
     const validation = await validatePage(page, response, resolvedCaptureUrl);
     const samples = await collectUiSamples(page);
     const pageHeight = await page.evaluate(() => Math.max(document.body?.scrollHeight || 0, document.documentElement?.scrollHeight || 0));
