@@ -14,12 +14,13 @@ const [bootstrap, app, admin, repository, css, capture, overlay, workflow] = awa
   read('.github/workflows/capture-visual-tone.yml'),
 ]);
 
-test('clean standalone routes reuse WordPress auth and map every legacy page', () => {
+test('clean standalone routes are public read-only and map every legacy page', () => {
   for (const route of ['mac-project-tracker/', 'mac-project-tracker/projects/', 'mac-project-tracker/analysis/', 'mac-project-tracker/skipped/', 'mac-project-tracker/settings/']) assert.match(app, new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(app, /is_user_logged_in\(\)/);
-  assert.match(app, /wp_login_url\( \$this->current_url\(\) \)/);
-  assert.match(app, /current_user_can\( 'manage_options' \)/);
-  assert.match(app, /'response' => 403/);
+  assert.doesNotMatch(app, /is_user_logged_in\(\)/);
+  assert.match(app, /set_public_view\( ! current_user_can\( 'manage_options' \) \)/);
+  assert.match(admin, /if \( \$this->public_view \) \{[\s\S]*?return;/);
+  assert.match(admin, /! \$this->standalone && ! current_user_can\( 'manage_options' \)/);
+  assert.match(css, /\.is-public-view form\[method="post"\]/);
   for (const page of ['mac-project-tracker-dashboard', 'mac-project-tracker-visuals', 'mac-project-tracker-colors', 'mac-project-tracker-pins']) assert.match(app, new RegExp(page));
   assert.match(bootstrap, /new MAC_Tracker_App\( \$admin \)/);
 });

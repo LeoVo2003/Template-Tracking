@@ -3,10 +3,12 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Clean, authenticated application routes for MAC Project Tracker.
+ * Clean public read-only routes for MAC Project Tracker.
  *
- * This class owns presentation routing only. Mutating requests still travel
- * through the existing admin-post/admin-ajax/REST handlers.
+ * Administrators keep the existing operational controls. Guests and users
+ * without manage_options receive the same data presentation without mutation
+ * scripts or controls. Mutating requests still travel through the protected
+ * admin-post/admin-ajax/REST handlers.
  */
 class MAC_Tracker_App {
 
@@ -77,17 +79,11 @@ class MAC_Tracker_App {
 		if ( '' === $screen ) {
 			return;
 		}
-		if ( ! is_user_logged_in() ) {
-			wp_safe_redirect( wp_login_url( $this->current_url() ) );
-			exit;
-		}
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You do not have permission to access MAC Tracker.', 'mac-project-tracker' ), esc_html__( 'Access denied', 'mac-project-tracker' ), array( 'response' => 403 ) );
-		}
 
 		status_header( 200 );
 		nocache_headers();
 		$this->admin->set_standalone( true );
+		$this->admin->set_public_view( ! current_user_can( 'manage_options' ) );
 		$this->admin->enqueue_standalone_assets();
 		$renderers = array(
 			'dashboard' => 'render_dashboard',

@@ -53,6 +53,11 @@ Never use the serif face in dense tables or forms.
 
 MAC Tracker routes use a plugin-owned full-page shell at `/mac-project-tracker/`: fixed linen sidebar, quiet topbar, and paper content canvas. The clean child routes are `/projects/`, `/analysis/`, `/skipped/`, and `/settings/`. The sidebar contains exactly Dashboard, Projects, AI Analysis, Skipped Projects, and Settings. Provide a small WordPress Admin escape link and version information. Scope every chrome-neutralizing rule to the MAC Tracker body class so normal wp-admin screens remain untouched.
 
+Standalone routes are publicly viewable in read-only mode. Guests must not
+receive mutation scripts or controls. Existing admin-post, AJAX, REST, nonce,
+and `manage_options` protection remains authoritative for every write action.
+Administrators retain the full operational interface through the same routes.
+
 At tablet widths the sidebar becomes a drawer. At mobile widths content stacks, tables scroll horizontally, and decoration never covers controls.
 
 ## Components

@@ -11,6 +11,7 @@ class MAC_Tracker_Admin {
 	private $github_actions;
 	private $current_screen = '';
 	private $standalone = false;
+	private $public_view = false;
 
 	public function __construct( MAC_Tracker_Repository $repository, MAC_Tracker_Sync_Service $sync, MAC_Tracker_Elementor_Color_Service $colors ) {
 		$this->repository = $repository;
@@ -57,6 +58,10 @@ class MAC_Tracker_Admin {
 		$this->standalone = (bool) $standalone;
 	}
 
+	public function set_public_view( $public_view ) {
+		$this->public_view = (bool) $public_view;
+	}
+
 	public function register_menu() {
 		add_menu_page( 'Projects', 'MAC Tracker', 'manage_options', 'mac-project-tracker', array( $this, 'render_projects' ), 'dashicons-chart-area', 30 );
 		add_submenu_page( 'mac-project-tracker', 'Projects', 'Projects', 'manage_options', 'mac-project-tracker', array( $this, 'render_projects' ) );
@@ -97,8 +102,11 @@ class MAC_Tracker_Admin {
 			wp_enqueue_style( 'mac-project-tracker-admin', MAC_TRACKER_URL . 'assets/admin.css', array( 'mac-tracker-fonts' ), MAC_TRACKER_VERSION );
 			wp_enqueue_style( 'mac-project-tracker-botanical', MAC_TRACKER_URL . 'assets/botanical.css', array( 'mac-project-tracker-admin' ), MAC_TRACKER_VERSION );
 		}
-		wp_enqueue_script( 'mac-project-tracker-admin', MAC_TRACKER_URL . 'assets/admin.js', array(), MAC_TRACKER_VERSION, true );
 		wp_enqueue_script( 'mac-project-tracker-botanical', MAC_TRACKER_URL . 'assets/botanical-ui.js', array(), MAC_TRACKER_VERSION, true );
+		if ( $this->public_view ) {
+			return;
+		}
+		wp_enqueue_script( 'mac-project-tracker-admin', MAC_TRACKER_URL . 'assets/admin.js', array(), MAC_TRACKER_VERSION, true );
 		wp_enqueue_script( 'mac-tracker-visual-workflow-monitor', MAC_TRACKER_URL . 'assets/visual-workflow-monitor.js', array(), MAC_TRACKER_VERSION, true );
 		wp_localize_script( 'mac-project-tracker-admin', 'macTrackerVisual', array(
 			'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
@@ -901,12 +909,12 @@ class MAC_Tracker_Admin {
 		$user   = wp_get_current_user();
 		$nav_screen = in_array( $this->current_screen, array( 'colors', 'visuals' ), true ) ? 'visuals' : ( in_array( $this->current_screen, array( 'pins', 'settings' ), true ) ? 'settings' : $this->current_screen );
 		?>
-		<div class="<?php echo esc_attr( $this->standalone ? 'mac-tracker-root' : 'wrap mac-tracker-wrap' ); ?> mac-tracker-wrap--<?php echo esc_attr( sanitize_html_class( $screen ) ); ?>">
+		<div class="<?php echo esc_attr( $this->standalone ? 'mac-tracker-root' : 'wrap mac-tracker-wrap' ); ?> mac-tracker-wrap--<?php echo esc_attr( sanitize_html_class( $screen ) ); ?><?php echo $this->public_view ? ' is-public-view' : ''; ?>">
 			<div class="mac-tracker-app">
 				<aside class="mac-tracker-sidebar" id="mac-tracker-sidebar" aria-label="MAC Tracker navigation">
 					<div class="mac-tracker-sidebar__identity"><span class="mac-tracker-leaf-mark" aria-hidden="true"><i></i><i></i><i></i></span><div><strong>MAC</strong><span>Project Tracker</span></div></div>
 					<nav class="mac-tracker-sidebar__nav"><?php $this->app_navigation( $nav_screen ); ?></nav>
-					<div class="mac-tracker-sidebar__utility"><a href="<?php echo esc_url( admin_url() ); ?>"><span class="dashicons dashicons-arrow-left-alt"></span>WordPress Admin</a><span>Version <?php echo esc_html( MAC_TRACKER_VERSION ); ?></span></div>
+					<div class="mac-tracker-sidebar__utility"><a href="<?php echo esc_url( $this->public_view ? wp_login_url( $this->app_url( $screen ) ) : admin_url() ); ?>"><span class="dashicons dashicons-arrow-left-alt"></span><?php echo esc_html( $this->public_view ? 'Admin sign in' : 'WordPress Admin' ); ?></a><span>Version <?php echo esc_html( MAC_TRACKER_VERSION ); ?></span></div>
 				</aside>
 				<div class="mac-tracker-app__workspace">
 					<header class="mac-tracker-topbar">
@@ -914,7 +922,7 @@ class MAC_Tracker_Admin {
 						<div class="mac-tracker-topbar__context"><span>MAC Project Tracker</span><strong><?php echo esc_html( $title ); ?></strong></div>
 						<form class="mac-tracker-global-search" method="get" action="<?php echo esc_url( $this->app_url( 'projects' ) ); ?>"><?php if ( ! $this->standalone ) : ?><input type="hidden" name="page" value="mac-project-tracker"><?php endif; ?><label><span class="screen-reader-text">Search projects</span><span class="dashicons dashicons-search" aria-hidden="true"></span><input type="search" name="search" placeholder="Search projects…"></label></form>
 						<a class="mac-tracker-topbar__notification" href="<?php echo esc_url( $this->app_url( 'analysis', array(), 'workflow' ) ); ?>" aria-label="Open workflow activity"><span class="dashicons dashicons-bell"></span></a>
-						<div class="mac-tracker-topbar__user"><?php echo get_avatar( $user->ID, 32 ); ?><span><strong><?php echo esc_html( $user->display_name ); ?></strong><small>Administrator</small></span><span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span></div>
+						<div class="mac-tracker-topbar__user"><?php echo get_avatar( $user->ID, 32 ); ?><span><strong><?php echo esc_html( $this->public_view ? 'Public viewer' : $user->display_name ); ?></strong><small><?php echo esc_html( $this->public_view ? 'Read only' : 'Administrator' ); ?></small></span><?php if ( ! $this->public_view ) : ?><span class="dashicons dashicons-arrow-down-alt2" aria-hidden="true"></span><?php endif; ?></div>
 					</header>
 					<main class="mac-tracker-main" id="mac-tracker-main">
 						<header class="mac-tracker-masthead"><div class="mac-tracker-masthead__title"><p class="mac-tracker-brand">MAC / DESIGN OPERATIONS</p><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><div class="mac-tracker-sync-strip mac-tracker-sync-strip--<?php echo esc_attr( $state ); ?>"><div class="mac-tracker-sync-route" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div><strong><?php echo esc_html( 'syncing' === $state ? 'Syncing cache' : ( 'queued' === $state ? 'Sync queued' : 'Cache ready' ) ); ?></strong><span><?php echo esc_html( $latest ? 'Last run ' . MAC_Tracker_Time::bangkok_label( $latest['started_at'] ) : 'No sync run yet' ); ?></span></div></div></header>
@@ -1411,7 +1419,7 @@ class MAC_Tracker_Admin {
 		return in_array( $status, array( 'success', 'running', 'failed', 'waiting' ), true ) ? $status : 'muted';
 	}
 
-	private function require_capability() { if ( ! current_user_can( 'manage_options' ) ) { wp_die( esc_html__( 'You do not have permission to access MAC Tracker.' ) ); } }
+	private function require_capability() { if ( ! $this->standalone && ! current_user_can( 'manage_options' ) ) { wp_die( esc_html__( 'You do not have permission to access MAC Tracker.' ) ); } }
 	private function require_request( $action ) { $this->require_capability(); check_admin_referer( $action ); }
 	private function redirect( $page, $message, $type ) { wp_safe_redirect( add_query_arg( array( 'page' => $page, 'mac_tracker_notice' => $message, 'mac_tracker_notice_type' => $type ), admin_url( 'admin.php' ) ) ); exit; }
 }
