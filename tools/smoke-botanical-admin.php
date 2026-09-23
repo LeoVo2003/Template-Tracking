@@ -47,10 +47,16 @@ class MAC_Tracker_Repository {
 	}
 	public function project_page() { return array( 'rows' => array( $this->project() ), 'total' => 1, 'per_page' => 0, 'paged' => 1, 'total_pages' => 1 ); }
 	public function visual_tone_filter_groups() { return array(); }
+	public function list_layout_groups() { return array( array( 'value' => 'demo:s18', 'label' => 'S18' ) ); }
 	public function list_assignees() { return array( 'Alex' ); }
 	public function visual_tones() { return array( 'Vàng trắng', 'Cần duyệt' ); }
 	public function visual_tone_palette() { return array( 'Vàng trắng' => array( 'tone_a' => '#C5A64A', 'tone_b' => '#FFFFFF' ) ); }
 	public function visual_stats() { return array( 'captured' => 1, 'classified' => 1, 'failed' => 0 ); }
+	public function visual_review_counts() { return array( 'processing' => 0, 'review' => 1, 'locked' => 0 ); }
+	public function color_review_counts() { return array( 'total' => 1, 'pending' => 1, 'approved' => 0 ); }
+	public function visual_automation_observability() { return array( 'last_scheduled_at' => '', 'last_success_at' => '', 'processed_60m' => 0, 'queue_size' => 0 ); }
+	public function visual_review_page() { return array( 'rows' => array( $this->project() ), 'total' => 1, 'per_page' => 100, 'paged' => 1, 'total_pages' => 1 ); }
+	public function color_review_page() { return array( 'rows' => array( $this->project() ), 'total' => 1, 'per_page' => 100, 'paged' => 1, 'total_pages' => 1 ); }
 	public function visual_review_rows() { return array(); }
 	public function color_review_rows() { return array(); }
 	public function recent_logs() { return array( array( 'status' => 'success', 'processed' => 1, 'message' => 'Sync completed.', 'started_at' => '2026-09-22 03:00:00' ) ); }

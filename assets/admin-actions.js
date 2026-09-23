@@ -12,9 +12,11 @@
     anchor.parentNode.insertBefore(notice, anchor);
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
-    var form = document.querySelector('.mac-tracker-visual-work');
+  function bindVisualActions(scope) {
+    var form = (scope || document).querySelector('.mac-tracker-visual-work');
     if (!form || 'undefined' === typeof macTrackerVisual) return;
+    if (form.dataset.macVisualBound) return;
+    form.dataset.macVisualBound = '1';
     var cards = Array.from(form.querySelectorAll('[data-visual-card]'));
     var selectAll = form.querySelector('[data-visual-select-all]');
     var timer = null;
@@ -116,6 +118,7 @@
         .then(function (payload) {
           if (!payload.success) throw new Error(payload.data?.message || 'Visual action failed.');
           ajaxNotice(form, payload.data.message || 'Action queued.', false, 'data-visual-ajax-notice');
+          document.dispatchEvent(new CustomEvent('mac:invalidatefragments'));
           return fetchStatuses(ids).then(startPolling);
         })
         .catch(function (error) { ajaxNotice(form, error.message || 'Visual action failed.', true, 'data-visual-ajax-notice'); })
@@ -125,11 +128,17 @@
     cards.filter(function (card) { return card.querySelector('[data-visual-active]'); }).forEach(function (card) { card.dataset.visualPoll = '1'; });
     if (cards.some(function (card) { return '1' === card.dataset.visualPoll; })) startPolling();
     syncSelection();
-  });
+  }
 
-  document.addEventListener('DOMContentLoaded', function () {
+  document.addEventListener('DOMContentLoaded', function () { bindVisualActions(document); });
+  document.addEventListener('mac:fragmentloaded', function (event) { bindVisualActions(event.detail?.panel || document); });
+
+  function bindVisualControls(scope) {
     if ('undefined' === typeof macTrackerVisual) return;
-    var runForm = document.querySelector('.mac-tracker-visual-run');
+    var root = scope || document;
+    var runForm = root.querySelector('.mac-tracker-visual-run');
+    if (runForm?.dataset.macRunBound) runForm = null;
+    if (runForm) runForm.dataset.macRunBound = '1';
     runForm?.addEventListener('submit', function (event) {
       event.preventDefault();
       var button = runForm.querySelector('button');
@@ -140,14 +149,17 @@
         .then(function (payload) {
           if (!payload.success) throw new Error(payload.data?.message || 'GitHub dispatch failed.');
           ajaxNotice(runForm, payload.data.message, false, 'data-run-ajax-notice');
+          document.dispatchEvent(new CustomEvent('mac:invalidatefragments'));
         })
         .catch(function (error) { ajaxNotice(runForm, error.message || 'Could not start the workflow.', true, 'data-run-ajax-notice'); })
         .finally(function () { if (button) button.disabled = false; });
     });
 
-    var controls = document.querySelector('[data-visual-controls]');
+    var controls = root.querySelector('[data-visual-controls]');
     var saveStatus = controls?.querySelector('[data-visual-controls-status]');
     if (!controls || !saveStatus) return;
+    if (controls.dataset.macControlsBound) return;
+    controls.dataset.macControlsBound = '1';
     var timer;
     function saveControls() {
       saveStatus.textContent = 'Saving…';
@@ -155,29 +167,40 @@
       new FormData(controls).forEach(function (value, key) { if (!['_wpnonce', 'action'].includes(key)) body.append(key, value); });
       fetch(macTrackerVisual.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body })
         .then(function (response) { return response.json(); })
-        .then(function (payload) { if (!payload.success) throw new Error(); saveStatus.textContent = 'Saved'; location.reload(); })
+        .then(function (payload) { if (!payload.success) throw new Error(); saveStatus.textContent = 'Saved'; document.dispatchEvent(new CustomEvent('mac:invalidatefragments')); })
         .catch(function () { saveStatus.textContent = 'Save failed'; });
     }
     controls.addEventListener('change', function () { clearTimeout(timer); timer = setTimeout(saveControls, 350); });
     controls.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(saveControls, 500); });
-  });
+  }
 
-  document.addEventListener('DOMContentLoaded', function () {
+  document.addEventListener('DOMContentLoaded', function () { bindVisualControls(document); });
+  document.addEventListener('mac:fragmentloaded', function (event) { bindVisualControls(event.detail?.panel || document); });
+
+  function bindColorActions(scope) {
     if ('undefined' === typeof macTrackerColors) return;
+    var root = scope || document;
     function send(form, action, nonce) {
       var body = new URLSearchParams({ action: action, nonce: nonce });
       new FormData(form).forEach(function (value, key) { if (!['_wpnonce', 'action'].includes(key)) body.append(key, value); });
       return fetch(macTrackerColors.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body }).then(function (response) { return response.json(); });
     }
-    document.querySelector('.mac-tracker-color-extract-all')?.addEventListener('submit', function (event) {
+    var extractAll = root.querySelector('.mac-tracker-color-extract-all');
+    if (extractAll?.dataset.macColorBound) extractAll = null;
+    if (extractAll) { extractAll.dataset.macColorBound = '1'; extractAll.addEventListener('submit', function (event) {
       event.preventDefault(); var form = event.currentTarget; var button = form.querySelector('button'); button.disabled = true;
       send(form, 'mac_tracker_extract_all_colors', macTrackerColors.extractAllNonce).then(function (payload) { if (!payload.success) throw new Error(payload.data.message); ajaxNotice(form, payload.data.message, false, 'data-color-ajax-notice'); }).catch(function (error) { ajaxNotice(form, error.message, true, 'data-color-ajax-notice'); button.disabled = false; });
-    });
-    document.querySelectorAll('.mac-tracker-color-extract').forEach(function (form) {
+    }); }
+    root.querySelectorAll('.mac-tracker-color-extract').forEach(function (form) {
+      if (form.dataset.macColorBound) return; form.dataset.macColorBound = '1';
       form.addEventListener('submit', function (event) { event.preventDefault(); var button = form.querySelector('button'); button.disabled = true; send(form, 'mac_tracker_extract_colors', macTrackerColors.extractNonce).then(function (payload) { if (!payload.success) throw new Error(payload.data.message); ajaxNotice(form, payload.data.message, false, 'data-color-ajax-notice'); button.textContent = 'Extracted'; }).catch(function (error) { ajaxNotice(form, error.message, true, 'data-color-ajax-notice'); button.disabled = false; }); });
     });
-    document.querySelectorAll('.mac-tracker-color-approve').forEach(function (form) {
-      form.addEventListener('submit', function (event) { event.preventDefault(); var button = form.querySelector('button'); button.disabled = true; send(form, 'mac_tracker_approve_colors', macTrackerColors.approveNonce).then(function (payload) { if (!payload.success) throw new Error(payload.data.message); location.reload(); }).catch(function (error) { ajaxNotice(form, error.message, true, 'data-color-ajax-notice'); button.disabled = false; }); });
+    root.querySelectorAll('.mac-tracker-color-approve').forEach(function (form) {
+      if (form.dataset.macColorBound) return; form.dataset.macColorBound = '1';
+      form.addEventListener('submit', function (event) { event.preventDefault(); var button = form.querySelector('button'); button.disabled = true; send(form, 'mac_tracker_approve_colors', macTrackerColors.approveNonce).then(function (payload) { if (!payload.success) throw new Error(payload.data.message); ajaxNotice(form, payload.data.message, false, 'data-color-ajax-notice'); form.closest('[data-color-card]')?.classList.add('is-approved'); document.dispatchEvent(new CustomEvent('mac:invalidatefragments')); }).catch(function (error) { ajaxNotice(form, error.message, true, 'data-color-ajax-notice'); button.disabled = false; }); });
     });
-  });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () { bindColorActions(document); });
+  document.addEventListener('mac:fragmentloaded', function (event) { bindColorActions(event.detail?.panel || document); });
 }());

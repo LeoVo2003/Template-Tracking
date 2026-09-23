@@ -89,9 +89,14 @@ class MAC_Tracker_GitHub_Actions {
 	}
 
 	/** List only the tracker workflow. Active results have a short cache. */
-	public function list_visual_runs( $page = 1, $per_page = 5, $force = false ) {
+	public function list_visual_runs( $page = 1, $per_page = 100, $force = false ) {
 		$page = max( 1, absint( $page ) );
-		$per_page = max( 1, min( 20, absint( $per_page ) ) );
+		$per_page = in_array( absint( $per_page ), array( 25, 50, 100 ), true ) ? absint( $per_page ) : 100;
+		// GitHub can return 100 executions per source page. Fetch enough source
+		// pages to fill the requested logical page after both workflow histories
+		// are merged, then slice once below.
+		$api_per_page = 100;
+		$source_pages_required = max( 1, (int) ceil( ( $page * $per_page ) / $api_per_page ) );
 		$key = 'mac_tracker_visual_workflow_runs_' . $page . '_' . $per_page;
 		if ( ! $force ) { $cached = get_transient( $key ); if ( is_array( $cached ) ) { return $cached; } }
 		$runs = array();
@@ -103,8 +108,8 @@ class MAC_Tracker_GitHub_Actions {
 		foreach ( array( self::WORKFLOW_FILE, self::LOCAL_WORKFLOW_FILE ) as $workflow_file ) {
 			$source_total = 0;
 			$source_loaded = false;
-			for ( $source_page = 1; $source_page <= $page; $source_page++ ) {
-				$response = $this->request( 'GET', '/actions/workflows/' . $workflow_file . '/runs?page=' . $source_page . '&per_page=' . $per_page, null, false, true );
+			for ( $source_page = 1; $source_page <= $source_pages_required; $source_page++ ) {
+				$response = $this->request( 'GET', '/actions/workflows/' . $workflow_file . '/runs?page=' . $source_page . '&per_page=' . $api_per_page, null, false, true );
 				if ( is_wp_error( $response ) ) { break; }
 				$success = true;
 				$data = (array) ( $response['data'] ?? array() );
@@ -113,7 +118,7 @@ class MAC_Tracker_GitHub_Actions {
 					$has_total_count = array_key_exists( 'total_count', $data );
 					$source_total = $has_total_count ? absint( $data['total_count'] ) : count( $source_runs );
 					$link = (string) ( $response['headers']['link'] ?? $response['headers']['Link'] ?? '' );
-					if ( ! $has_total_count && preg_match( '/[?&]page=(\d+)[^>]*>;\s*rel="last"/i', $link, $match ) ) { $source_total = max( $source_total, ( (int) $match[1] - 1 ) * $per_page + count( $source_runs ) ); }
+					if ( ! $has_total_count && preg_match( '/[?&]page=(\d+)[^>]*>;\s*rel="last"/i', $link, $match ) ) { $source_total = max( $source_total, ( (int) $match[1] - 1 ) * $api_per_page + count( $source_runs ) ); }
 					$source_loaded = true;
 				}
 				foreach ( $source_runs as $run ) {
@@ -125,7 +130,7 @@ class MAC_Tracker_GitHub_Actions {
 					$runs[] = $normalized;
 					if ( 1 === $source_page ) { $fresh_runs[] = $normalized; }
 				}
-				if ( count( $source_runs ) < $per_page ) { break; }
+				if ( count( $source_runs ) < $api_per_page ) { break; }
 			}
 			if ( $source_loaded ) { $workflow_totals[] = $source_total; ++$fresh_source_count; }
 		}
@@ -285,7 +290,7 @@ class MAC_Tracker_GitHub_Actions {
 	}
 
 	public function clear_cache( $run_id = 0 ) {
-		foreach ( array( 1, 2, 3, 4, 5, 10, 20 ) as $page ) { foreach ( array( 5, 10, 20 ) as $per_page ) { delete_transient( 'mac_tracker_visual_workflow_runs_' . $page . '_' . $per_page ); } }
+		foreach ( array( 1, 2, 3, 4, 5, 10, 20 ) as $page ) { foreach ( array( 25, 50, 100 ) as $per_page ) { delete_transient( 'mac_tracker_visual_workflow_runs_' . $page . '_' . $per_page ); } }
 		foreach ( array( 5, 10, 20 ) as $legacy_per_page ) { delete_transient( 'mac_tracker_visual_workflow_runs_' . $legacy_per_page ); }
 		if ( $run_id ) { delete_transient( 'mac_tracker_visual_workflow_run_' . absint( $run_id ) ); }
 	}

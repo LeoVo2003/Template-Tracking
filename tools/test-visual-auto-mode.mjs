@@ -21,7 +21,7 @@ test('REST visual config reflects the persisted mode and schedule honors auto', 
 
 test('Auto is the only schedule switch and the status reflects a successful auto-save', () => {
   assert.doesNotMatch(admin, /data-enable-visual-schedule|>Turn on</);
-  assert.match(admin, /data-visual-schedule-status/);
+  assert.match(admin, /data-visual-controls-status/);
   assert.match(js, /function reflectMode\(mode\)/);
   assert.match(js, /reflectMode\(mode\);status\.textContent='Saved'/);
 });

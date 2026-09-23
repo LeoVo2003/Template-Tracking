@@ -381,8 +381,13 @@ class MAC_Tracker_Repository {
 
 	/** One bulk query for the Projects screen; no WPM/API call and no N+1. */
 	public function project_page( array $filters = array() ) {
-		$per_page = isset( $filters['per_page'] ) ? (int) $filters['per_page'] : 50;
-		$per_page = in_array( $per_page, array( 50, 100, 150, 200 ), true ) ? $per_page : 0;
+		// Page size is presentation-only. A zero value is the existing "all"
+		// compatibility mode; the UI loads that mode incrementally instead of
+		// putting every record into the browser at once.
+		$requested_per_page = isset( $filters['per_page'] ) ? (int) $filters['per_page'] : 100;
+		// A zero is retained for internal whole-dataset consumers such as the
+		// dashboard. Invalid external values fall back to the safe display default.
+		$per_page = 0 === $requested_per_page ? 0 : ( in_array( $requested_per_page, array( 25, 50, 100, 200 ), true ) ? $requested_per_page : 100 );
 		$page     = max( 1, absint( $filters['paged'] ?? 1 ) );
 		// A CSV pin is the verified historical fallback. Once WPM has an
 		// Action Design snapshot for the same project, show the task row(s)
@@ -443,10 +448,20 @@ class MAC_Tracker_Repository {
 		if ( 'yes' === $website ) { $where[] = "p.website_url <> ''"; }
 		if ( 'no' === $website ) { $where[] = "p.website_url = ''"; }
 		$layout = trim( (string) ( $filters['layout'] ?? '' ) );
-		if ( '__missing' === $layout || 'no' === $layout ) {
+		if ( '__missing' === $layout || 'missing' === $layout || 'no' === $layout ) {
 			$where[] = "p.layout_url = ''";
+		} elseif ( 'external' === $layout ) {
+			// A presentation group for non-template layout URLs. Keep the old exact
+			// layout filtering path below for bookmarked legacy URLs.
+			$where[] = "p.layout_url <> '' AND LOWER(p.layout_url) NOT REGEXP '(^|[^a-z0-9])s[0-9]{1,2}([^0-9]|$)'";
 		} elseif ( 'yes' === $layout ) {
 			$where[] = "p.layout_url <> ''";
+		} elseif ( preg_match( '/^demo:s(\\d{1,2})$/', strtolower( $layout ), $layout_match ) ) {
+			$template = sprintf( 's%02d', (int) $layout_match[1] );
+			// Match the complete template family (for example demo-s01/home and
+			// demo-s01/about-us), rather than a single raw subpage URL.
+			$where[] = 'LOWER(p.layout_url) REGEXP %s';
+			$args[]  = '(^|[^a-z0-9])' . $template . '([^0-9]|$)';
 		} elseif ( '' !== $layout ) {
 			$where[] = 'p.layout_url = %s';
 			$args[]  = $layout;
@@ -543,6 +558,25 @@ class MAC_Tracker_Repository {
 		return array_values( array_filter( array_map( 'strval', (array) $this->wpdb->get_col( "SELECT DISTINCT p.layout_url FROM {$this->projects} p WHERE {$visible} AND p.layout_url <> '' ORDER BY p.layout_url ASC" ) ) ) );
 	}
 
+	/**
+	 * Presentation groups for the Projects layout filter.  Values are deliberately
+	 * stable and do not expose a long, duplicated list of raw layout URLs.
+	 */
+	public function list_layout_groups() {
+		$groups = array();
+		foreach ( $this->list_layouts() as $layout_url ) {
+			if ( preg_match( '/(?:^|[^a-z0-9])s(\\d{1,2})(?:[^0-9]|$)/i', (string) $layout_url, $match ) ) {
+				$key = sprintf( 's%02d', (int) $match[1] );
+				$groups[ $key ] = array(
+					'value' => 'demo:' . $key,
+					'label' => strtoupper( $key ),
+				);
+			}
+		}
+		ksort( $groups, SORT_NATURAL );
+		return array_values( $groups );
+	}
+
 	/** Strip decorative emoji so one person has one filter option. */
 	public function canonical_person_name( $name ) {
 		$name = trim( (string) $name );
@@ -596,10 +630,10 @@ class MAC_Tracker_Repository {
 	}
 
 	/** Paginated Color Review rows; never render the full website roster at once. */
-	public function color_review_page( $status = 'pending', $page = 1, $per_page = 24, $search = '' ) {
+	public function color_review_page( $status = 'pending', $page = 1, $per_page = 100, $search = '' ) {
 		$status = 'approved' === $status ? 'approved' : 'pending';
 		$page = max( 1, absint( $page ) );
-		$per_page = max( 12, min( 32, absint( $per_page ) ) );
+		$per_page = in_array( absint( $per_page ), array( 25, 50, 100, 200 ), true ) ? absint( $per_page ) : 100;
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
 		$where = array( $visible, $this->exclusion_sql( 'p' ), "p.website_url <> ''", 'approved' === $status ? 'COALESCE(c.locked,0) = 1' : 'COALESCE(c.locked,0) = 0' );
 		$args = array();
@@ -622,7 +656,7 @@ class MAC_Tracker_Repository {
 
 	/** Compatibility helper for bounded callers. */
 	public function color_review_rows( $limit = 32 ) {
-		return $this->color_review_page( 'pending', 1, min( 32, max( 12, absint( $limit ) ) ) )['rows'];
+		return array_slice( $this->color_review_page( 'pending', 1, 100 )['rows'], 0, max( 1, min( 100, absint( $limit ) ) ) );
 	}
 
 	/** IDs without a prior extraction; one batch is deliberately bounded. */
@@ -729,8 +763,8 @@ class MAC_Tracker_Repository {
 		}
 	}
 
-	public function visual_runs_page( $page = 1, $per_page = 5 ) {
-		$page = max( 1, absint( $page ) ); $per_page = max( 1, min( 20, absint( $per_page ) ) ); $offset = ( $page - 1 ) * $per_page;
+	public function visual_runs_page( $page = 1, $per_page = 100 ) {
+		$page = max( 1, absint( $page ) ); $per_page = in_array( absint( $per_page ), array( 25, 50, 100, 200 ), true ) ? absint( $per_page ) : 100; $offset = ( $page - 1 ) * $per_page;
 		$order = "CASE WHEN status IN ('queued','in_progress','cancelling') THEN 0 ELSE 1 END ASC, github_run_number DESC, github_run_id DESC";
 		$runs = (array) $this->wpdb->get_results( $this->wpdb->prepare( "SELECT * FROM {$this->visual_runs} ORDER BY {$order} LIMIT %d OFFSET %d", $per_page, $offset ), ARRAY_A );
 		$total = (int) $this->wpdb->get_var( "SELECT COUNT(*) FROM {$this->visual_runs}" );
@@ -747,7 +781,7 @@ class MAC_Tracker_Repository {
 		return $rows;
 	}
 
-	public function visual_runs( $limit = 10 ) { return $this->visual_runs_page( 1, $limit )['runs']; }
+	public function visual_runs( $limit = 10 ) { return array_slice( $this->visual_runs_page( 1, 100 )['runs'], 0, max( 1, min( 100, absint( $limit ) ) ) ); }
 
 	/** Rolling project throughput; one cumulative row is counted once per GitHub run. */
 	public function visual_run_throughput_summary() {
@@ -828,10 +862,10 @@ class MAC_Tracker_Repository {
 		return array_map( 'intval', array_merge( array( 'total' => 0, 'processing' => 0, 'review' => 0, 'locked' => 0 ), $row ) );
 	}
 
-	public function visual_review_page( $bucket = 'processing', $page = 1, $per_page = 24 ) {
+	public function visual_review_page( $bucket = 'processing', $page = 1, $per_page = 100 ) {
 		$bucket = in_array( $bucket, array( 'processing', 'review', 'locked' ), true ) ? $bucket : 'processing';
 		$page = max( 1, absint( $page ) );
-		$per_page = max( 12, min( 48, absint( $per_page ) ) );
+		$per_page = in_array( absint( $per_page ), array( 25, 50, 100, 200 ), true ) ? absint( $per_page ) : 100;
 		$where = $this->visual_review_where( $bucket );
 		$total = (int) $this->wpdb->get_var( "SELECT COUNT(*) FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where}" );
 		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.capture_bundle_json, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where} ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d OFFSET %d";

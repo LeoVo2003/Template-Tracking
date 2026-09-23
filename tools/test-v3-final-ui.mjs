@@ -33,8 +33,8 @@ test('review counts are aggregate queries and both review surfaces are paginated
   assert.match(repository, /function visual_review_counts\(\)/);
   assert.match(repository, /function color_review_page[\s\S]*?LIMIT %d OFFSET %d/);
   assert.match(repository, /function visual_review_page[\s\S]*?LIMIT %d OFFSET %d/);
-  assert.match(admin, /color_review_page\( \$status, \$page_number, 24, \$search \)/);
-  assert.match(admin, /visual_review_page\( \$section, max\( 1, absint\( \$_GET\['visual_page'\]/);
+  assert.match(admin, /color_review_page\( \$status, \$page_number, \$per_page, \$search \)/);
+  assert.match(admin, /visual_review_page\( \$section, \$page_number, \$per_page \)/);
 });
 
 test('topbar, sorting and row actions use the rebuilt presentation layer', () => {
@@ -51,7 +51,7 @@ test('settings and AI use a single-level tab architecture', () => {
   for (const section of ['action', 'processing', 'review', 'locked', 'workflow']) {
     assert.match(admin, new RegExp(`'section' => '${section}'`));
   }
-  for (const setting of ['import', 'connections', 'automation', 'data']) {
+  for (const setting of ['appearance', 'import', 'connections', 'automation', 'data']) {
     assert.match(admin, new RegExp(`data-settings-tab="${setting}"`));
   }
   assert.match(admin, /color_status' => 'pending'/);

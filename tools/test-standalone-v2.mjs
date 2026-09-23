@@ -53,9 +53,9 @@ test('AUTO observability is read-only and the production schedule remains serial
   assert.match(repository, /function visual_automation_observability/);
   assert.match(repository, /source_action = 'scheduled_auto'/);
   assert.match(repository, /INTERVAL 60 MINUTE/);
-  assert.match(admin, /Last scheduled run/);
-  assert.match(admin, /Last successful batch/);
-  assert.match(admin, /Every 15 min · :02, :17, :32, :47/);
+  assert.match(admin, /Last scheduled/);
+  assert.match(admin, /Last successful/);
+  assert.match(admin, /Scheduled every 15 minutes/);
   assert.match(workflow, /cron:\s*"2,17,32,47 \* \* \* \*"/);
   assert.match(workflow, /default:\s*"11"/);
   assert.match(workflow, /cancel-in-progress:\s*false/);

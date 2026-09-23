@@ -31,16 +31,17 @@ test('standalone shell is route-scoped and exposes exactly five product destinat
 });
 
 test('all five pages share one page-end editorial component', () => {
-  assert.match(admin, /private function page_end\(\)[\s\S]*editorial_footer_band/);
+  assert.match(admin, /private function page_end\([^)]*\)[\s\S]*editorial_footer_band/);
   for (const quote of ['Good websites grow businesses', 'Good systems make good work visible', 'Turn websites into insights', 'Keep the signal. Remove the noise', 'Better tools create better work']) assert.match(admin, new RegExp(quote.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
 
 test('AI Analysis and Settings are presentation composites over existing handlers', () => {
   for (const tab of ['action', 'processing', 'review', 'locked', 'workflow']) assert.match(admin, new RegExp(`'section' => '${tab}'`));
-  for (const tab of ['import', 'connections', 'automation', 'data']) assert.match(admin, new RegExp(`data-settings-tab="${tab}"`));
+  for (const tab of ['appearance', 'import', 'connections', 'automation', 'data']) assert.match(admin, new RegExp(`data-settings-tab="${tab}"`));
   assert.match(admin, /render_color_review_content/);
   assert.match(admin, /render_pin_import_content/);
-  assert.doesNotMatch(ui, /fetch\(|XMLHttpRequest|admin-ajax\.php/);
+  assert.match(ui, /mac_tracker_load_fragment/);
+  assert.match(ui, /AbortController/);
   assert.match(actions, /fetch\(macTrackerVisual\.ajaxUrl/);
 });
 

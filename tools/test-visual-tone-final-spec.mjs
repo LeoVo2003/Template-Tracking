@@ -60,11 +60,12 @@ test('Review exposes a safe page approve action only for eligible AI classificat
   assert.match(repo, /tone IN \(\{\$tone_tokens\}\)/);
 });
 
-test('automation state is presented as a semantic notice badge, not a detached white card', () => {
-  assert.match(admin, /data-visual-schedule-detail/);
-  assert.match(admin, /Automation paused/);
-  assert.match(css, /\.mac-tracker-visual-auto__signal\.is-manual\{color:/);
-  assert.match(css, /\.mac-tracker-visual-auto__signal i\{/);
+test('automation state is presented as a compact control-room summary', () => {
+  assert.match(admin, /mac-tracker-visual-auto--v4/);
+  assert.match(admin, /mac-tracker-automation-state/);
+  assert.match(admin, /Advanced controls/);
+  assert.match(css, /\.mac-tracker-automation-state\{/);
+  assert.match(css, /\.mac-tracker-advanced-controls\{/);
 });
 
 test('card actions stay inside each card, with approval only on eligible review cards and a visible skip control', () => {
@@ -84,5 +85,9 @@ test('monitor and skipped-project surfaces use clear button treatments', () => {
   assert.match(css, /\.mac-tracker-workflow-pagination__controls\{/);
   assert.match(css, /\.mac-tracker-table-shell\{/);
   assert.match(css, /\.mac-tracker-button--skip\{/);
-  assert.doesNotMatch(ui, /fetch\(|XMLHttpRequest/);
+  // V4 deliberately adds authenticated presentation-only fragments and
+  // bounded All-mode rows. Operational mutations remain in admin-actions.
+  assert.match(ui, /mac_tracker_load_fragment/);
+  assert.match(ui, /mac_tracker_load_project_rows/);
+  assert.match(ui, /credentials: 'same-origin'/);
 });
