@@ -4,33 +4,33 @@ This document is the visual source of truth for every MAC Project Tracker admin 
 
 ## Product character
 
-MAC Tracker is a quiet, premium design-operations workspace: botanical and editorial at the edges, operational and highly legible inside. Use restrained forest, olive, linen, paper, and warm taupe. Avoid generic SaaS blue, purple gradients, glass effects, novelty cards, and botanical decoration behind data.
+MAC Tracker is a quiet, premium design-operations workspace: botanical and editorial at the edges, operational and highly legible inside. The V3 direction is **Warm Botanical / Quiet Olive**. Warm ivory, paper, greige, stone and mushroom taupe carry most of the product; olive is a restrained accent. Avoid generic SaaS blue, purple gradients, glass effects, novelty cards, muddy khaki and botanical decoration behind data.
 
 ## Tokens
 
 ```css
---mac-forest-950: #343529;
---mac-forest-900: #464735;
---mac-forest-800: #52543D;
---mac-moss: #7F8765;
---mac-olive: #9AA872;
---mac-sage: #CAD8B7;
---mac-linen: #E8E1CF;
---mac-paper: #F5F0E4;
---mac-surface: #FFFDF8;
---mac-wash: #EEE7DA;
---mac-mushroom: #756F64;
---mac-ink: #2D3026;
---mac-line: rgba(70, 71, 53, 0.16);
+--mac-canvas: #F3F0E8;
+--mac-paper: #FBF9F4;
+--mac-surface: #FFFEFA;
+--mac-wash: #EDE8DE;
+--mac-greige: #D8D1C5;
+--mac-stone: #B9B0A3;
+--mac-mushroom: #746C61;
+--mac-olive: #6F7554;
+--mac-olive-dark: #4D533A;
+--mac-sage: #BFC6AA;
+--mac-ink: #25271F;
+--mac-line: rgba(77, 83, 58, 0.15);
 
 /* Legacy admin stylesheet aliases retained for compatibility. */
---mac-sage-600: var(--mac-moss);
---mac-linen-100: var(--mac-linen);
+--mac-sage-600: var(--mac-olive);
+--mac-linen-100: var(--mac-wash);
 ```
 
-The identity is olive rather than blue-green: dark olive provides structure,
-linen cream and warm beige carry most surfaces, mushroom taupe handles muted
-copy, and forest green appears only as a supporting accent.
+The identity is warm-neutral rather than green. Ivory, paper and greige provide
+the canvas; mushroom taupe handles muted copy; quiet olive identifies active
+navigation and deliberate actions. Never use forest green as the dominant page
+background.
 
 Semantic states use text plus color: muted green for success/locked, amber for review/warning, blue for running/info, red for failed/blocked, and taupe for idle/neutral.
 
@@ -51,12 +51,13 @@ Never use the serif face in dense tables or forms.
 
 ## App shell and navigation
 
-MAC Tracker routes use a plugin-owned full-page shell at `/mac-project-tracker/`: fixed linen sidebar, quiet topbar, and paper content canvas. The clean child routes are `/projects/`, `/analysis/`, `/skipped/`, and `/settings/`. The sidebar contains exactly Dashboard, Projects, AI Analysis, Skipped Projects, and Settings. Provide a small WordPress Admin escape link and version information. Scope every chrome-neutralizing rule to the MAC Tracker body class so normal wp-admin screens remain untouched.
+MAC Tracker routes use a plugin-owned full-page shell at `/mac-project-tracker/`: sticky warm-paper sidebar, sticky clean topbar, and an edge-to-edge neutral content canvas. Do not wrap the app in a floating paper card. The clean child routes are `/projects/`, `/analysis/`, `/skipped/`, and `/settings/`. The sidebar contains exactly Dashboard, Projects, AI Analysis, Skipped Projects, and Settings. Provide a small WordPress Admin escape link and version information. Scope every chrome-neutralizing rule to the MAC Tracker body class so normal wp-admin screens remain untouched.
 
-Standalone routes are publicly viewable in read-only mode. Guests must not
-receive mutation scripts or controls. Existing admin-post, AJAX, REST, nonce,
-and `manage_options` protection remains authoritative for every write action.
-Administrators retain the full operational interface through the same routes.
+Standalone routes use the current WordPress session and require an authenticated
+administrator with `manage_options`. Production project, domain, WPM and
+operational data must never remain anonymously readable. Existing admin-post,
+AJAX, REST, nonce and capability protection remains authoritative for every
+write action.
 
 At tablet widths the sidebar becomes a drawer. At mobile widths content stacks, tables scroll horizontally, and decoration never covers controls.
 
@@ -64,7 +65,7 @@ At tablet widths the sidebar becomes a drawer. At mobile widths content stacks, 
 
 ### Buttons and forms
 
-Primary buttons are forest with cream text. Secondary buttons are paper/white with forest borders. Danger buttons use muted red. Keep labels explicit, focus rings visible, and controls at least 36px tall. Password and technical values use the same form hierarchy as normal text fields.
+Primary buttons use dark quiet olive with cream text. Secondary buttons are paper/white with warm olive borders. Danger buttons use muted red. Keep labels explicit, focus rings visible, and controls at least 36px tall. Password and technical values use the same form hierarchy as normal text fields.
 
 ### Cards
 
@@ -80,7 +81,7 @@ Badges are compact, slightly rounded, and always include readable status text. C
 
 ### Tabs and dropdowns
 
-Tabs are a calm horizontal rail with a clear forest active state. Dropdown row actions are keyboard-accessible, close on Escape/outside click, and never introduce actions unsupported by existing handlers.
+Tabs are a calm horizontal rail with a clear quiet-olive active state. Dropdown row actions are keyboard-accessible, close on Escape/outside click, and never introduce actions unsupported by existing handlers.
 
 ## Page composition
 
@@ -92,7 +93,7 @@ Tabs are a calm horizontal rail with a clear forest active state. Dropdown row a
 
 ## Bottom editorial band
 
-Every main page ends with exactly one reusable botanical editorial band after the last operational section. It uses a local botanical illustration or a forest gradient fallback, a subtle overlay, one Cormorant Garamond quote, and a tiny mono label. Never place a band between tables, cards, forms, or workflow controls.
+Every main page ends with exactly one reusable botanical editorial band after the last operational section. It uses a local botanical illustration or a warm neutral-to-olive gradient fallback, a subtle overlay, one Cormorant Garamond quote, and a tiny mono label. Never place a band between tables, cards, forms, or workflow controls.
 
 Page quotes:
 
@@ -116,6 +117,6 @@ Use semantic headings, navigation, forms, tables, and status text. Maintain read
 
 ## Do / don't
 
-Do use cream canvases, forest navigation, olive accents, mono metadata, restrained serif moments, readable data tables, and one page-end botanical band.
+Do use warm-neutral canvases, paper navigation, quiet olive accents, mono metadata, restrained serif moments, readable data tables, and one page-end botanical band.
 
 Do not use blue as the product identity, arbitrary gradients, giant radii, low-contrast beige-on-beige, serif data text, remote image hotlinks, decorative plants behind operational content, or global CSS that leaks into other wp-admin pages.

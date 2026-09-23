@@ -19,6 +19,7 @@ html,body{margin:0;font:16px Arial,sans-serif;background:#f6f3ec;color:#24342b}b
 .elementor-popup-modal,.modal,.aria-popup{position:fixed;z-index:9001;left:20vw;top:18vh;width:60vw;height:55vh;background:#d892a6;color:#fff;padding:28px}
 .cookie-consent{position:fixed;z-index:8000;left:0;right:0;bottom:0;min-height:150px;background:#f2dfbe;padding:30px}
 .chat-widget-obstructive{position:fixed;z-index:7000;right:0;bottom:0;width:43vw;height:44vh;background:#d8e7ef;padding:24px}
+.delayed-wrap{position:fixed;inset:0;z-index:9500}.delayed-wrap .outside-close{position:absolute;z-index:3;right:18vw;top:14vh}.delayed-popup{position:absolute;z-index:2;left:20vw;top:18vh;width:60vw;height:55vh;background:#d892a6;color:#fff;padding:28px}
 </style></head><body><header class="sticky-header">Real navigation</header><main><section class="hero">Real hero</section><section class="gallery">Real gallery</section></main><button class="booking-cta">Book appointment</button>${overlay}</body></html>`;
 
 const fixtures = [
@@ -27,6 +28,7 @@ const fixtures = [
   ['cookie-banner', '<section class="cookie-consent"><p>We use cookies.</p><button>Accept all</button></section><script>document.querySelector(".cookie-consent button").onclick=()=>document.querySelector(".cookie-consent").remove()</script>'],
   ['backdrop', '<div class="modal-backdrop"></div><div class="modal"><button data-bs-dismiss="modal">Dismiss</button><p>Bootstrap modal</p></div>'],
   ['chat-widget', '<aside class="chat-widget-obstructive"><button aria-label="Close">Close</button><p>Third-party chat support</p></aside>'],
+  ['delayed-icon-close', '<script>setTimeout(()=>{const wrap=document.createElement("div");wrap.className="delayed-wrap";wrap.innerHTML=`<button class="outside-close" aria-label="Close popup">×</button><section class="delayed-popup" role="dialog" aria-modal="true"><p>Delayed newsletter</p></section>`;wrap.querySelector("button").onclick=()=>wrap.remove();document.body.append(wrap)},650)</script>'],
 ];
 
 const results = [];
@@ -43,7 +45,7 @@ try {
       sticky: Boolean(document.querySelector('.sticky-header')),
       cta: Boolean(document.querySelector('.booking-cta')),
       hero: Boolean(document.querySelector('.hero')),
-      remaining: Boolean(document.querySelector('.elementor-popup-modal,.aria-popup,.cookie-consent,.modal-backdrop,.modal,.chat-widget-obstructive')),
+      remaining: Boolean(document.querySelector('.elementor-popup-modal,.aria-popup,.cookie-consent,.modal-backdrop,.modal,.chat-widget-obstructive,.delayed-wrap')),
       overflow: `${getComputedStyle(document.documentElement).overflowY} ${getComputedStyle(document.body).overflowY}`,
     }));
     assert.equal(state.sticky, true, `${name}: sticky navigation must remain`);
@@ -53,7 +55,7 @@ try {
     assert.doesNotMatch(state.overflow, /hidden|clip/, `${name}: scroll lock must be restored`);
     assert.ok(cleanup.detected >= 1, `${name}: obstruction must be detected`);
     assert.equal(cleanup.remaining, 0, `${name}: metadata must report no residue`);
-    assert.ok(cleanup.passes >= 1 && cleanup.passes <= 2, `${name}: cleanup must be bounded`);
+    assert.equal(cleanup.passes, 2, `${name}: cleanup must include the delayed-popup scan`);
     assert.ok(samples.length > 0, `${name}: UI collection still runs`);
     results.push({ name, cleanup });
     await page.close();

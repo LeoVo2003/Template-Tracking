@@ -44,8 +44,9 @@ async function stabilize(page) {
 }
 
 const overlayCloseSelectors = [
-  '[aria-label="Close"]',
-  '[aria-label="close"]',
+  '[aria-label*="close" i]',
+  '[aria-label*="dismiss" i]',
+  '[title*="close" i]',
   '[data-dismiss="modal"]',
   '[data-bs-dismiss="modal"]',
   '.dialog-close-button',
@@ -53,13 +54,15 @@ const overlayCloseSelectors = [
   '.mfp-close',
   '.modal .close',
   '.dialog-close',
+  '[class*="popup-close" i]',
+  '[class*="modal-close" i]',
   '.cookie-close',
   '.cookie-consent-close',
   '[data-cookiebanner="accept_button"]',
   '[data-testid="cookie-policy-manage-dialog-decline-button"]',
 ];
 
-const overlayCloseText = /^(close|dismiss|no thanks|not now|accept|accept all|agree|allow all|got it|continue|continue without accepting)$/i;
+const overlayCloseText = /^(?:close|dismiss|no thanks|not now|accept|accept all|agree|allow all|got it|continue|continue without accepting|[×✕✖x])$/i;
 
 async function scanOverlayEvidence(page) {
   return page.evaluate((closeSelectors) => {
@@ -105,7 +108,7 @@ async function scanOverlayEvidence(page) {
         sticky: style.position === 'sticky',
         z_index: Number.parseInt(style.zIndex, 10) || 0,
         coverage: Number(((clippedWidth * clippedHeight) / viewportArea).toFixed(4)),
-        has_close_control: closeSelectors.some((selector) => Boolean(element.matches(selector) || element.querySelector(selector))) || [...element.querySelectorAll('button,[role="button"],a')].some((control) => /^(close|dismiss|no thanks|not now|accept|accept all|agree|allow all|got it|continue|continue without accepting)$/i.test((control.textContent || '').trim())),
+        has_close_control: closeSelectors.some((selector) => Boolean(element.matches(selector) || element.querySelector(selector) || element.parentElement?.querySelector(selector))) || [...element.querySelectorAll('button,[role="button"],a'), ...(element.parentElement ? element.parentElement.querySelectorAll(':scope > button,:scope > [role="button"],:scope > a') : [])].some((control) => /^(?:close|dismiss|no thanks|not now|accept|accept all|agree|allow all|got it|continue|continue without accepting|[×✕✖x])$/i.test(`${control.getAttribute('aria-label') || ''} ${control.getAttribute('title') || ''} ${control.textContent || ''}`.trim())),
         aria_modal: element.getAttribute('aria-modal') === 'true',
         role_dialog: element.getAttribute('role') === 'dialog',
       });
@@ -124,12 +127,14 @@ export async function dismissObstructiveOverlays(page) {
   let remaining = [];
   let passes = 0;
 
-  // One normal pass plus one bounded residue pass for late cookie/modal layers.
+  // One immediate pass plus a second scan after a real quiet window. A number
+  // of production popup tools inject 500–1000ms after network idle.
   for (let pass = 0; pass < 2; pass += 1) {
+    if (pass > 0) await page.waitForTimeout(1200);
     const scan = await bounded(scanOverlayEvidence(page), 3500, []);
     const detected = (Array.isArray(scan) ? scan : []).filter((row) => classifyOverlayEvidence(row).obstructive);
-    if (!detected.length) { remaining = []; break; }
     passes += 1;
+    if (!detected.length) { remaining = []; continue; }
     detected.forEach((row) => {
       if (!seenTokens.has(row.token)) { detectedCount += 1; seenTokens.add(row.token); }
       types.add(classifyOverlayEvidence(row).type);
@@ -140,8 +145,9 @@ export async function dismissObstructiveOverlays(page) {
       for (const token of tokens) {
         const element = document.querySelector(`[data-mac-overlay-token="${token}"]`);
         if (!element) continue;
-        const controls = [...closeSelectors.map((selector) => element.matches(selector) ? element : element.querySelector(selector)), ...element.querySelectorAll('button,[role="button"],a')].filter(Boolean);
-        const close = controls.find((control) => closeSelectors.some((selector) => control.matches?.(selector))) || controls.find((control) => closeText.test((control.textContent || '').trim()));
+        const parent = element.parentElement;
+        const controls = [...closeSelectors.map((selector) => element.matches(selector) ? element : (element.querySelector(selector) || parent?.querySelector(selector))), ...element.querySelectorAll('button,[role="button"],a'), ...(parent ? parent.querySelectorAll(':scope > button,:scope > [role="button"],:scope > a') : [])].filter(Boolean);
+        const close = controls.find((control) => closeSelectors.some((selector) => control.matches?.(selector))) || controls.find((control) => closeText.test(`${control.getAttribute('aria-label') || ''} ${control.getAttribute('title') || ''} ${control.textContent || ''}`.trim()));
         if (close && 'function' === typeof close.click) close.click();
       }
     }, { tokens: detected.map((row) => row.token), closeSelectors: overlayCloseSelectors, closeTextSource: overlayCloseText.source }), 2500, null);
@@ -193,6 +199,12 @@ export async function dismissObstructiveOverlays(page) {
     removed,
     scroll_restored: Boolean(scrollRestored),
     remaining: remaining.length,
+    remaining_descriptors: remaining.slice(0, 8).map((row) => ({
+      type: String(classifyOverlayEvidence(row).type || 'generic_overlay'),
+      coverage: Number(row.coverage || 0),
+      fixed: Boolean(row.fixed),
+      z_index: Number(row.z_index || 0),
+    })),
     passes,
     types: [...types].filter(Boolean).slice(0, 12),
   };
@@ -233,9 +245,9 @@ export async function captureRenderedPage(browser, requestedUrl, snapshotId, run
     const { response, validation: firstValidation, candidateUrls, resolvedCaptureUrl, resolutionStrategy } = resolved;
     await activateLazyContent(page);
     await stabilize(page);
-    const overlayCleanup = await dismissObstructiveOverlays(page);
     await page.waitForLoadState('networkidle', { timeout: 2500 }).catch(() => null);
-    await page.waitForTimeout(520);
+    const overlayCleanup = await dismissObstructiveOverlays(page);
+    await page.waitForTimeout(220);
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(320);
     const validation = await validatePage(page, response, resolvedCaptureUrl);
@@ -269,6 +281,7 @@ export async function captureRenderedPage(browser, requestedUrl, snapshotId, run
         render_ms: Date.now() - started,
         validation: { ...validation, initial: firstValidation },
         overlay_cleanup: overlayCleanup,
+        capture_quality: overlayCleanup.remaining > 0 ? 'degraded' : 'clean',
         ui: { samples, metrics },
         artifacts: { full_screenshot_url: null, ai_preview_url: null },
       },

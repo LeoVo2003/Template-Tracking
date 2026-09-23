@@ -5,15 +5,14 @@ import fs from 'node:fs';
 const repo = fs.readFileSync('includes/class-mac-tracker-repository.php', 'utf8');
 const admin = fs.readFileSync('includes/class-mac-tracker-admin.php', 'utf8');
 const activator = fs.readFileSync('includes/class-mac-tracker-activator.php', 'utf8');
-const css = fs.readFileSync('assets/admin.css', 'utf8');
-const js = fs.readFileSync('assets/admin.js', 'utf8');
+const css = fs.readFileSync('assets/standalone.css', 'utf8');
+const js = fs.readFileSync('assets/admin-actions.js', 'utf8');
+const ui = fs.readFileSync('assets/app-ui.js', 'utf8');
 
 test('canonical palette is the single source for taxonomy and contains regression tones', () => {
   assert.match(repo, /function visual_tone_palette/);
   assert.match(repo, /return array_keys\( \$this->visual_tone_palette\(\) \)/);
-  for (const tone of ['Vàng kem', 'Xám kem', 'Xanh trắng', 'Vàng đen', 'Cần duyệt']) {
-    assert.match(repo, new RegExp(`['"]${tone.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`));
-  }
+  for (const tone of ['Vàng kem', 'Xám kem', 'Xanh trắng', 'Vàng đen', 'Cần duyệt']) assert.match(repo, new RegExp(`['"]${tone.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`));
   assert.doesNotMatch(css, /\.mac-tracker-tone--vang-kem\s*\{/);
 });
 
@@ -24,10 +23,10 @@ test('approval schema and exclusion registry are persistent', () => {
   assert.match(repo, /is_project_excluded/);
 });
 
-test('review flow exposes Queue, Review, Locked and Vietnamese combined action', () => {
-  assert.match(admin, /data-visual-tab="queue"/);
-  assert.match(admin, /data-visual-tab="review"/);
-  assert.match(admin, /data-visual-tab="locked"/);
+test('review flow exposes one-level Processing, Review and Locked routes and combined action', () => {
+  assert.match(admin, /'section' => 'processing'/);
+  assert.match(admin, /'section' => 'review'/);
+  assert.match(admin, /'section' => 'locked'/);
   assert.match(admin, /capture_analyze_selected/);
   assert.match(repo, /capture_and_analyze_selected/);
   assert.match(admin, /Save &amp; approve/);
@@ -43,35 +42,32 @@ test('controls auto-save and monitor hidden state remain guarded', () => {
   assert.match(css, /\.mac-tracker-workflow-pagination\[hidden\][^{]*\{[^}]*display:\s*none\s*!important/);
 });
 
-test('bulk actions stay scoped to the active tab and locked cards remain immutable', () => {
+test('bulk actions stay scoped to the rendered page and locked cards remain immutable', () => {
   assert.doesNotMatch(admin, /value="reanalyze_all"/);
-  for (const action of ['reanalyze_selected', 'recapture_selected', 'capture_analyze_selected']) {
-    assert.match(admin, new RegExp(`data-visual-bulk="${action}"`));
-  }
-  assert.match(js, /boxes\.forEach\(function\(box\)\{box\.checked=true;\}\)/);
-  assert.match(js, /tab==='locked'/);
-  assert.match(js, /Card đã duyệt không chạy lại bằng bulk action/);
+  for (const action of ['reanalyze_selected', 'recapture_selected', 'capture_analyze_selected']) assert.match(admin, new RegExp(`value="${action}" data-visual-bulk`));
+  assert.match(js, /boxes\(\)\.forEach\(function \(box\) \{ box\.checked = true; \}\)/);
+  assert.match(admin, /if \( 'locked' !== \$section \)/);
+  assert.match(admin, /\$is_locked/);
 });
 
-test('Review exposes a safe approve-all action only for eligible AI classifications', () => {
-  const repository = fs.readFileSync('includes/class-mac-tracker-repository.php', 'utf8');
-  assert.match(admin, /value="approve_selected" data-visual-approve-all hidden/);
-  assert.match(js, /approve\.hidden=tab!=='review'/);
-  assert.match(js, /Approve all review/);
+test('Review exposes a safe page approve action only for eligible AI classifications', () => {
+  assert.match(admin, /'review' === \$section[\s\S]*?value="approve_selected" data-visual-bulk/);
+  assert.match(js, /'approve_selected'/);
+  assert.match(admin, /Approve page/);
   assert.match(admin, /approve_visual_tones\( \$ids \)/);
-  assert.match(repository, /function approve_visual_tones\( array \$snapshot_ids \)/);
-  assert.match(repository, /human_locked = 0 AND manual_locked = 0 AND tone_status = 'classified'/);
-  assert.match(repository, /tone IN \(\{\$tone_tokens\}\)/);
+  assert.match(repo, /function approve_visual_tones\( array \$snapshot_ids \)/);
+  assert.match(repo, /human_locked = 0 AND manual_locked = 0 AND tone_status = 'classified'/);
+  assert.match(repo, /tone IN \(\{\$tone_tokens\}\)/);
 });
 
 test('automation state is presented as a semantic notice badge, not a detached white card', () => {
   assert.match(admin, /data-visual-schedule-detail/);
   assert.match(admin, /Automation paused/);
-  assert.match(css, /\.mac-tracker-visual-auto__signal\.is-manual \{ color: var\(--warn\); background: var\(--warn-soft\)/);
-  assert.match(css, /\.mac-tracker-visual-auto__signal strong \{/);
+  assert.match(css, /\.mac-tracker-visual-auto__signal\.is-manual\{color:/);
+  assert.match(css, /\.mac-tracker-visual-auto__signal i\{/);
 });
 
-test('card actions stay inside each card, with approval only on Review and a visible skip control everywhere', () => {
+test('card actions stay inside each card, with approval only on eligible review cards and a visible skip control', () => {
   const cardStart = admin.indexOf('<article class="mac-tracker-visual-card');
   const cardEnd = admin.indexOf('</article>', cardStart);
   const card = admin.slice(cardStart, cardEnd);
@@ -85,7 +81,8 @@ test('card actions stay inside each card, with approval only on Review and a vis
 test('monitor and skipped-project surfaces use clear button treatments', () => {
   assert.match(admin, /class="button" data-workflow-view-all/);
   assert.match(admin, /mac-tracker-workflow-pagination__controls/);
-  assert.match(css, /\.mac-tracker-workflow-pagination__controls\s*\{/);
-  assert.match(css, /\.mac-tracker-wrap \.mac-tracker-table-shell \{ margin-top: var\(--space-4\); \}/);
-  assert.match(css, /\.mac-tracker-button--skip\s*\{/);
+  assert.match(css, /\.mac-tracker-workflow-pagination__controls\{/);
+  assert.match(css, /\.mac-tracker-table-shell\{/);
+  assert.match(css, /\.mac-tracker-button--skip\{/);
+  assert.doesNotMatch(ui, /fetch\(|XMLHttpRequest/);
 });

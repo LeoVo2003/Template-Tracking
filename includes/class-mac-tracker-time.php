@@ -40,6 +40,21 @@ class MAC_Tracker_Time {
 		return $local->format( 'Y-m-d H:i:s' );
 	}
 
+	public static function bangkok_day_start_utc( $date ) {
+		$local = DateTime::createFromFormat( '!Y-m-d', (string) $date, new DateTimeZone( 'Asia/Bangkok' ) );
+		if ( ! $local ) { return ''; }
+		$local->setTimezone( new DateTimeZone( 'UTC' ) );
+		return $local->format( 'Y-m-d H:i:s' );
+	}
+
+	public static function bangkok_next_day_start_utc( $date ) {
+		$local = DateTime::createFromFormat( '!Y-m-d', (string) $date, new DateTimeZone( 'Asia/Bangkok' ) );
+		if ( ! $local ) { return ''; }
+		$local->modify( '+1 day' );
+		$local->setTimezone( new DateTimeZone( 'UTC' ) );
+		return $local->format( 'Y-m-d H:i:s' );
+	}
+
 	private static function bangkok_parts( $utc_value ) {
 		$utc_value = trim( (string) $utc_value );
 		if ( '' === $utc_value ) { return null; }

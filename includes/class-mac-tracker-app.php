@@ -2,14 +2,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-/**
- * Clean public read-only routes for MAC Project Tracker.
- *
- * Administrators keep the existing operational controls. Guests and users
- * without manage_options receive the same data presentation without mutation
- * scripts or controls. Mutating requests still travel through the protected
- * admin-post/admin-ajax/REST handlers.
- */
+/** Clean standalone routes backed by the current WordPress administrator session. */
 class MAC_Tracker_App {
 
 	const QUERY_VAR = 'mac_tracker_app';
@@ -80,10 +73,18 @@ class MAC_Tracker_App {
 			return;
 		}
 
+		if ( ! is_user_logged_in() ) {
+			auth_redirect();
+			exit;
+		}
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have permission to access MAC Tracker.' ), '', array( 'response' => 403 ) );
+		}
+
 		status_header( 200 );
 		nocache_headers();
 		$this->admin->set_standalone( true );
-		$this->admin->set_public_view( ! current_user_can( 'manage_options' ) );
+		$this->admin->set_public_view( false );
 		$this->admin->enqueue_standalone_assets();
 		$renderers = array(
 			'dashboard' => 'render_dashboard',
@@ -97,6 +98,7 @@ class MAC_Tracker_App {
 		<head>
 			<meta charset="<?php bloginfo( 'charset' ); ?>">
 			<meta name="viewport" content="width=device-width, initial-scale=1">
+			<meta name="robots" content="noindex,nofollow,noarchive">
 			<title><?php echo esc_html( 'MAC Project Tracker' ); ?></title>
 			<?php wp_print_styles( array( 'dashicons', 'mac-tracker-fonts', 'mac-project-tracker-standalone' ) ); ?>
 		</head>

@@ -381,7 +381,7 @@ class MAC_Tracker_Repository {
 
 	/** One bulk query for the Projects screen; no WPM/API call and no N+1. */
 	public function project_page( array $filters = array() ) {
-		$per_page = isset( $filters['per_page'] ) ? (int) $filters['per_page'] : 150;
+		$per_page = isset( $filters['per_page'] ) ? (int) $filters['per_page'] : 50;
 		$per_page = in_array( $per_page, array( 50, 100, 150, 200 ), true ) ? $per_page : 0;
 		$page     = max( 1, absint( $filters['paged'] ?? 1 ) );
 		// A CSV pin is the verified historical fallback. Once WPM has an
@@ -428,12 +428,28 @@ class MAC_Tracker_Repository {
 			$where[] = 'p.task_completed_at < %s';
 			$args[]  = MAC_Tracker_Time::bangkok_next_month_start_utc( $month_to );
 		}
+		$date_from = trim( (string) ( $filters['date_from'] ?? '' ) );
+		$date_to   = trim( (string) ( $filters['date_to'] ?? '' ) );
+		if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_from ) ) {
+			$where[] = 'p.task_completed_at >= %s';
+			$args[]  = MAC_Tracker_Time::bangkok_day_start_utc( $date_from );
+		}
+		if ( preg_match( '/^\d{4}-\d{2}-\d{2}$/', $date_to ) ) {
+			$where[] = 'p.task_completed_at < %s';
+			$args[]  = MAC_Tracker_Time::bangkok_next_day_start_utc( $date_to );
+		}
 
-		foreach ( array( 'website', 'layout' ) as $field ) {
-			$value  = sanitize_key( $filters[ $field ] ?? '' );
-			$column = 'website' === $field ? 'p.website_url' : 'p.layout_url';
-			if ( 'yes' === $value ) { $where[] = "{$column} <> ''"; }
-			if ( 'no' === $value ) { $where[] = "{$column} = ''"; }
+		$website = sanitize_key( $filters['website'] ?? '' );
+		if ( 'yes' === $website ) { $where[] = "p.website_url <> ''"; }
+		if ( 'no' === $website ) { $where[] = "p.website_url = ''"; }
+		$layout = trim( (string) ( $filters['layout'] ?? '' ) );
+		if ( '__missing' === $layout || 'no' === $layout ) {
+			$where[] = "p.layout_url = ''";
+		} elseif ( 'yes' === $layout ) {
+			$where[] = "p.layout_url <> ''";
+		} elseif ( '' !== $layout ) {
+			$where[] = 'p.layout_url = %s';
+			$args[]  = $layout;
 		}
 
 		$tone = sanitize_text_field( (string) ( $filters['tone'] ?? '' ) );
@@ -451,7 +467,7 @@ class MAC_Tracker_Repository {
 			$where[] = 'v.tone = %s';
 			$args[]  = $tone;
 		} elseif ( 'pending' === $tone ) {
-			$where[] = "(v.id IS NULL OR v.capture_status <> 'captured' OR v.tone_status <> 'classified')";
+			$where[] = "(v.id IS NULL OR COALESCE(v.capture_status,'') <> 'captured' OR COALESCE(v.tone_status,'') <> 'classified')";
 		}
 
 		$where_sql = implode( ' AND ', $where );
@@ -521,6 +537,12 @@ class MAC_Tracker_Repository {
 		return array_values( $names );
 	}
 
+	/** Distinct real layout values for the Projects presentation filter. */
+	public function list_layouts() {
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
+		return array_values( array_filter( array_map( 'strval', (array) $this->wpdb->get_col( "SELECT DISTINCT p.layout_url FROM {$this->projects} p WHERE {$visible} AND p.layout_url <> '' ORDER BY p.layout_url ASC" ) ) ) );
+	}
+
 	/** Strip decorative emoji so one person has one filter option. */
 	public function canonical_person_name( $name ) {
 		$name = trim( (string) $name );
@@ -566,18 +588,41 @@ class MAC_Tracker_Repository {
 		);
 	}
 
-	/** The review queue is entirely local and only includes currently visible project rows. */
-	public function color_review_rows() {
-		$page = $this->project_page(
-			array(
-				'website' => 'yes',
-				'exclude_visual' => true,
-				'per_page' => 0,
-				'orderby'  => 'date',
-				'order'    => 'desc',
-			)
-		);
-		return (array) $page['rows'];
+	/** Full Color Review counts are independent from the current rendered page. */
+	public function color_review_counts() {
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
+		$row = (array) $this->wpdb->get_row( "SELECT COUNT(*) AS total, SUM(COALESCE(c.locked,0) = 0) AS pending, SUM(COALESCE(c.locked,0) = 1) AS approved FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND {$this->exclusion_sql('p')} AND p.website_url <> ''", ARRAY_A );
+		return array_map( 'intval', array_merge( array( 'total' => 0, 'pending' => 0, 'approved' => 0 ), $row ) );
+	}
+
+	/** Paginated Color Review rows; never render the full website roster at once. */
+	public function color_review_page( $status = 'pending', $page = 1, $per_page = 24, $search = '' ) {
+		$status = 'approved' === $status ? 'approved' : 'pending';
+		$page = max( 1, absint( $page ) );
+		$per_page = max( 12, min( 32, absint( $per_page ) ) );
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
+		$where = array( $visible, $this->exclusion_sql( 'p' ), "p.website_url <> ''", 'approved' === $status ? 'COALESCE(c.locked,0) = 1' : 'COALESCE(c.locked,0) = 0' );
+		$args = array();
+		$search = trim( (string) $search );
+		if ( '' !== $search ) {
+			$like = '%' . $this->wpdb->esc_like( $search ) . '%';
+			$where[] = '(p.name LIKE %s OR p.website_url LIKE %s OR p.wpm_project_id = %d)';
+			$args[] = $like;
+			$args[] = $like;
+			$args[] = absint( $search );
+		}
+		$where_sql = implode( ' AND ', $where );
+		$count_sql = "SELECT COUNT(*) FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$where_sql}";
+		$total = $args ? (int) $this->wpdb->get_var( $this->wpdb->prepare( $count_sql, $args ) ) : (int) $this->wpdb->get_var( $count_sql );
+		$query = "SELECT p.*, c.status AS color_status, c.colors_json, c.source_type AS color_source_type, c.source_raw AS color_source_raw, c.approved_at, c.locked AS color_locked, v.screenshot_url, v.tone, v.tone_status, v.capture_status FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id LEFT JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where_sql} ORDER BY p.task_completed_at DESC, p.id DESC LIMIT %d OFFSET %d";
+		$query_args = array_merge( $args, array( $per_page, ( $page - 1 ) * $per_page ) );
+		$rows = (array) $this->wpdb->get_results( $this->wpdb->prepare( $query, $query_args ), ARRAY_A );
+		return array( 'rows' => $rows, 'total' => $total, 'per_page' => $per_page, 'paged' => $page, 'total_pages' => max( 1, (int) ceil( $total / $per_page ) ) );
+	}
+
+	/** Compatibility helper for bounded callers. */
+	public function color_review_rows( $limit = 32 ) {
+		return $this->color_review_page( 'pending', 1, min( 32, max( 12, absint( $limit ) ) ) )['rows'];
 	}
 
 	/** IDs without a prior extraction; one batch is deliberately bounded. */
@@ -768,11 +813,37 @@ class MAC_Tracker_Repository {
 	private function visual_run_time( $value ) { $time = strtotime( (string) $value ); return $time ? gmdate( 'Y-m-d H:i:s', $time ) : null; }
 	private function cleanup_visual_run_history() { $this->wpdb->query( "DELETE FROM {$this->visual_run_events} WHERE created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)" ); $this->wpdb->query( "DELETE FROM {$this->visual_runs} WHERE created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 DAY)" ); }
 
-	/** Current snapshot rows with their locally stored visual review. */
+	private function visual_review_where( $bucket = 'all' ) {
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
+		$where = "{$visible} AND {$this->exclusion_sql('p')} AND (v.screenshot_url <> '' OR v.diagnostic_screenshot_url <> '' OR v.pipeline_status IN ('idle', 'capture_queued', 'capturing', 'retry_wait', 'blocked', 'failed'))";
+		if ( 'locked' === $bucket ) { return $where . ' AND v.human_locked = 1'; }
+		if ( 'review' === $bucket ) { return $where . " AND v.human_locked = 0 AND (v.tone_status = 'classified' OR v.pipeline_status = 'needs_review')"; }
+		if ( 'processing' === $bucket ) { return $where . " AND v.human_locked = 0 AND COALESCE(v.tone_status,'') <> 'classified' AND COALESCE(v.pipeline_status,'') <> 'needs_review'"; }
+		return $where;
+	}
+
+	public function visual_review_counts() {
+		$base = $this->visual_review_where( 'all' );
+		$row = (array) $this->wpdb->get_row( "SELECT COUNT(*) AS total, SUM(v.human_locked = 1) AS locked, SUM(v.human_locked = 0 AND (v.tone_status = 'classified' OR v.pipeline_status = 'needs_review')) AS review, SUM(v.human_locked = 0 AND COALESCE(v.tone_status,'') <> 'classified' AND COALESCE(v.pipeline_status,'') <> 'needs_review') AS processing FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$base}", ARRAY_A );
+		return array_map( 'intval', array_merge( array( 'total' => 0, 'processing' => 0, 'review' => 0, 'locked' => 0 ), $row ) );
+	}
+
+	public function visual_review_page( $bucket = 'processing', $page = 1, $per_page = 24 ) {
+		$bucket = in_array( $bucket, array( 'processing', 'review', 'locked' ), true ) ? $bucket : 'processing';
+		$page = max( 1, absint( $page ) );
+		$per_page = max( 12, min( 48, absint( $per_page ) ) );
+		$where = $this->visual_review_where( $bucket );
+		$total = (int) $this->wpdb->get_var( "SELECT COUNT(*) FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where}" );
+		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.capture_bundle_json, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where} ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d OFFSET %d";
+		$rows = (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $per_page, ( $page - 1 ) * $per_page ), ARRAY_A );
+		return array( 'rows' => $rows, 'total' => $total, 'per_page' => $per_page, 'paged' => $page, 'total_pages' => max( 1, (int) ceil( $total / $per_page ) ) );
+	}
+
+	/** Compatibility helper for bounded operational callers. */
 	public function visual_review_rows( $limit = 120 ) {
 		$limit = max( 1, min( 300, absint( $limit ) ) );
-		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
-		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.capture_bundle_json, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$visible} AND {$this->exclusion_sql('p')} AND (v.screenshot_url <> '' OR v.diagnostic_screenshot_url <> '' OR v.pipeline_status IN ('idle', 'capture_queued', 'capturing', 'retry_wait', 'blocked', 'failed')) ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d";
+		$where = $this->visual_review_where( 'all' );
+		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.capture_bundle_json, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where} ORDER BY v.updated_at DESC LIMIT %d";
 		return (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
 	}
 
