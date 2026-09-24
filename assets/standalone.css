@@ -206,3 +206,86 @@ html[data-mac-theme]{background:var(--mac-canvas)}
 @media(max-width:1200px){.mac-tracker-wrap--dashboard .mac-tracker-masthead{margin-inline:-24px;padding-inline:48px}.mac-tracker-wrap--dashboard .mac-tracker-dashboard-primary{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-tone-distribution .mac-tracker-distribution{min-height:150px}.mac-tracker-wrap--dashboard .mac-tracker-dashboard-lower{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-dashboard-lower__side{grid-template-columns:1fr 1fr}.mac-tracker-wrap--dashboard .mac-tracker-editorial-band--side{min-height:100%}}
 @media(max-width:800px){.mac-tracker-wrap--dashboard .mac-tracker-masthead{min-height:124px;margin-inline:-14px;padding:24px 27px}.mac-tracker-wrap--dashboard .mac-tracker-masthead:after{right:25px;top:21px;font-size:7px}.mac-tracker-wrap--dashboard .mac-tracker-dashboard-heading{align-items:flex-start;flex-direction:column}.mac-tracker-wrap--dashboard .mac-tracker-date-range{width:100%}.mac-tracker-wrap--dashboard .mac-tracker-date-range>label{flex:1}.mac-tracker-wrap--dashboard .mac-tracker-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mac-tracker-wrap--dashboard .mac-tracker-dashboard-lower__side{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card{align-items:flex-start}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card dl{width:100%;flex-wrap:wrap}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card dl>div{min-width:20%;padding:7px 4px;border-left:0}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card:before{display:none}}
 @media(max-width:520px){.mac-tracker-wrap--dashboard .mac-tracker-masthead h1{font-size:42px}.mac-tracker-wrap--dashboard .mac-tracker-masthead p{max-width:300px;font-size:13px}.mac-tracker-wrap--dashboard .mac-tracker-masthead:after{display:none}.mac-tracker-wrap--dashboard .mac-tracker-metric-grid{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-analytics-grid--secondary{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-tone-distribution .mac-tracker-distribution{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-distribution__chart{margin:auto}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card dl>div{min-width:33.333%}.mac-tracker-wrap--dashboard .mac-tracker-timeline details{float:none;margin-top:3px}}
+
+/* Dashboard reference alignment — presentation only. Typography remains defined
+   by the v0.20.36 dashboard rules above; these refinements only control surfaces,
+   space, artwork, and panel balance. */
+.mac-tracker-wrap--dashboard .mac-tracker-masthead--dashboard {
+	background: linear-gradient(90deg, var(--mac-surface) 0%, color-mix(in srgb, var(--mac-surface) 94%, transparent) 49%, color-mix(in srgb, var(--mac-surface) 46%, transparent) 76%, color-mix(in srgb, var(--mac-surface) 75%, transparent) 100%);
+	isolation: isolate;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead--dashboard::after { z-index: 2; right: 52px; }
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__art {
+	position: absolute;
+	z-index: 1;
+	top: -50px;
+	right: -34px;
+	width: min(48%, 600px);
+	height: 248px;
+	pointer-events: none;
+	background: linear-gradient(90deg, var(--mac-surface), transparent 36%), url("editorial/forest-blossom.webp") right center / cover no-repeat;
+	opacity: .72;
+	filter: saturate(.74) sepia(.08);
+	clip-path: polygon(19% 0, 100% 0, 100% 100%, 0 100%);
+}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__title { z-index: 3; }
+.mac-tracker-wrap--dashboard .mac-tracker-dashboard-heading { padding-top: 5px; padding-bottom: 7px; }
+.mac-tracker-wrap--dashboard .mac-tracker-date-range > label,
+.mac-tracker-wrap--dashboard .mac-tracker-date-range details > summary { background: var(--mac-surface); box-shadow: var(--mac-shadow-sm); }
+
+.mac-tracker-wrap--dashboard .mac-tracker-metric-card { background: linear-gradient(135deg, var(--mac-surface), var(--mac-paper)); }
+.mac-tracker-wrap--dashboard .mac-tracker-metric-card::after {
+	right: -22px;
+	bottom: -31px;
+	width: 142px;
+	height: 126px;
+	background: url("editorial/olive-linen.webp") left center / cover no-repeat;
+	border: 0;
+	border-radius: 0;
+	opacity: .075;
+	transform: rotate(-10deg);
+}
+.mac-tracker-wrap--dashboard .mac-tracker-dashboard-primary,
+.mac-tracker-wrap--dashboard .mac-tracker-analytics-grid--secondary { align-items: stretch; }
+.mac-tracker-wrap--dashboard .mac-tracker-analytics-card,
+.mac-tracker-wrap--dashboard .mac-tracker-health-card { background: var(--mac-paper); }
+.mac-tracker-wrap--dashboard .mac-tracker-recent-projects img,
+.mac-tracker-wrap--dashboard .mac-tracker-recent-projects .mac-tracker-project-thumb { width: 58px; height: 38px; }
+.mac-tracker-wrap--dashboard .mac-tracker-recent-projects li { grid-template-columns: 58px minmax(0, 1fr) auto; gap: 11px; padding-block: 7px; }
+.mac-tracker-wrap--dashboard .mac-tracker-tone-distribution .mac-tracker-distribution { grid-template-columns: 168px minmax(0, 1fr); gap: 20px; }
+.mac-tracker-wrap--dashboard .mac-tracker-distribution__chart { width: 154px; height: 154px; }
+.mac-tracker-wrap--dashboard .mac-tracker-distribution__chart::before { background: var(--mac-paper); }
+.mac-tracker-wrap--dashboard .mac-tracker-metric-table th { background: var(--mac-panel); }
+
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card {
+	background: linear-gradient(100deg, color-mix(in srgb, var(--mac-panel) 90%, var(--mac-surface)) 0%, color-mix(in srgb, var(--mac-surface) 88%, var(--mac-panel)) 100%);
+	border-left: 1px solid rgba(102, 91, 66, .13);
+}
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card::after {
+	position: absolute;
+	inset: 0 44% 0 0;
+	background: url("editorial/olive-linen.webp") left center / cover no-repeat;
+	content: "";
+	opacity: .065;
+	pointer-events: none;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card > * { position: relative; z-index: 1; }
+.mac-tracker-wrap--dashboard .mac-tracker-dashboard-lower__side { grid-template-rows: auto auto; }
+.mac-tracker-wrap--dashboard .mac-tracker-health-card { min-height: 0; }
+.mac-tracker-wrap--dashboard .mac-tracker-editorial-band--side { background-position: right center; box-shadow: var(--mac-shadow-sm); }
+
+/* A light Dashboard-only shell polish keeps the fixed chrome coherent with the hero. */
+.mac-tracker-wrap--dashboard .mac-tracker-topbar { background: color-mix(in srgb, var(--mac-surface) 94%, transparent); }
+.mac-tracker-wrap--dashboard .mac-tracker-sidebar__nav a.is-active { box-shadow: 0 5px 12px color-mix(in srgb, var(--mac-olive-900) 16%, transparent); }
+
+@media (max-width: 1200px) {
+	.mac-tracker-wrap--dashboard .mac-tracker-masthead__art { width: 44%; right: -76px; }
+	.mac-tracker-wrap--dashboard .mac-tracker-tone-distribution .mac-tracker-distribution { grid-template-columns: 154px minmax(0, 1fr); }
+}
+@media (max-width: 800px) {
+	.mac-tracker-wrap--dashboard .mac-tracker-masthead__art { display: none; }
+	.mac-tracker-wrap--dashboard .mac-tracker-masthead--dashboard { background: var(--mac-surface); }
+	.mac-tracker-wrap--dashboard .mac-tracker-recent-projects img,
+	.mac-tracker-wrap--dashboard .mac-tracker-recent-projects .mac-tracker-project-thumb { width: 50px; height: 34px; }
+	.mac-tracker-wrap--dashboard .mac-tracker-recent-projects li { grid-template-columns: 50px minmax(0, 1fr) auto; }
+}

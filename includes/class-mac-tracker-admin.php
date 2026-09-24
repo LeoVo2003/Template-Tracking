@@ -1077,7 +1077,7 @@ class MAC_Tracker_Admin {
 						<div class="mac-tracker-topbar__user"><?php echo get_avatar( $user->ID, 32 ); ?><span><strong><?php echo esc_html( $user->display_name ); ?></strong><small>Administrator</small></span></div>
 					</header>
 					<main class="mac-tracker-main" id="mac-tracker-main">
-						<header class="mac-tracker-masthead"><div class="mac-tracker-masthead__title"><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div></header>
+						<header class="mac-tracker-masthead<?php echo 'dashboard' === $this->current_screen ? ' mac-tracker-masthead--dashboard' : ''; ?>"><div class="mac-tracker-masthead__title"><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><?php if ( 'dashboard' === $this->current_screen ) : ?><div class="mac-tracker-masthead__art" aria-hidden="true"></div><?php endif; ?></header>
 						<div class="mac-tracker-page-content">
 		<?php
 	}
