@@ -298,8 +298,8 @@
   document.addEventListener('change', function (event) {
     var projectRange = event.target.closest('.mac-tracker-filters select[name="range"]');
     if (projectRange) {
-      var projectForm = projectRange.closest('.mac-tracker-filters');
-      var customRange = projectForm?.querySelector('[data-mac-project-custom-range]');
+      var rangeControl = projectRange.closest('.mac-tracker-filter-range');
+      var customRange = rangeControl?.querySelector('[data-mac-project-custom-range]');
       if (customRange) {
         customRange.hidden = projectRange.value !== 'custom';
         if (!customRange.hidden) customRange.querySelector('input')?.focus();
