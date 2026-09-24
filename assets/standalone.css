@@ -686,3 +686,9 @@ html[data-mac-theme]{background:var(--mac-canvas)}
 .mac-tracker-wrap--projects .mac-tracker-masthead__art{right:6%;bottom:-495px;width:465px;height:698px}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead__title,.mac-tracker-wrap--projects .mac-tracker-masthead__title{position:relative;z-index:2}
 @media(max-width:800px){.mac-tracker-wrap--dashboard .mac-tracker-masthead__art,.mac-tracker-wrap--projects .mac-tracker-masthead__art{right:-4%;bottom:-455px;width:420px;height:630px}.mac-tracker-wrap--dashboard .mac-tracker-masthead::after,.mac-tracker-wrap--projects .mac-tracker-masthead::after{right:-18%;bottom:-410px;width:390px;height:585px}}
+
+/* Let the botanical layer travel underneath the operational canvas instead of clipping at the masthead. */
+.mac-tracker-wrap--dashboard .mac-tracker-masthead,.mac-tracker-wrap--projects .mac-tracker-masthead{overflow:visible;border-bottom:0;background:linear-gradient(90deg,var(--mac-canvas) 0%,var(--mac-canvas) 52%,#ebe5d8 100%)}
+.mac-tracker-wrap--dashboard .mac-tracker-page-content,.mac-tracker-wrap--projects .mac-tracker-page-content{position:relative;z-index:1}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__art,.mac-tracker-wrap--projects .mac-tracker-masthead__art{z-index:0}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead::after,.mac-tracker-wrap--projects .mac-tracker-masthead::after{z-index:0}
