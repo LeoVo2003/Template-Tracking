@@ -1,7 +1,7 @@
 // Stored `tone` remains the compact group. Older values stay valid forever.
 export const TONES = ['Vàng kem sáng', 'Vàng kem', 'Vàng be', 'Vàng nâu', 'Vàng đen', 'Vàng trắng', 'Đen vàng', 'Đen trắng', 'Đen xám', 'Hồng xanh trắng', 'Hồng trắng', 'Hồng kem', 'Hồng be', 'Hồng xám', 'Hồng nâu', 'Hồng đen', 'Đỏ trắng', 'Đỏ kem', 'Đỏ be', 'Đỏ hồng', 'Đỏ nâu', 'Đỏ đen', 'Nâu kem', 'Nâu trắng', 'Nâu be', 'Nâu vàng', 'Nâu xám', 'Nâu đen', 'Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem', 'Trắng kem', 'Trắng be', 'Trắng xám', 'Kem trắng', 'Kem be', 'Kem xám', 'Kem nâu', 'Be trắng', 'Be kem', 'Be xám', 'Be nâu', 'Xám trắng', 'Xám kem', 'Xám be', 'Xám nâu', 'Xám đen', 'Tím hồng', 'Tím trắng', 'Tím kem', 'Tím be', 'Tím xám', 'Tím đen', 'Cam trắng', 'Cam kem', 'Cam be', 'Cam nâu', 'Cam đen', 'Cần duyệt'];
 export const FAMILIES = ['white', 'ivory', 'cream', 'beige', 'greige', 'gray', 'charcoal', 'black', 'taupe', 'brown', 'terracotta', 'orange', 'peach', 'yellow', 'gold', 'champagne', 'red', 'burgundy', 'pink', 'rose', 'dusty_rose', 'purple', 'lavender', 'green', 'olive', 'sage', 'blue', 'navy', 'teal', 'aqua', 'neutral'];
-export const CANVAS_FAMILIES = ['white', 'ivory', 'cream', 'beige', 'greige', 'gray', 'charcoal', 'black', 'navy', 'brown', 'other'];
+export const CANVAS_FAMILIES = ['white', 'ivory', 'cream', 'beige', 'greige', 'gray', 'charcoal', 'black', 'navy', 'brown', 'gold', 'yellow', 'other'];
 
 export const TONE_SCHEMA = {
   type: 'object',

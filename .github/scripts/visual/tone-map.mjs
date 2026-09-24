@@ -1,4 +1,4 @@
-const surfaceWord = { white: 'trắng', ivory: 'trắng', cream: 'kem', beige: 'be', greige: 'be', gray: 'xám', charcoal: 'xám', black: 'đen', navy: 'đen', brown: 'nâu' };
+const surfaceWord = { white: 'trắng', ivory: 'trắng', cream: 'kem', beige: 'be', greige: 'be', gray: 'xám', charcoal: 'xám', black: 'đen', navy: 'đen', brown: 'nâu', gold: 'vàng', yellow: 'vàng' };
 const primaryWord = { white: 'Trắng', ivory: 'Trắng', cream: 'Kem', beige: 'Be', greige: 'Greige', gray: 'Xám', charcoal: 'Charcoal', black: 'Đen', taupe: 'Nâu', brown: 'Nâu', terracotta: 'Cam đất', orange: 'Cam', peach: 'Đào', yellow: 'Vàng', gold: 'Vàng', champagne: 'Vàng', red: 'Đỏ', burgundy: 'Đỏ rượu', pink: 'Hồng', rose: 'Rose', dusty_rose: 'Hồng đất', purple: 'Tím', lavender: 'Lavender', green: 'Xanh lá', olive: 'Olive', sage: 'Sage', blue: 'Xanh dương', navy: 'Navy', teal: 'Teal', aqua: 'Xanh ngọc' };
 const blueFamilies = new Set(['blue', 'navy', 'teal', 'aqua']);
 const greenFamilies = new Set(['green', 'sage', 'olive']);
@@ -27,7 +27,7 @@ function normalizedGroup(primary, base, secondary) {
   if (['red', 'burgundy'].includes(primary)) return 'pink' === secondary ? 'Đỏ hồng' : `Đỏ ${'xám' === baseWord ? 'trắng' : baseWord}`;
   if (['pink', 'rose', 'dusty_rose'].includes(primary)) return blueFamilies.has(secondary) ? 'Hồng xanh trắng' : `Hồng ${baseWord}`;
   if (['purple', 'lavender'].includes(primary)) return 'pink' === secondary ? 'Tím hồng' : `Tím ${baseWord}`;
-  if (greenFamilies.has(primary)) return 'đen' === baseWord ? 'Xanh đen' : ('kem' === baseWord ? 'Xanh kem' : 'Xanh trắng');
+  if (greenFamilies.has(primary)) return 'đen' === baseWord ? 'Xanh đen' : ('kem' === baseWord ? 'Xanh kem' : ('vàng' === baseWord ? 'Xanh vàng' : 'Xanh trắng'));
   if (blueFamilies.has(primary)) return 'đen' === baseWord ? 'Xanh đen' : ('kem' === baseWord ? 'Xanh kem' : ('be' === baseWord ? 'Xanh trắng' : 'Xanh trắng'));
   return 'Cần duyệt';
 }

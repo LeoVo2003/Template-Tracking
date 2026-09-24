@@ -453,15 +453,17 @@ class MAC_Tracker_Repository {
 		} elseif ( 'external' === $layout ) {
 			// A presentation group for non-template layout URLs. Keep the old exact
 			// layout filtering path below for bookmarked legacy URLs.
-			$where[] = "p.layout_url <> '' AND LOWER(p.layout_url) NOT REGEXP '(^|[^a-z0-9])s[0-9]{1,2}([^0-9]|$)'";
+			$where[] = "p.layout_url <> '' AND LOWER(p.layout_url) NOT REGEXP '(^|[^a-z0-9])[spgf][0-9]{1,3}([^a-z0-9]|$)'";
 		} elseif ( 'yes' === $layout ) {
 			$where[] = "p.layout_url <> ''";
-		} elseif ( preg_match( '/^demo:s(\\d{1,2})$/', strtolower( $layout ), $layout_match ) ) {
-			$template = sprintf( 's%02d', (int) $layout_match[1] );
+		// `demo:s01` remains accepted for saved legacy links; current controls use
+		// `template:` so every actual S/P/G/F family can be presented.
+		} elseif ( preg_match( '/^(?:demo:|template:)([a-z]{1,3}\\d{1,3})$/i', strtolower( $layout ), $layout_match ) ) {
+			$template = strtolower( $layout_match[1] );
 			// Match the complete template family (for example demo-s01/home and
 			// demo-s01/about-us), rather than a single raw subpage URL.
 			$where[] = 'LOWER(p.layout_url) REGEXP %s';
-			$args[]  = '(^|[^a-z0-9])' . $template . '([^0-9]|$)';
+			$args[]  = '(^|[^a-z0-9])' . preg_quote( $template, '/' ) . '([^a-z0-9]|$)';
 		} elseif ( '' !== $layout ) {
 			$where[] = 'p.layout_url = %s';
 			$args[]  = $layout;
@@ -565,12 +567,14 @@ class MAC_Tracker_Repository {
 	public function list_layout_groups() {
 		$groups = array();
 		foreach ( $this->list_layouts() as $layout_url ) {
-			if ( preg_match( '/(?:^|[^a-z0-9])s(\\d{1,2})(?:[^0-9]|$)/i', (string) $layout_url, $match ) ) {
-				$key = sprintf( 's%02d', (int) $match[1] );
-				$groups[ $key ] = array(
-					'value' => 'demo:' . $key,
-					'label' => strtoupper( $key ),
-				);
+			if ( preg_match_all( '/(?:^|[^a-z0-9])([a-z]{1,3}\\d{1,3})(?:[^a-z0-9]|$)/i', (string) $layout_url, $matches ) ) {
+				foreach ( (array) $matches[1] as $match ) {
+					$key = strtolower( (string) $match );
+					$groups[ $key ] = array(
+						'value' => 'template:' . $key,
+						'label' => strtoupper( $key ),
+					);
+				}
 			}
 		}
 		ksort( $groups, SORT_NATURAL );

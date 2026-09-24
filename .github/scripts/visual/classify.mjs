@@ -32,6 +32,7 @@ const CANVAS_GROUPS = {
   dark: ['black', 'charcoal'],
   dark_blue: ['navy'],
   warm_dark: ['brown'],
+  warm_accent: ['gold', 'yellow'],
 };
 const BRAND_GROUPS = {
   warm_metallic: ['gold', 'champagne', 'yellow'],
@@ -52,7 +53,9 @@ export function canvasCompatible(vision, deterministic) {
   if (!vision || !deterministic || vision === deterministic) return Boolean(vision && deterministic);
   const a = familyGroup(vision, CANVAS_GROUPS), b = familyGroup(deterministic, CANVAS_GROUPS);
   if (a && a === b) return true;
-  return ['light_white', 'light_warm', 'light_gray'].includes(a) && ['light_white', 'light_warm', 'light_gray'].includes(b);
+  const light = ['light_white', 'light_warm', 'light_gray'];
+  if (light.includes(a) && light.includes(b)) return true;
+  return ('warm_accent' === a && ['light_white', 'light_warm'].includes(b)) || ('warm_accent' === b && ['light_white', 'light_warm'].includes(a));
 }
 export function brandCompatibility(vision, deterministic) {
   if (!vision || !deterministic) return 'unknown';

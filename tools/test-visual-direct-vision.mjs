@@ -31,6 +31,7 @@ test('canonical Direct Vision validator rejects free-form labels and accepts tax
   assert.throws(() => validateDirectVisionResult({ brand: 'gold', canvas: 'black', tone: 'Đen vàng', confidence: 0.94, reason: 'reversed semantics' }), /maps to Vàng đen/);
   assert.equal(directVisionEligible({ screenshot_url: 'https://cdn.test/full.jpg', diagnostic_screenshot_url: '', last_error_code: '' }), true);
   assert.equal(directVisionEligible({ screenshot_url: '', diagnostic_screenshot_url: 'https://cdn.test/403.jpg', last_error_code: 'HTTP_403' }), false);
+  assert.equal(validateDirectVisionResult({ brand: 'green', canvas: 'gold', tone: 'Xanh vàng', confidence: 0.91, reason: 'Leaf-green controls repeat across gold structural panels.' }, 'fixture', 'fixture-model').tone, 'Xanh vàng');
 });
 
 test('direct mode invokes canonical validator and keeps Vision tone authoritative', async () => {

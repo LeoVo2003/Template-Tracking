@@ -131,11 +131,12 @@
     var target = trigger.getAttribute('data-mac-fragment-target');
     var section = trigger.getAttribute('data-mac-fragment-section') || 'processing';
     var colorStatus = trigger.getAttribute('data-mac-color-status') || '';
+    var colorSearch = trigger.getAttribute('data-mac-color-search') || '';
     var pageSize = trigger.getAttribute('data-mac-page-size') || '';
     var fragmentPage = trigger.getAttribute('data-mac-fragment-page') || '';
     var panel = document.querySelector('[data-mac-fragment-panel="' + target + '"]');
     if (!panel) return;
-    var key = [target, section, colorStatus, pageSize, fragmentPage].join(':');
+    var key = [target, section, colorStatus, colorSearch, pageSize, fragmentPage].join(':');
     function render(html) {
       panel.innerHTML = html;
       panel.removeAttribute('aria-busy');
@@ -154,6 +155,7 @@
       target: target,
       section: section,
       color_status: colorStatus,
+      color_search: colorSearch,
       standalone: macTrackerApp.standalone ? '1' : '0'
     });
     if (pageSize) {
@@ -176,6 +178,20 @@
         panel.removeAttribute('aria-busy');
         fragmentError(panel, error.message, function () { loadFragment(trigger, true); });
       });
+  }
+
+  function warmFragment(trigger) {
+    if (!window.macTrackerApp || !trigger || !trigger.matches('[data-mac-fragment-tabs] [data-mac-fragment-target]')) return;
+    var target = trigger.getAttribute('data-mac-fragment-target'), section = trigger.getAttribute('data-mac-fragment-section') || 'processing';
+    var colorStatus = trigger.getAttribute('data-mac-color-status') || '', pageSize = trigger.getAttribute('data-mac-page-size') || '';
+    var key = [target, section, colorStatus, '', pageSize, ''].join(':');
+    if (fragmentCache.has(key)) return;
+    var body = new URLSearchParams({ action: 'mac_tracker_load_fragment', nonce: macTrackerApp.fragmentNonce, target: target, section: section, color_status: colorStatus, standalone: macTrackerApp.standalone ? '1' : '0' });
+    if (pageSize) { if ('action' === section) body.set('color_per_page', pageSize); else body.set('visual_per_page', pageSize); }
+    fetch(macTrackerApp.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body })
+      .then(function (response) { return response.json(); })
+      .then(function (payload) { if (payload.success && payload.data?.html) fragmentCache.set(key, payload.data.html); })
+      .catch(function () {});
   }
 
   function setupLocalTabs() {
@@ -252,6 +268,8 @@
     }
     closeMenus();
   });
+  document.addEventListener('pointerover', function (event) { warmFragment(event.target.closest('[data-mac-fragment-target]')); });
+  document.addEventListener('focusin', function (event) { warmFragment(event.target.closest('[data-mac-fragment-target]')); });
 
   document.addEventListener('keydown', function (event) {
     if ('Escape' !== event.key) return;
@@ -277,16 +295,25 @@
   document.addEventListener('change', function (event) {
     var size = event.target.closest('[data-mac-fragment-page-size]');
     if (!size) return;
+    var colorSearch = size.closest('[data-mac-fragment-panel]')?.querySelector('input[name="color_search"]')?.value || '';
     loadFragment({
       getAttribute: function (name) {
-        if ('data-mac-fragment-target' === name) return size.getAttribute('data-mac-fragment-target');
-        if ('data-mac-fragment-section' === name) return size.getAttribute('data-mac-fragment-section');
         if ('data-mac-page-size' === name) return size.value;
-        return '';
+        if ('data-mac-color-search' === name) return colorSearch;
+        return size.getAttribute(name) || '';
       }
     }, true);
   });
   document.addEventListener('mac:invalidatefragments', function () { fragmentCache.clear(); });
+  document.addEventListener('mac:loadfragment', function (event) {
+    var detail = event.detail || {};
+    if (!detail.target || !detail.section) return;
+    loadFragment({ getAttribute: function (name) {
+      if ('data-mac-fragment-target' === name) return detail.target;
+      if ('data-mac-fragment-section' === name) return detail.section;
+      return detail[name.replace('data-mac-', '')] || '';
+    } }, true);
+  });
   if (window.macTrackerApp?.theme) setTheme(macTrackerApp.theme);
   setupLocalTabs();
   hydrateLazyCards(document);

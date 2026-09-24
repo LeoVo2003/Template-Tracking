@@ -37,3 +37,8 @@ test('V3.18 always resolves brand first and structural canvas second', () => {
   assert.equal(mapVietnameseTone(semantic('blue', 'white')), 'Xanh trắng');
   assert.equal(mapVietnameseTone(semantic('black', 'white')), 'Đen trắng');
 });
+
+test('leaf green with a gold structural canvas remains Xanh vàng', () => {
+  assert.deepEqual(resolveTone(semantic('green', 'gold')), { precise_tone: 'Xanh lá vàng', tone_group: 'Xanh vàng', base_surface: 'gold' });
+  assert.equal(mapVietnameseTone(semantic('olive', 'yellow')), 'Xanh vàng');
+});

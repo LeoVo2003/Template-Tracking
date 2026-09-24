@@ -119,6 +119,10 @@
           if (!payload.success) throw new Error(payload.data?.message || 'Visual action failed.');
           ajaxNotice(form, payload.data.message || 'Action queued.', false, 'data-visual-ajax-notice');
           document.dispatchEvent(new CustomEvent('mac:invalidatefragments'));
+          if (/^approve_(?:selected|one_)/.test(action)) {
+            document.dispatchEvent(new CustomEvent('mac:loadfragment', { detail: { target: 'ai-panel', section: 'locked' } }));
+            return;
+          }
           return fetchStatuses(ids).then(startPolling);
         })
         .catch(function (error) { ajaxNotice(form, error.message || 'Visual action failed.', true, 'data-visual-ajax-notice'); })
