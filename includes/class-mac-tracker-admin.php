@@ -184,8 +184,8 @@ class MAC_Tracker_Admin {
 			<section class="mac-tracker-analytics-card mac-tracker-tone-distribution"><header><div><p class="mac-tracker-eyebrow">AI tone distribution</p><h2>True color signals</h2></div><a href="<?php echo esc_url( $this->app_url( 'analysis', array( 'section' => 'review' ) ) ); ?>">Review</a></header><?php $this->distribution_summary( $insights['colors'] ); ?></section>
 		</div>
 		<div class="mac-tracker-analytics-grid mac-tracker-analytics-grid--secondary">
-			<section class="mac-tracker-analytics-card"><header><div><p class="mac-tracker-eyebrow">Template usage</p><h2>Top templates</h2></div><span><?php echo esc_html( number_format_i18n( count( $insights['templates'] ) ) ); ?> found</span></header><?php $this->ranked_list( $insights['templates'], max( 1, (int) $insights['project_count'] ) ); ?></section>
-			<section class="mac-tracker-analytics-card"><header><div><p class="mac-tracker-eyebrow">Cross-section</p><h2>Template × color</h2></div><span>Top combinations</span></header><div class="mac-tracker-metric-table"><table><thead><tr><th>Template</th><th>Top color</th><th>Projects</th></tr></thead><tbody><?php if ( empty( $insights['combinations'] ) ) : ?><tr><td colspan="3">No classified template/color pairs in this range.</td></tr><?php else : foreach ( $insights['combinations'] as $item ) : ?><tr><td><?php echo esc_html( $item['template'] ); ?></td><td><span class="mac-tracker-color-key mac-tracker-color-key--<?php echo esc_attr( sanitize_title( $item['color'] ) ); ?>"><i></i><?php echo esc_html( $item['color'] ); ?></span></td><td><?php echo esc_html( number_format_i18n( $item['count'] ) ); ?></td></tr><?php endforeach; endif; ?></tbody></table></div></section>
+			<section class="mac-tracker-analytics-card"><header><div><p class="mac-tracker-eyebrow">Template usage</p><h2>Top templates</h2></div><span><?php echo esc_html( number_format_i18n( count( $insights['templates'] ) ) ); ?> families</span></header><?php $this->template_bar_chart( $insights['templates'], max( 1, (int) $insights['project_count'] ) ); ?></section>
+			<section class="mac-tracker-analytics-card"><header><div><p class="mac-tracker-eyebrow">Cross-section</p><h2>Family × color</h2></div><span>Top color signal</span></header><div class="mac-tracker-metric-table"><table><thead><tr><th>Template family</th><th>Top color</th><th>Projects</th><th>Share</th></tr></thead><tbody><?php if ( empty( $insights['family_combinations'] ) ) : ?><tr><td colspan="4">No classified family/color pairs in this range.</td></tr><?php else : foreach ( $insights['family_combinations'] as $item ) : ?><tr><td><?php echo esc_html( $item['family'] ); ?></td><td><span class="mac-tracker-color-key mac-tracker-color-key--<?php echo esc_attr( sanitize_title( $item['color'] ) ); ?>"><i></i><?php echo esc_html( $item['color'] ); ?></span></td><td><?php echo esc_html( number_format_i18n( $item['count'] ) ); ?></td><td><?php echo esc_html( $item['share'] ); ?>%</td></tr><?php endforeach; endif; ?></tbody></table></div></section>
 		</div>
 		<section class="mac-tracker-pipeline-card" aria-label="Visual Tone pipeline summary"><span class="mac-tracker-pipeline-card__mark mac-tracker-leaf-mark" aria-hidden="true"><i></i><i></i><i></i></span><div><p class="mac-tracker-eyebrow">Visual Tone pipeline</p><h2>Current processing snapshot</h2></div><dl><div><dt>Captured</dt><dd><?php echo esc_html( number_format_i18n( (int) ( $visual_stats['captured'] ?? 0 ) ) ); ?></dd></div><div><dt>Analyzed</dt><dd><?php echo esc_html( number_format_i18n( (int) ( $visual_stats['classified'] ?? 0 ) ) ); ?></dd></div><div><dt>Review</dt><dd><?php echo esc_html( number_format_i18n( $review_count ) ); ?></dd></div><div><dt>Locked</dt><dd><?php echo esc_html( number_format_i18n( $locked_count ) ); ?></dd></div><div><dt>Failed</dt><dd><?php echo esc_html( number_format_i18n( (int) ( $visual_stats['failed'] ?? 0 ) ) ); ?></dd></div></dl></section>
 		<div class="mac-tracker-dashboard-lower">
@@ -1193,27 +1193,37 @@ class MAC_Tracker_Admin {
 	private function dashboard_insights( array $rows ) {
 		$templates = array();
 		$colors = array();
-		$pairs = array();
+		$family_colors = array();
+		$family_totals = array();
 		$projects = array();
 		foreach ( $rows as $row ) {
 			$project_id = absint( $row['wpm_project_id'] ?? 0 );
 			if ( $project_id && isset( $projects[ $project_id ] ) ) { continue; }
 			if ( $project_id ) { $projects[ $project_id ] = true; }
-			$template = $this->layout_label( $row['layout_url'] ?? '' );
-			$template = '—' === $template || 'Open layout' === $template ? '' : $template;
+			$family = $this->template_family_label( $row['layout_url'] ?? '' );
 			$tone = 'classified' === (string) ( $row['tone_status'] ?? '' ) ? trim( (string) ( $row['tone'] ?? '' ) ) : '';
 			$color = $this->brand_color_label( $tone );
-			if ( $template ) { $templates[ $template ] = ( $templates[ $template ] ?? 0 ) + 1; }
+			if ( $family ) { $templates[ $family ] = ( $templates[ $family ] ?? 0 ) + 1; }
 			if ( $color ) { $colors[ $color ] = ( $colors[ $color ] ?? 0 ) + 1; }
-			if ( $template && $color ) {
-				$key = $template . '|' . $color;
-				$pairs[ $key ] = array( 'template' => $template, 'color' => $color, 'count' => ( $pairs[ $key ]['count'] ?? 0 ) + 1 );
+			if ( $family ) { $family_totals[ $family ] = ( $family_totals[ $family ] ?? 0 ) + 1; }
+			if ( $family && $color ) {
+				$key = $family . '|' . $color;
+				$family_colors[ $key ] = array( 'family' => $family, 'color' => $color, 'count' => ( $family_colors[ $key ]['count'] ?? 0 ) + 1 );
 			}
 		}
 		arsort( $templates );
 		arsort( $colors );
-		usort( $pairs, function ( $a, $b ) { return $b['count'] <=> $a['count']; } );
-		return array( 'project_count' => count( $projects ), 'templates' => array_slice( $templates, 0, 6, true ), 'colors' => array_slice( $colors, 0, 8, true ), 'combinations' => array_slice( $pairs, 0, 6 ) );
+		$family_combinations = array();
+		foreach ( $family_colors as $item ) {
+			$family = $item['family'];
+			$family_combinations[ $family ] = isset( $family_combinations[ $family ] ) && $family_combinations[ $family ]['count'] >= $item['count'] ? $family_combinations[ $family ] : $item;
+		}
+		foreach ( $family_combinations as &$item ) {
+			$item['share'] = round( 100 * (int) $item['count'] / max( 1, (int) ( $family_totals[ $item['family'] ] ?? 0 ) ) );
+		}
+		unset( $item );
+		usort( $family_combinations, function ( $a, $b ) { return $b['count'] <=> $a['count']; } );
+		return array( 'project_count' => count( $projects ), 'templates' => array_slice( $templates, 0, 6, true ), 'colors' => array_slice( $colors, 0, 8, true ), 'family_combinations' => array_slice( $family_combinations, 0, 6 ) );
 	}
 
 	private function brand_color_label( $tone ) {
@@ -1229,6 +1239,18 @@ class MAC_Tracker_Admin {
 		foreach ( $items as $label => $count ) {
 			$percentage = min( 100, round( 100 * (int) $count / max( 1, (int) $total ) ) );
 			echo '<li><div><strong>' . esc_html( $label ) . '</strong><span>' . esc_html( number_format_i18n( $count ) ) . ' projects · ' . esc_html( $percentage ) . '%</span></div><i><b style="width:' . esc_attr( $percentage ) . '%"></b></i></li>';
+		}
+		echo '</ol>';
+	}
+
+	private function template_bar_chart( array $items, $total ) {
+		if ( empty( $items ) ) { echo '<div class="mac-tracker-empty mac-tracker-empty--compact"><strong>No template data in this range</strong><p>Template usage appears when a saved layout is available.</p></div>'; return; }
+		$max = max( $items );
+		echo '<ol class="mac-tracker-template-chart">';
+		foreach ( $items as $label => $count ) {
+			$height = max( 9, round( 100 * (int) $count / max( 1, (int) $max ) ) );
+			$share = round( 100 * (int) $count / max( 1, (int) $total ) );
+			echo '<li><span class="mac-tracker-template-chart__bar" style="--bar-height:' . esc_attr( $height ) . '%"><i></i></span><strong>' . esc_html( $label ) . '</strong><small>' . esc_html( number_format_i18n( $count ) . ' · ' . $share . '%' ) . '</small></li>';
 		}
 		echo '</ol>';
 	}
@@ -1693,6 +1715,13 @@ class MAC_Tracker_Admin {
 			return $parts['demo'] . ' - home' . ( '' === $parts['home_number'] ? '' : ' ' . $parts['home_number'] );
 		}
 		return '' === $this->first_url( $url ) ? '—' : 'Open layout';
+	}
+
+	/** Dashboard family insight intentionally ignores individual home variants. */
+	private function template_family_label( $url ) {
+		$parts = $this->layout_parts( $url );
+		if ( ! $parts ) { return ''; }
+		return strtoupper( preg_replace( '/^demo-/', '', (string) $parts['demo'] ) );
 	}
 
 	/** Canonical public template destination; source links can be inconsistent. */
