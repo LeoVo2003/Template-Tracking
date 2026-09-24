@@ -136,6 +136,9 @@
     var fragmentPage = trigger.getAttribute('data-mac-fragment-page') || '';
     var panel = document.querySelector('[data-mac-fragment-panel="' + target + '"]');
     if (!panel) return;
+    // A tab is feedback as well as navigation. Reflect the intended destination
+    // immediately, while the matching fragment is fetched in the background.
+    applyFragmentTabs(target, section);
     var key = [target, section, colorStatus, colorSearch, pageSize, fragmentPage].join(':');
     function render(html) {
       panel.innerHTML = html;
@@ -238,7 +241,7 @@
       if (row) { row.hidden = !row.hidden; if (!row.hidden) row.querySelector('input')?.focus(); }
       closeMenus(); return;
     }
-    var fragment = event.target.closest('[data-mac-fragment-target]');
+    var fragment = event.target.closest('[data-mac-fragment-target]:not(select)');
     if (fragment) { event.preventDefault(); loadFragment(fragment); return; }
     var theme = event.target.closest('[data-mac-theme-option]');
     if (theme) {

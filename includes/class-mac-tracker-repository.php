@@ -451,19 +451,19 @@ class MAC_Tracker_Repository {
 		if ( '__missing' === $layout || 'missing' === $layout || 'no' === $layout ) {
 			$where[] = "p.layout_url = ''";
 		} elseif ( 'external' === $layout ) {
-			// A presentation group for non-template layout URLs. Keep the old exact
-			// layout filtering path below for bookmarked legacy URLs.
-			$where[] = "p.layout_url <> '' AND LOWER(p.layout_url) NOT REGEXP '(^|[^a-z0-9])[spgf][0-9]{1,3}([^a-z0-9]|$)'";
+			// Only MAC's canonical /demo-xxx template URLs belong to a template
+			// group. Every other non-empty URL is intentionally one External layout.
+			$where[] = "p.layout_url <> '' AND LOWER(p.layout_url) NOT REGEXP '^(https?:)?//templates\\.macusaone\\.com/demo-[a-z0-9]+([/?#]|$)'";
 		} elseif ( 'yes' === $layout ) {
 			$where[] = "p.layout_url <> ''";
-		// `demo:s01` remains accepted for saved legacy links; current controls use
-		// `template:` so every actual S/P/G/F family can be presented.
-		} elseif ( preg_match( '/^(?:demo:|template:)([a-z]{1,3}\\d{1,3})$/i', strtolower( $layout ), $layout_match ) ) {
+		// `demo:s01` remains accepted for saved legacy links; controls only expose
+		// codes actually present in templates.macusaone.com/demo-xxx URLs.
+		} elseif ( preg_match( '/^(?:demo:|template:)([a-z0-9]+)$/i', strtolower( $layout ), $layout_match ) ) {
 			$template = strtolower( $layout_match[1] );
-			// Match the complete template family (for example demo-s01/home and
-			// demo-s01/about-us), rather than a single raw subpage URL.
+			// Match the complete canonical template family (for example demo-s01
+			// and demo-s01/about-us), rather than a loose token anywhere in a URL.
 			$where[] = 'LOWER(p.layout_url) REGEXP %s';
-			$args[]  = '(^|[^a-z0-9])' . preg_quote( $template, '/' ) . '([^a-z0-9]|$)';
+			$args[]  = '^(https?:)?//templates\\.macusaone\\.com/demo-' . preg_quote( $template, '/' ) . '([/?#]|$)';
 		} elseif ( '' !== $layout ) {
 			$where[] = 'p.layout_url = %s';
 			$args[]  = $layout;
@@ -567,14 +567,15 @@ class MAC_Tracker_Repository {
 	public function list_layout_groups() {
 		$groups = array();
 		foreach ( $this->list_layouts() as $layout_url ) {
-			if ( preg_match_all( '/(?:^|[^a-z0-9])([a-z]{1,3}\\d{1,3})(?:[^a-z0-9]|$)/i', (string) $layout_url, $matches ) ) {
-				foreach ( (array) $matches[1] as $match ) {
-					$key = strtolower( (string) $match );
-					$groups[ $key ] = array(
-						'value' => 'template:' . $key,
-						'label' => strtoupper( $key ),
-					);
-				}
+			$parts = wp_parse_url( (string) $layout_url );
+			$host  = strtolower( (string) ( $parts['host'] ?? '' ) );
+			$path  = (string) ( $parts['path'] ?? '' );
+			if ( 'templates.macusaone.com' === $host && preg_match( '#^/demo-([a-z0-9]+)(?:/|$)#i', $path, $matches ) ) {
+				$key = strtolower( (string) $matches[1] );
+				$groups[ $key ] = array(
+					'value' => 'template:' . $key,
+					'label' => strtoupper( $key ),
+				);
 			}
 		}
 		ksort( $groups, SORT_NATURAL );

@@ -27,10 +27,26 @@
     }
     function boxes() { return cards.map(function (card) { return card.querySelector('[data-visual-select]'); }).filter(Boolean); }
     function selectedIds() { return boxes().filter(function (box) { return box.checked; }).map(function (box) { return box.value; }); }
+    function adjustTabCount(section, amount) {
+      var tab = document.querySelector('[data-mac-fragment-tabs] [data-mac-fragment-target="ai-panel"][data-mac-fragment-section="' + section + '"]');
+      var count = tab?.querySelector('span');
+      if (!count) return;
+      count.textContent = String(Math.max(0, Number(count.textContent.replace(/[^0-9]/g, '')) + amount));
+    }
+    function removeApprovedCards(ids) {
+      ids.forEach(function (id) { cardFor(id)?.remove(); });
+      cards = cards.filter(function (card) { return card.isConnected; });
+      if (selectAll) selectAll.checked = false;
+      syncSelection();
+    }
     function syncSelection() {
       if (!selectAll) return;
       var all = boxes();
       var selected = all.filter(function (box) { return box.checked; });
+      var localOnly = selected.length > 0 && selected.every(function (box) {
+        var card = box.closest('[data-visual-card]');
+        return card?.dataset.visualLocalRetry === '1' && card.dataset.visualErrorCode === 'HTTP_403';
+      });
       selectAll.checked = all.length > 0 && selected.length === all.length;
       selectAll.indeterminate = selected.length > 0 && selected.length < all.length;
       form.querySelectorAll('[data-visual-bulk]').forEach(function (button) {
@@ -38,6 +54,12 @@
         button.dataset.visualLabel = base;
         button.textContent = base + (selected.length ? ' mục chọn' : ' trang này');
       });
+      var capture = form.querySelector('[data-visual-capture], button[value="recapture_selected"]');
+      var localCapture = form.querySelector('[data-visual-local-capture], button[value="local_retry_selected"]');
+      if (capture && localCapture) {
+        capture.hidden = localOnly;
+        localCapture.hidden = !localOnly;
+      }
     }
     selectAll?.addEventListener('change', function () { boxes().forEach(function (box) { box.checked = selectAll.checked; }); syncSelection(); });
     form.addEventListener('change', function (event) { if (event.target.matches('[data-visual-select]')) syncSelection(); });
@@ -119,8 +141,11 @@
           if (!payload.success) throw new Error(payload.data?.message || 'Visual action failed.');
           ajaxNotice(form, payload.data.message || 'Action queued.', false, 'data-visual-ajax-notice');
           document.dispatchEvent(new CustomEvent('mac:invalidatefragments'));
-          if (/^approve_(?:selected|one_)/.test(action)) {
-            document.dispatchEvent(new CustomEvent('mac:loadfragment', { detail: { target: 'ai-panel', section: 'locked' } }));
+          if (/^approve_(?:selected|one_)/.test(action) || /^save_tone_\d+$/.test(action)) {
+            var changed = Math.min(ids.length, Number(payload.data?.changed || ids.length));
+            removeApprovedCards(ids);
+            adjustTabCount('review', -changed);
+            adjustTabCount('locked', changed);
             return;
           }
           return fetchStatuses(ids).then(startPolling);
