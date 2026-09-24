@@ -150,6 +150,10 @@ class MAC_Tracker_Admin {
 		$custom_from = isset( $get['custom_from'] ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', (string) $get['custom_from'] ) ? (string) $get['custom_from'] : '';
 		$custom_to = isset( $get['custom_to'] ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', (string) $get['custom_to'] ) ? (string) $get['custom_to'] : '';
 		$dates = $this->date_range_values( $range, $custom_from, $custom_to );
+		// The custom chooser is deliberately separate from the preset select. Keep
+		// a readable preset visible after an AJAX custom-range refresh instead of
+		// leaving the native select with no selected option.
+		$preset_range = 'custom' === $range ? 'all' : $range;
 		$project_page = $this->repository->project_page( array( 'date_from' => $dates['from'], 'date_to' => $dates['to'], 'per_page' => 0, 'orderby' => 'date', 'order' => 'desc' ) );
 		$insights = $this->dashboard_insights( (array) $project_page['rows'] );
 		$visual_stats = $this->repository->visual_stats();
@@ -166,7 +170,7 @@ class MAC_Tracker_Admin {
 		<div class="mac-tracker-dashboard-layout">
 			<section class="mac-tracker-dashboard-heading" aria-label="Dashboard date range">
 				<div class="mac-tracker-dashboard-heading__copy"><p class="mac-tracker-eyebrow">Design operations overview</p><h2>Overview</h2><p>Track progress, analyze visual tone and keep delivery work visible.</p></div>
-				<form class="mac-tracker-date-range" method="get" action="<?php echo esc_url( $this->app_url( 'dashboard' ) ); ?>" data-mac-dashboard-range><label><span class="screen-reader-text">Date preset</span><span class="dashicons dashicons-calendar-alt" aria-hidden="true"></span><select name="range"><option value="month" <?php selected( $range, 'month' ); ?>>This month</option><option value="30" <?php selected( $range, '30' ); ?>>Last 30 days</option><option value="90" <?php selected( $range, '90' ); ?>>Last 90 days</option><option value="all" <?php selected( $range, 'all' ); ?>>All time</option></select></label><details<?php echo 'custom' === $range ? ' open' : ''; ?>><summary>Custom</summary><div><label><span>From</span><input type="date" name="custom_from" value="<?php echo esc_attr( $custom_from ); ?>"></label><label><span>To</span><input type="date" name="custom_to" value="<?php echo esc_attr( $custom_to ); ?>"></label><button class="button" type="submit">Apply range</button></div></details></form>
+				<form class="mac-tracker-date-range" method="get" action="<?php echo esc_url( $this->app_url( 'dashboard' ) ); ?>" data-mac-dashboard-range><label><span class="screen-reader-text">Date preset</span><span class="dashicons dashicons-calendar-alt" aria-hidden="true"></span><select name="range"><option value="month" <?php selected( $preset_range, 'month' ); ?>>This month</option><option value="30" <?php selected( $preset_range, '30' ); ?>>Last 30 days</option><option value="90" <?php selected( $preset_range, '90' ); ?>>Last 90 days</option><option value="all" <?php selected( $preset_range, 'all' ); ?>>All time</option></select></label><details<?php echo 'custom' === $range ? ' open' : ''; ?>><summary>Custom</summary><div><label><span>From</span><input type="date" name="custom_from" value="<?php echo esc_attr( $custom_from ); ?>"></label><label><span>To</span><input type="date" name="custom_to" value="<?php echo esc_attr( $custom_to ); ?>"></label><button class="button" type="submit">Apply</button></div></details></form>
 			</section>
 			<?php $this->notices(); ?>
 		<section class="mac-tracker-metric-grid mac-tracker-dashboard-kpis" aria-label="Key metrics">
