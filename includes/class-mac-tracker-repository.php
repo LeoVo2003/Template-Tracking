@@ -567,10 +567,13 @@ class MAC_Tracker_Repository {
 	public function list_layout_groups() {
 		$groups = array();
 		foreach ( $this->list_layouts() as $layout_url ) {
-			$parts = wp_parse_url( (string) $layout_url );
-			$path  = (string) ( $parts['path'] ?? '' );
-			if ( preg_match( '#(?:^|/)demo-([a-z0-9]+)(?:/|[?#]|$)#i', $path, $matches ) ) {
-				$key = strtolower( (string) $matches[1] );
+			$raw   = trim( (string) $layout_url );
+			$parts = wp_parse_url( $raw );
+			$host  = strtolower( (string) ( $parts['host'] ?? '' ) );
+			if ( preg_match( '/^(demo-[a-z0-9]+)$/i', $host, $matches ) || preg_match( '#(?:^|/)demo-([a-z0-9]+)(?:/|[?#]|$)#i', $raw, $matches ) ) {
+				$key = strtolower( (string) ( $matches[1] ?? '' ) );
+				$key = preg_replace( '/^demo-/', '', $key );
+				if ( '' === $key ) { continue; }
 				$groups[ $key ] = array(
 					'value' => 'template:' . $key,
 					'label' => strtoupper( $key ),

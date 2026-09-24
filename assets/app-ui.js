@@ -296,6 +296,16 @@
     });
   });
   document.addEventListener('change', function (event) {
+    var projectRange = event.target.closest('.mac-tracker-filters select[name="range"]');
+    if (projectRange) {
+      var projectForm = projectRange.closest('.mac-tracker-filters');
+      var customRange = projectForm?.querySelector('[data-mac-project-custom-range]');
+      if (customRange) {
+        customRange.hidden = projectRange.value !== 'custom';
+        if (!customRange.hidden) customRange.querySelector('input')?.focus();
+      }
+      return;
+    }
     var size = event.target.closest('[data-mac-fragment-page-size]');
     if (!size) return;
     var colorSearch = size.closest('[data-mac-fragment-panel]')?.querySelector('input[name="color_search"]')?.value || '';
