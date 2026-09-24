@@ -207,9 +207,8 @@ html[data-mac-theme]{background:var(--mac-canvas)}
 @media(max-width:800px){.mac-tracker-wrap--dashboard .mac-tracker-masthead{min-height:124px;margin-inline:-14px;padding:24px 27px}.mac-tracker-wrap--dashboard .mac-tracker-masthead:after{right:25px;top:21px;font-size:7px}.mac-tracker-wrap--dashboard .mac-tracker-dashboard-heading{align-items:flex-start;flex-direction:column}.mac-tracker-wrap--dashboard .mac-tracker-date-range{width:100%}.mac-tracker-wrap--dashboard .mac-tracker-date-range>label{flex:1}.mac-tracker-wrap--dashboard .mac-tracker-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mac-tracker-wrap--dashboard .mac-tracker-dashboard-lower__side{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card{align-items:flex-start}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card dl{width:100%;flex-wrap:wrap}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card dl>div{min-width:20%;padding:7px 4px;border-left:0}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card:before{display:none}}
 @media(max-width:520px){.mac-tracker-wrap--dashboard .mac-tracker-masthead h1{font-size:42px}.mac-tracker-wrap--dashboard .mac-tracker-masthead p{max-width:300px;font-size:13px}.mac-tracker-wrap--dashboard .mac-tracker-masthead:after{display:none}.mac-tracker-wrap--dashboard .mac-tracker-metric-grid{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-analytics-grid--secondary{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-tone-distribution .mac-tracker-distribution{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-distribution__chart{margin:auto}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card dl>div{min-width:33.333%}.mac-tracker-wrap--dashboard .mac-tracker-timeline details{float:none;margin-top:3px}}
 
-/* Dashboard reference alignment — presentation only. Typography remains defined
-   by the v0.20.36 dashboard rules above; these refinements only control surfaces,
-   space, artwork, and panel balance. */
+/* Dashboard reference alignment baseline. The scoped rebuild below supplies the
+   current presentation and restores the Project page's typography metrics. */
 .mac-tracker-wrap--dashboard .mac-tracker-masthead--dashboard {
 	background: linear-gradient(90deg, var(--mac-surface) 0%, color-mix(in srgb, var(--mac-surface) 94%, transparent) 49%, color-mix(in srgb, var(--mac-surface) 46%, transparent) 76%, color-mix(in srgb, var(--mac-surface) 75%, transparent) 100%);
 	isolation: isolate;
@@ -288,4 +287,182 @@ html[data-mac-theme]{background:var(--mac-canvas)}
 	.mac-tracker-wrap--dashboard .mac-tracker-recent-projects img,
 	.mac-tracker-wrap--dashboard .mac-tracker-recent-projects .mac-tracker-project-thumb { width: 50px; height: 34px; }
 	.mac-tracker-wrap--dashboard .mac-tracker-recent-projects li { grid-template-columns: 50px minmax(0, 1fr) auto; }
+}
+
+/* Dashboard rebuild: use the Project page's Inter type scale, then let the
+   layout and a single local botanical asset carry the editorial character. */
+.mac-tracker-wrap--dashboard .mac-tracker-main { padding-top: 0; }
+.mac-tracker-wrap--dashboard .mac-tracker-masthead {
+	width: auto;
+	max-width: none;
+	min-height: 162px;
+	margin: 0 -34px 20px;
+	padding: 29px 58px;
+	background: linear-gradient(105deg, var(--mac-surface) 0%, color-mix(in srgb, var(--mac-surface) 92%, transparent) 56%, color-mix(in srgb, var(--mac-surface) 46%, transparent) 100%);
+	border-bottom: 1px solid var(--mac-line);
+}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead::after { content: none; }
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__art {
+	top: 0;
+	right: 0;
+	width: min(47%, 650px);
+	height: 100%;
+	background: url("editorial/dashboard-botanical.svg") right 45% / 680px auto no-repeat;
+	opacity: .72;
+	filter: none;
+	clip-path: none;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead h1 {
+	color: var(--mac-ink);
+	font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 30px;
+	font-weight: 720;
+	line-height: 1.12;
+	letter-spacing: -.035em;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead p {
+	margin-top: 6px;
+	color: var(--mac-text-muted);
+	font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 13px;
+	font-style: normal;
+	font-weight: 400;
+	line-height: 1.5;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-page-content { max-width: 1450px; }
+.mac-tracker-wrap--dashboard .mac-tracker-dashboard-heading h2 {
+	font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 24px;
+	font-weight: 700;
+	line-height: 1.5;
+	letter-spacing: -.025em;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-dashboard-heading { padding-top: 2px; padding-bottom: 6px; }
+
+.mac-tracker-wrap--dashboard .mac-tracker-date-range { position: relative; min-height: 40px; gap: 9px; }
+.mac-tracker-wrap--dashboard .mac-tracker-date-range > label,
+.mac-tracker-wrap--dashboard .mac-tracker-date-range select,
+.mac-tracker-wrap--dashboard .mac-tracker-date-range details > summary {
+	height: 40px;
+	min-height: 40px;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-date-range > label { min-width: 164px; }
+.mac-tracker-wrap--dashboard .mac-tracker-date-range select,
+.mac-tracker-wrap--dashboard .mac-tracker-date-range details > summary {
+	color: var(--mac-text);
+	background-color: var(--mac-paper);
+	border-color: var(--mac-line-solid);
+	box-shadow: none;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-date-range details[open] > summary {
+	color: var(--mac-text);
+	background: var(--mac-paper);
+	border-color: var(--mac-olive-700);
+}
+.mac-tracker-wrap--dashboard .mac-tracker-date-range details > div {
+	width: 342px;
+	padding: 13px;
+	background: var(--mac-paper);
+	border-color: var(--mac-line-solid);
+}
+.mac-tracker-wrap--dashboard .mac-tracker-date-range [data-mac-dashboard-range-status] {
+	position: absolute;
+	z-index: 31;
+	top: calc(100% + 8px);
+	right: 0;
+	margin: 0;
+	padding: 7px 10px;
+	color: var(--mac-text-muted);
+	background: var(--mac-paper);
+	border: 1px solid var(--mac-line);
+	border-radius: 7px;
+	box-shadow: var(--mac-shadow-sm);
+}
+.mac-tracker-wrap--dashboard .mac-tracker-date-range [data-mac-dashboard-range-status].is-error { color: var(--mac-danger); }
+.mac-tracker-wrap--dashboard .mac-tracker-dashboard-layout.is-loading { pointer-events: none; opacity: .58; }
+
+.mac-tracker-wrap--dashboard .mac-tracker-metric-card { background: linear-gradient(135deg, var(--mac-surface), var(--mac-paper)); }
+.mac-tracker-wrap--dashboard .mac-tracker-metric-card::after {
+	right: -18px;
+	bottom: -14px;
+	width: 170px;
+	height: 132px;
+	background: url("editorial/dashboard-botanical.svg") right center / 300px auto no-repeat;
+	opacity: .12;
+	transform: none;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-metric-card strong {
+	font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 28px;
+	font-weight: 720;
+	line-height: 1;
+	letter-spacing: normal;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-analytics-card h2,
+.mac-tracker-wrap--dashboard .mac-tracker-health-card h2 {
+	font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 16px;
+	font-weight: 680;
+	line-height: 1.25;
+	letter-spacing: normal;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-distribution__chart strong {
+	font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 22px;
+	font-weight: 720;
+	line-height: 1;
+}
+
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card {
+	min-height: 78px;
+	background: linear-gradient(100deg, color-mix(in srgb, var(--mac-panel) 90%, var(--mac-surface)), var(--mac-surface));
+}
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card::before {
+	width: 48px;
+	height: 48px;
+	margin-right: 11px;
+	background: url("editorial/dashboard-botanical.svg") 4% center / 172px auto no-repeat;
+	border-radius: 0;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card::after {
+	inset: 0 42% 0 0;
+	background: url("editorial/dashboard-botanical.svg") left center / 470px auto no-repeat;
+	opacity: .09;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card h2 {
+	font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 17px;
+	font-weight: 680;
+	line-height: 1.25;
+	letter-spacing: normal;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card dd {
+	font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	font-size: 20px;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.mac-tracker-wrap--dashboard .mac-tracker-sidebar__utility { margin-top: 32px; }
+.mac-tracker-wrap--dashboard .mac-tracker-health-card dd {
+	min-width: 96px;
+	justify-content: flex-start;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-health-card .dashicons-github {
+	color: transparent;
+	background: var(--mac-olive-800);
+	-webkit-mask: url("editorial/github-mark.svg") center / contain no-repeat;
+	mask: url("editorial/github-mark.svg") center / contain no-repeat;
+}
+
+@media (max-width: 1200px) {
+	.mac-tracker-wrap--dashboard .mac-tracker-masthead { margin-inline: -24px; padding-inline: 48px; }
+	.mac-tracker-wrap--dashboard .mac-tracker-masthead__art { width: 46%; background-size: 560px auto; }
+}
+@media (max-width: 800px) {
+	.mac-tracker-wrap--dashboard .mac-tracker-main { padding-top: 0; }
+	.mac-tracker-wrap--dashboard .mac-tracker-masthead { min-height: 124px; margin-inline: -14px; padding: 24px 27px; }
+	.mac-tracker-wrap--dashboard .mac-tracker-masthead h1 { font-size: 25px; }
+	.mac-tracker-wrap--dashboard .mac-tracker-masthead__art { display: none; }
+	.mac-tracker-wrap--dashboard .mac-tracker-date-range { width: 100%; }
 }

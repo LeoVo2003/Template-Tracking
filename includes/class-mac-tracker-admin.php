@@ -12,6 +12,7 @@ class MAC_Tracker_Admin {
 	private $current_screen = '';
 	private $standalone = false;
 	private $public_view = false;
+	private $dashboard_fragment = false;
 
 	public function __construct( MAC_Tracker_Repository $repository, MAC_Tracker_Sync_Service $sync, MAC_Tracker_Elementor_Color_Service $colors ) {
 		$this->repository = $repository;
@@ -54,6 +55,7 @@ class MAC_Tracker_Admin {
 		add_action( 'wp_ajax_mac_tracker_visual_run_action', array( $this, 'handle_visual_run_action_ajax' ) );
 		add_action( 'wp_ajax_mac_tracker_load_fragment', array( $this, 'handle_load_fragment_ajax' ) );
 		add_action( 'wp_ajax_mac_tracker_load_project_rows', array( $this, 'handle_load_project_rows_ajax' ) );
+		add_action( 'wp_ajax_mac_tracker_load_dashboard', array( $this, 'handle_load_dashboard_ajax' ) );
 		add_action( 'wp_ajax_mac_tracker_save_ui_theme', array( $this, 'handle_save_ui_theme_ajax' ) );
 	}
 
@@ -110,6 +112,7 @@ class MAC_Tracker_Admin {
 			'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
 			'fragmentNonce' => wp_create_nonce( 'mac_tracker_load_fragment' ),
 			'projectRowsNonce' => wp_create_nonce( 'mac_tracker_load_project_rows' ),
+			'dashboardNonce' => wp_create_nonce( 'mac_tracker_load_dashboard' ),
 			'themeNonce'    => wp_create_nonce( 'mac_tracker_save_ui_theme' ),
 			'theme'         => $this->ui_theme(),
 			'standalone'    => (bool) $this->standalone,
@@ -156,12 +159,14 @@ class MAC_Tracker_Admin {
 		$review_count = (int) ( $visual_counts['review'] ?? 0 );
 		$locked_count = (int) ( $visual_counts['locked'] ?? 0 );
 		$settings = (array) get_option( 'mac_tracker_settings', array() );
-		$this->page_start( 'Dashboard', 'Track project volume, visual trends and automation health.', 'dashboard' );
+		if ( ! $this->dashboard_fragment ) {
+			$this->page_start( 'Dashboard', 'Track project volume, visual trends and automation health.', 'dashboard' );
+		}
 		?>
 		<div class="mac-tracker-dashboard-layout">
 			<section class="mac-tracker-dashboard-heading" aria-label="Dashboard date range">
 				<div class="mac-tracker-dashboard-heading__copy"><p class="mac-tracker-eyebrow">Design operations overview</p><h2>Overview</h2><p>Track progress, analyze visual tone and keep delivery work visible.</p></div>
-				<form class="mac-tracker-date-range" method="get" action="<?php echo esc_url( $this->app_url( 'dashboard' ) ); ?>"><label><span class="screen-reader-text">Date preset</span><span class="dashicons dashicons-calendar-alt" aria-hidden="true"></span><select name="range" onchange="this.form.submit()"><option value="month" <?php selected( $range, 'month' ); ?>>This month</option><option value="30" <?php selected( $range, '30' ); ?>>Last 30 days</option><option value="90" <?php selected( $range, '90' ); ?>>Last 90 days</option><option value="all" <?php selected( $range, 'all' ); ?>>All time</option><option value="custom" <?php selected( $range, 'custom' ); ?>>Custom range</option></select></label><details<?php echo 'custom' === $range ? ' open' : ''; ?>><summary>Custom</summary><div><label><span>From</span><input type="date" name="custom_from" value="<?php echo esc_attr( $custom_from ); ?>"></label><label><span>To</span><input type="date" name="custom_to" value="<?php echo esc_attr( $custom_to ); ?>"></label><button class="button" type="submit">Apply</button></div></details></form>
+				<form class="mac-tracker-date-range" method="get" action="<?php echo esc_url( $this->app_url( 'dashboard' ) ); ?>" data-mac-dashboard-range><label><span class="screen-reader-text">Date preset</span><span class="dashicons dashicons-calendar-alt" aria-hidden="true"></span><select name="range"><option value="month" <?php selected( $range, 'month' ); ?>>This month</option><option value="30" <?php selected( $range, '30' ); ?>>Last 30 days</option><option value="90" <?php selected( $range, '90' ); ?>>Last 90 days</option><option value="all" <?php selected( $range, 'all' ); ?>>All time</option></select></label><details<?php echo 'custom' === $range ? ' open' : ''; ?>><summary>Custom</summary><div><label><span>From</span><input type="date" name="custom_from" value="<?php echo esc_attr( $custom_from ); ?>"></label><label><span>To</span><input type="date" name="custom_to" value="<?php echo esc_attr( $custom_to ); ?>"></label><button class="button" type="submit">Apply range</button></div></details></form>
 			</section>
 			<?php $this->notices(); ?>
 		<section class="mac-tracker-metric-grid mac-tracker-dashboard-kpis" aria-label="Key metrics">
@@ -184,7 +189,7 @@ class MAC_Tracker_Admin {
 			<div class="mac-tracker-dashboard-lower__side"><section class="mac-tracker-health-card"><header><div><p class="mac-tracker-eyebrow">System health</p><h2>Connections &amp; automation</h2></div></header><dl><div><dt><span class="dashicons dashicons-wordpress" aria-hidden="true"></span>WPM</dt><dd class="<?php echo ! empty( $settings['wpm_endpoint'] ) && get_option( 'mac_tracker_wpm_secret', '' ) ? 'is-good' : 'is-muted'; ?>"><?php echo ! empty( $settings['wpm_endpoint'] ) && get_option( 'mac_tracker_wpm_secret', '' ) ? 'Configured' : 'Needs setup'; ?></dd></div><div><dt><span class="dashicons dashicons-github" aria-hidden="true"></span>GitHub</dt><dd class="<?php echo get_option( 'mac_tracker_github_dispatch_token', '' ) ? 'is-good' : 'is-muted'; ?>"><?php echo get_option( 'mac_tracker_github_dispatch_token', '' ) ? 'Configured' : 'Needs setup'; ?></dd></div><div><dt><span class="dashicons dashicons-controls-repeat" aria-hidden="true"></span>Automation</dt><dd class="<?php echo 'auto' === get_option( 'mac_tracker_visual_mode', 'manual' ) ? 'is-good' : 'is-muted'; ?>"><?php echo 'auto' === get_option( 'mac_tracker_visual_mode', 'manual' ) ? 'Auto' : 'Manual'; ?></dd></div><div><dt><span class="dashicons dashicons-admin-generic" aria-hidden="true"></span>AI strategy</dt><dd><?php echo esc_html( strtoupper( (string) get_option( 'mac_tracker_visual_ai_strategy', 'smart' ) ) ); ?></dd></div></dl><footer class="mac-tracker-health-card__action"><?php $this->sync_buttons(); ?></footer></section><?php $this->editorial_footer_band( 'dashboard', 'side' ); ?></div>
 		</div>
 		</div>
-		<?php $this->page_end( false );
+		<?php if ( ! $this->dashboard_fragment ) { $this->page_end( false ); }
 	}
 
 	public function render_projects() {
@@ -573,6 +578,31 @@ class MAC_Tracker_Admin {
 		$this->render_ai_fragment( $section );
 		$html = ob_get_clean();
 		wp_send_json_success( array( 'html' => $html, 'section' => $section ) );
+	}
+
+	/** Reload Dashboard analytics without changing the current admin page. */
+	public function handle_load_dashboard_ajax() {
+		check_ajax_referer( 'mac_tracker_load_dashboard', 'nonce' );
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( array( 'message' => 'You are not allowed to load the Dashboard.' ), 403 );
+		}
+		$range = sanitize_key( wp_unslash( $_POST['range'] ?? 'all' ) );
+		$range = in_array( $range, array( 'month', '30', '90', 'all', 'custom' ), true ) ? $range : 'all';
+		$custom_from = sanitize_text_field( wp_unslash( $_POST['custom_from'] ?? '' ) );
+		$custom_to = sanitize_text_field( wp_unslash( $_POST['custom_to'] ?? '' ) );
+		if ( 'custom' === $range && ( ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $custom_from ) || ! preg_match( '/^\d{4}-\d{2}-\d{2}$/', $custom_to ) ) ) {
+			wp_send_json_error( array( 'message' => 'Choose both dates for a custom range.' ), 400 );
+		}
+
+		$original_get = $_GET;
+		$_GET = array( 'range' => $range, 'custom_from' => $custom_from, 'custom_to' => $custom_to );
+		$this->dashboard_fragment = true;
+		ob_start();
+		$this->render_dashboard();
+		$html = ob_get_clean();
+		$this->dashboard_fragment = false;
+		$_GET = $original_get;
+		wp_send_json_success( array( 'html' => $html, 'range' => $range ) );
 	}
 
 	/**

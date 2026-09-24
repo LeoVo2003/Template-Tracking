@@ -317,8 +317,75 @@
       return detail[name.replace('data-mac-', '')] || '';
     } }, true);
   });
+
+  function bindDashboardRange(scope) {
+    var form = (scope || document).querySelector('[data-mac-dashboard-range]');
+    if (!form || form.dataset.macDashboardBound || !window.macTrackerApp?.dashboardNonce) return;
+    form.dataset.macDashboardBound = '1';
+    var select = form.querySelector('select[name="range"]');
+    var custom = form.querySelector('details');
+    var busy = false;
+
+    function setStatus(message, error) {
+      var status = form.querySelector('[data-mac-dashboard-range-status]');
+      if (!status) {
+        status = document.createElement('p');
+        status.dataset.macDashboardRangeStatus = '1';
+        status.setAttribute('role', 'status');
+        form.appendChild(status);
+      }
+      status.className = error ? 'is-error' : '';
+      status.textContent = message;
+    }
+
+    function load(range) {
+      if (busy) return;
+      var from = form.querySelector('[name="custom_from"]')?.value || '';
+      var to = form.querySelector('[name="custom_to"]')?.value || '';
+      if ('custom' === range && (!from || !to)) { setStatus('Choose both dates for a custom range.', true); return; }
+      var layout = form.closest('.mac-tracker-dashboard-layout');
+      if (!layout) return;
+      busy = true;
+      layout.classList.add('is-loading');
+      layout.setAttribute('aria-busy', 'true');
+      setStatus('Loading range…', false);
+      fetch(macTrackerApp.ajaxUrl, {
+        method: 'POST', credentials: 'same-origin',
+        body: new URLSearchParams({ action: 'mac_tracker_load_dashboard', nonce: macTrackerApp.dashboardNonce, range: range, custom_from: from, custom_to: to })
+      })
+        .then(function (response) { return response.json(); })
+        .then(function (payload) {
+          if (!payload.success || !payload.data?.html) throw new Error(payload.data?.message || 'Could not load this range.');
+          var template = document.createElement('template');
+          template.innerHTML = payload.data.html.trim();
+          var next = template.content.firstElementChild;
+          if (!next) throw new Error('The Dashboard response was empty.');
+          layout.replaceWith(next);
+          bindDashboardRange(next);
+        })
+        .catch(function (error) {
+          layout.classList.remove('is-loading');
+          layout.removeAttribute('aria-busy');
+          setStatus(error.message || 'Could not load this range.', true);
+        })
+        .finally(function () { busy = false; });
+    }
+
+    select?.addEventListener('change', function () {
+      if (custom) custom.open = false;
+      load(select.value || 'all');
+    });
+    custom?.addEventListener('toggle', function () { form.classList.toggle('is-custom-open', custom.open); });
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      load('custom');
+    });
+  }
+
   if (window.macTrackerApp?.theme) setTheme(macTrackerApp.theme);
   setupLocalTabs();
   hydrateLazyCards(document);
   hydrateProjectRows(document);
+
+  bindDashboardRange(document);
 }());
