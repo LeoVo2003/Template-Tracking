@@ -406,12 +406,13 @@ class MAC_Tracker_Admin {
 	}
 
 	private function analysis_pagination( array $page, array $args, $page_key ) {
-		if ( empty( $page ) || (int) ( $page['total_pages'] ?? 1 ) <= 1 ) { return; }
+		if ( empty( $page ) ) { return; }
 		$current = (int) $page['paged'];
 		$total_pages = (int) $page['total_pages'];
-		$start = ( ( $current - 1 ) * (int) $page['per_page'] ) + 1;
-		$end = min( (int) $page['total'], $current * (int) $page['per_page'] );
-		echo '<nav class="mac-tracker-analysis-pagination" aria-label="Analysis pages"><span>Showing ' . esc_html( number_format_i18n( $start ) ) . '–' . esc_html( number_format_i18n( $end ) ) . ' of ' . esc_html( number_format_i18n( $page['total'] ) ) . '</span><div class="mac-tracker-analysis-pagination__controls">';
+		$total = (int) $page['total'];
+		$start = $total ? ( ( $current - 1 ) * (int) $page['per_page'] ) + 1 : 0;
+		$end = $total ? min( $total, $current * (int) $page['per_page'] ) : 0;
+		echo '<nav class="mac-tracker-analysis-pagination" aria-label="Analysis pages"><span>Showing ' . esc_html( number_format_i18n( $start ) ) . '–' . esc_html( number_format_i18n( $end ) ) . ' of ' . esc_html( number_format_i18n( $total ) ) . '</span><div class="mac-tracker-analysis-pagination__controls">';
 		$section = sanitize_key( $args['section'] ?? 'processing' );
 		$requested_size = 'action' === $section ? ( $args['color_per_page'] ?? 100 ) : ( $args['visual_per_page'] ?? 100 );
 		$fragment_attrs = ' data-mac-fragment-target="ai-panel" data-mac-fragment-section="' . esc_attr( $section ) . '" data-mac-page-size="' . esc_attr( $this->presentation_page_request( $requested_size ) ) . '"';

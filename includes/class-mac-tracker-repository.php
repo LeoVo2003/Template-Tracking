@@ -393,10 +393,9 @@ class MAC_Tracker_Repository {
 		// Action Design snapshot for the same project, show the task row(s)
 		// instead of duplicating that project with its CSV row.
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
-		$where    = array( $visible );
-		if ( ! empty( $filters['exclude_visual'] ) ) {
-			$where[] = $this->exclusion_sql( 'p' );
-		}
+		// A skipped project is a user-facing exclusion, not merely a queue flag.
+		// Keep it out of every Projects result until an administrator restores it.
+		$where    = array( $visible, $this->exclusion_sql( 'p' ) );
 		$args     = array();
 
 		$search = trim( (string) ( $filters['search'] ?? '' ) );

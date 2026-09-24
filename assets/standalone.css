@@ -101,3 +101,18 @@ html[data-mac-theme]{background:var(--mac-canvas)}
 
 /* Match the preferred Chrome 105% reading scale without affecting WordPress. */
 @media(min-width:701px){body.mac-tracker-standalone{zoom:1.05}}
+
+/* V4.3: dashboard range and review surfaces use the same compact operations grammar. */
+.mac-tracker-date-range details>summary{min-width:118px;justify-content:space-between;gap:12px;padding-inline:13px;color:var(--mac-olive-900);background:var(--mac-surface);border-color:var(--mac-line-solid);box-shadow:var(--mac-shadow-sm)}
+.mac-tracker-date-range details>summary:hover{background:var(--mac-panel);border-color:var(--mac-stone)}
+.mac-tracker-date-range details>summary::after{content:'⌄';display:block;font-size:14px;line-height:1;transform:translateY(-1px)}
+.mac-tracker-date-range details[open]>summary{color:#fff;background:var(--mac-olive-800);border-color:var(--mac-olive-800)}
+.mac-tracker-date-range details[open]>summary::after{transform:rotate(180deg)}
+.mac-tracker-date-range details>div{top:calc(100% + 8px);width:344px;padding:14px;background:var(--mac-surface);border-color:var(--mac-line-solid);box-shadow:var(--mac-shadow-md)}
+.mac-tracker-color-review{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.mac-tracker-color-card{gap:14px;padding:18px;background:var(--mac-paper);border-color:var(--mac-line-solid);border-radius:11px;box-shadow:var(--mac-shadow-sm)}
+.mac-tracker-color-card__head{align-items:flex-start}.mac-tracker-color-card__head h2{max-width:none;color:var(--mac-ink);font-size:14px}.mac-tracker-color-card__head p:last-child{color:var(--mac-text-muted);font-size:10px}
+.mac-tracker-color-swatches{gap:8px}.mac-tracker-color-swatches span{min-width:62px;padding:7px 6px;background:var(--mac-surface);border:1px solid var(--mac-line);border-radius:8px}.mac-tracker-color-swatches i{width:32px;height:32px;border-radius:50%}.mac-tracker-color-swatches code{font-size:9px}
+.mac-tracker-color-variables{padding:9px 10px;background:var(--mac-panel);border-radius:7px}.mac-tracker-color-card__actions{align-items:end;gap:8px;padding-top:13px;border-top-color:var(--mac-line)}.mac-tracker-color-card__actions .button{min-height:36px}.mac-tracker-palette-editor{grid-template-columns:minmax(0,1fr) auto}.mac-tracker-palette-editor input{background:var(--mac-surface)}
+.mac-tracker-workflow-list{grid-template-columns:1fr;gap:9px}.mac-tracker-workflow-run{grid-template-columns:minmax(260px,1.25fr) auto auto;min-height:0;align-items:center;gap:14px;padding:14px 16px;border-left-width:4px;border-radius:9px}.mac-tracker-workflow-run__top{grid-column:1;align-items:center}.mac-tracker-workflow-run__meta{grid-column:2;align-items:center;white-space:nowrap}.mac-tracker-workflow-actions{grid-column:3;align-self:center;justify-content:flex-end;white-space:nowrap}.mac-tracker-workflow-progress,.mac-tracker-workflow-run__current,.mac-tracker-workflow-run__stale,.mac-tracker-workflow-run__counts{grid-column:1/-1}.mac-tracker-workflow-progress{margin:0 0 16px}.mac-tracker-workflow-run__current,.mac-tracker-workflow-run__stale,.mac-tracker-workflow-run__counts{margin-top:-4px}
+@media(max-width:900px){.mac-tracker-color-review{grid-template-columns:1fr}.mac-tracker-workflow-run{grid-template-columns:1fr;align-items:start}.mac-tracker-workflow-run__top,.mac-tracker-workflow-run__meta,.mac-tracker-workflow-actions{grid-column:auto}.mac-tracker-workflow-actions{justify-content:flex-start;white-space:normal}}
