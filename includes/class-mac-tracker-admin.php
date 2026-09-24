@@ -1111,7 +1111,7 @@ class MAC_Tracker_Admin {
 						<div class="mac-tracker-topbar__user"><?php echo get_avatar( $user->ID, 32 ); ?><span><strong><?php echo esc_html( $user->display_name ); ?></strong><small>Administrator</small></span></div>
 					</header>
 					<main class="mac-tracker-main" id="mac-tracker-main">
-						<header class="mac-tracker-masthead<?php echo 'dashboard' === $this->current_screen ? ' mac-tracker-masthead--dashboard' : ''; ?>"><div class="mac-tracker-masthead__title"><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><?php if ( 'dashboard' === $this->current_screen ) : ?><div class="mac-tracker-masthead__art" aria-hidden="true"></div><?php endif; ?></header>
+						<header class="mac-tracker-masthead<?php echo in_array( $this->current_screen, array( 'dashboard', 'projects' ), true ) ? ' mac-tracker-masthead--' . esc_attr( $this->current_screen ) : ''; ?>"><div class="mac-tracker-masthead__title"><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><?php if ( in_array( $this->current_screen, array( 'dashboard', 'projects' ), true ) ) : ?><div class="mac-tracker-masthead__art" aria-hidden="true"></div><?php endif; ?></header>
 						<div class="mac-tracker-page-content">
 		<?php
 	}
@@ -1745,6 +1745,9 @@ class MAC_Tracker_Admin {
 		if ( preg_match( '/^(demo-[a-z0-9]+)$/i', $host, $host_match ) ) { return array( 'demo' => strtolower( $host_match[1] ), 'home_number' => '' ); }
 		if ( '' === $value ) { return null; }
 		if ( ! preg_match( '#(?:^|/)(demo-[a-z0-9]+)/(home(?:-([0-9]+))?)(?:/|$)#i', $value, $match ) ) {
+			if ( preg_match( '#(?:^|/)(demo-[a-z0-9]+)(?:/|[?#]|$)#i', $value, $family_match ) ) {
+				return array( 'demo' => strtolower( $family_match[1] ), 'home_number' => '' );
+			}
 			return preg_match( '/^demo-[a-z0-9]+$/i', $value, $host_match ) ? array( 'demo' => strtolower( $host_match[0] ), 'home_number' => '' ) : null;
 		}
 		$home_number = isset( $match[3] ) ? str_pad( (string) (int) $match[3], 2, '0', STR_PAD_LEFT ) : '';

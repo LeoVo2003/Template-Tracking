@@ -596,3 +596,35 @@ html[data-mac-theme]{background:var(--mac-canvas)}
 .mac-tracker-wrap--dashboard .mac-tracker-template-chart small{color:var(--mac-text-muted);font-size:8px;line-height:1.2;white-space:nowrap}
 .mac-tracker-wrap--dashboard .mac-tracker-template-chart li:hover .mac-tracker-template-chart__bar i{background:var(--mac-olive-800)}
 @media(max-width:520px){.mac-tracker-wrap--dashboard .mac-tracker-template-chart{grid-template-columns:repeat(3,minmax(0,1fr));height:238px;row-gap:14px}}
+
+/* Projects is the operational ledger: botanical only at the threshold, never behind the table. */
+.mac-tracker-wrap--projects .mac-tracker-main{padding-top:0;background:var(--mac-canvas)}
+.mac-tracker-wrap--projects .mac-tracker-masthead{position:relative;min-height:120px;margin:0 -34px 20px;padding:22px 34px;overflow:hidden;border-bottom:1px solid rgba(77,83,58,.13);background:linear-gradient(105deg,rgba(255,254,250,1) 0%,rgba(255,254,250,.97) 43%,rgba(255,254,250,.56) 67%,rgba(255,254,250,.16) 100%)}
+.mac-tracker-wrap--projects .mac-tracker-masthead__title{position:relative;z-index:1;max-width:500px}
+.mac-tracker-wrap--projects .mac-tracker-masthead h1{color:var(--mac-ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:26px;font-weight:720;line-height:1.12;letter-spacing:-.035em}
+.mac-tracker-wrap--projects .mac-tracker-masthead p{max-width:470px;margin-top:5px;color:var(--mac-text-muted);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:12px;font-style:normal;font-weight:400;line-height:1.5}
+.mac-tracker-wrap--projects .mac-tracker-masthead__art{position:absolute;z-index:0;inset:0 0 0 auto;width:min(62%,850px);height:100%;pointer-events:none;background:linear-gradient(90deg,var(--mac-surface) 0%,rgba(255,254,250,.88) 17%,rgba(255,254,250,0) 45%),url("editorial/projects-olive-branch.png");background-position:left center,right center;background-repeat:no-repeat;background-size:auto 100%,100% auto;opacity:.96}
+.mac-tracker-wrap--projects .mac-tracker-page-content{max-width:1450px;gap:14px}
+.mac-tracker-wrap--projects .mac-tracker-project-intro{position:relative;min-height:88px;padding:17px 20px;overflow:hidden;background:linear-gradient(105deg,var(--mac-surface),var(--mac-paper));border-color:rgba(77,83,58,.14);box-shadow:0 8px 22px rgba(77,83,58,.045)}
+.mac-tracker-wrap--projects .mac-tracker-project-intro::after{position:absolute;right:19%;bottom:-31px;width:250px;height:110px;content:"";pointer-events:none;background:url("editorial/dashboard-fern-frond.png") center/contain no-repeat;opacity:.105;filter:grayscale(1) sepia(.22)}
+.mac-tracker-wrap--projects .mac-tracker-project-intro>div,.mac-tracker-wrap--projects .mac-tracker-project-intro>.mac-tracker-sync-actions{position:relative;z-index:1}
+.mac-tracker-wrap--projects .mac-tracker-project-intro h2{font-size:18px;font-weight:720;letter-spacing:-.025em}
+.mac-tracker-wrap--projects .mac-tracker-filters{grid-template-columns:minmax(250px,1.55fr) repeat(4,minmax(132px,.82fr));align-items:end;gap:10px;padding:15px 16px 12px;background:var(--mac-surface);border-color:rgba(77,83,58,.14);border-radius:11px;box-shadow:0 8px 22px rgba(77,83,58,.04)}
+.mac-tracker-wrap--projects .mac-tracker-filters>label{min-width:0}
+.mac-tracker-wrap--projects .mac-tracker-filters input,.mac-tracker-wrap--projects .mac-tracker-filters select{min-height:38px;background:var(--mac-paper);border-color:rgba(77,83,58,.2);box-shadow:none}
+.mac-tracker-wrap--projects .mac-tracker-filter-search{position:relative}
+.mac-tracker-wrap--projects .mac-tracker-filter-search::after{position:absolute;bottom:12px;left:11px;width:14px;height:14px;content:"";background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%236f7554' stroke-width='1.7'%3E%3Ccircle cx='8.5' cy='8.5' r='4.8'/%3E%3Cpath d='m12.1 12.1 4.1 4.1'/%3E%3C/svg%3E") center/contain no-repeat;pointer-events:none}
+.mac-tracker-wrap--projects .mac-tracker-filter-search input{padding-left:34px}
+.mac-tracker-wrap--projects .mac-tracker-filter-more{grid-column:5;grid-row:2;justify-self:end}
+.mac-tracker-wrap--projects .mac-tracker-filter-more summary{min-height:34px;padding-inline:11px;color:var(--mac-olive-900);background:var(--mac-paper);border-color:rgba(77,83,58,.16)}
+.mac-tracker-wrap--projects .mac-tracker-filter-more summary::before{margin-right:7px;content:"⌕";font-size:15px;line-height:1}
+.mac-tracker-wrap--projects .mac-tracker-filter-actions{grid-column:1 / span 2;grid-row:2;align-items:center;padding-top:1px}
+.mac-tracker-wrap--projects .mac-tracker-filter-actions .button{min-height:34px;padding-inline:15px}
+.mac-tracker-wrap--projects .mac-tracker-table-shell{border-color:rgba(77,83,58,.14);box-shadow:0 8px 22px rgba(77,83,58,.04)}
+.mac-tracker-wrap--projects .mac-tracker-project-table thead th{background:#f0ede5}
+/* Bar height expresses the relative value; the chart never imposes a card-sized bar. */
+.mac-tracker-wrap--dashboard .mac-tracker-template-chart{height:128px;max-width:520px;margin-inline:auto;gap:12px}
+.mac-tracker-wrap--dashboard .mac-tracker-template-chart__bar{padding-inline:7px}
+@media(max-width:1200px){.mac-tracker-wrap--projects .mac-tracker-masthead{margin-inline:-24px;padding-inline:24px}.mac-tracker-wrap--projects .mac-tracker-masthead__art{width:64%;background-size:auto 100%,auto 142%}.mac-tracker-wrap--projects .mac-tracker-filters{grid-template-columns:minmax(220px,1.5fr) repeat(2,minmax(160px,1fr))}.mac-tracker-wrap--projects .mac-tracker-filter-more{grid-column:3;grid-row:2}.mac-tracker-wrap--projects .mac-tracker-filter-actions{grid-column:1 / span 2;grid-row:2}}
+@media(max-width:800px){.mac-tracker-wrap--projects .mac-tracker-masthead{min-height:116px;margin-inline:-14px;padding:22px 14px}.mac-tracker-wrap--projects .mac-tracker-masthead__art{width:67%;background-size:auto 100%,auto 130%}.mac-tracker-wrap--projects .mac-tracker-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.mac-tracker-wrap--projects .mac-tracker-filter-search{grid-column:1/-1}.mac-tracker-wrap--projects .mac-tracker-filter-more,.mac-tracker-wrap--projects .mac-tracker-filter-actions{grid-column:auto;grid-row:auto;justify-self:stretch}.mac-tracker-wrap--projects .mac-tracker-filter-more summary{justify-content:center}.mac-tracker-wrap--projects .mac-tracker-filter-actions{grid-column:1/-1}.mac-tracker-wrap--projects .mac-tracker-project-intro::after{right:-35px;opacity:.07}}
+@media(max-width:520px){.mac-tracker-wrap--projects .mac-tracker-masthead__art{display:none}.mac-tracker-wrap--projects .mac-tracker-filters{grid-template-columns:1fr}.mac-tracker-wrap--projects .mac-tracker-filter-search,.mac-tracker-wrap--projects .mac-tracker-filter-actions{grid-column:auto}.mac-tracker-wrap--dashboard .mac-tracker-template-chart{height:208px;max-width:none}}

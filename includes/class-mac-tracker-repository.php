@@ -459,10 +459,11 @@ class MAC_Tracker_Repository {
 		// codes actually present in templates.macusaone.com/demo-xxx URLs.
 		} elseif ( preg_match( '/^(?:demo:|template:)([a-z0-9]+)$/i', strtolower( $layout ), $layout_match ) ) {
 			$template = strtolower( $layout_match[1] );
-			// Match the complete canonical template family (for example demo-s01
-			// and demo-s01/about-us), rather than a loose token anywhere in a URL.
+			// Match the same complete family recognized by the Dashboard. Snapshot
+			// URLs can originate from an older template host, so host name is not
+			// part of the family identity.
 			$where[] = 'LOWER(p.layout_url) REGEXP %s';
-			$args[]  = '^(https?:)?//templates\\.macusaone\\.com/demo-' . preg_quote( $template, '/' ) . '([/?#]|$)';
+			$args[]  = '(^|/)demo-' . preg_quote( $template, '/' ) . '([/?#]|$)';
 		} elseif ( '' !== $layout ) {
 			$where[] = 'p.layout_url = %s';
 			$args[]  = $layout;
@@ -567,9 +568,8 @@ class MAC_Tracker_Repository {
 		$groups = array();
 		foreach ( $this->list_layouts() as $layout_url ) {
 			$parts = wp_parse_url( (string) $layout_url );
-			$host  = strtolower( (string) ( $parts['host'] ?? '' ) );
 			$path  = (string) ( $parts['path'] ?? '' );
-			if ( 'templates.macusaone.com' === $host && preg_match( '#^/demo-([a-z0-9]+)(?:/|$)#i', $path, $matches ) ) {
+			if ( preg_match( '#(?:^|/)demo-([a-z0-9]+)(?:/|[?#]|$)#i', $path, $matches ) ) {
 				$key = strtolower( (string) $matches[1] );
 				$groups[ $key ] = array(
 					'value' => 'template:' . $key,
