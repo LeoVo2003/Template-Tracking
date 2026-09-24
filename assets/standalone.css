@@ -116,3 +116,93 @@ html[data-mac-theme]{background:var(--mac-canvas)}
 .mac-tracker-color-variables{padding:9px 10px;background:var(--mac-panel);border-radius:7px}.mac-tracker-color-card__actions{align-items:end;gap:8px;padding-top:13px;border-top-color:var(--mac-line)}.mac-tracker-color-card__actions .button{min-height:36px}.mac-tracker-palette-editor{grid-template-columns:minmax(0,1fr) auto}.mac-tracker-palette-editor input{background:var(--mac-surface)}
 .mac-tracker-workflow-list{grid-template-columns:1fr;gap:9px}.mac-tracker-workflow-run{grid-template-columns:minmax(260px,1.25fr) auto auto;min-height:0;align-items:center;gap:14px;padding:14px 16px;border-left-width:4px;border-radius:9px}.mac-tracker-workflow-run__top{grid-column:1;align-items:center}.mac-tracker-workflow-run__meta{grid-column:2;align-items:center;white-space:nowrap}.mac-tracker-workflow-actions{grid-column:3;align-self:center;justify-content:flex-end;white-space:nowrap}.mac-tracker-workflow-progress,.mac-tracker-workflow-run__current,.mac-tracker-workflow-run__stale,.mac-tracker-workflow-run__counts{grid-column:1/-1}.mac-tracker-workflow-progress{margin:0 0 16px}.mac-tracker-workflow-run__current,.mac-tracker-workflow-run__stale,.mac-tracker-workflow-run__counts{margin-top:-4px}
 @media(max-width:900px){.mac-tracker-color-review{grid-template-columns:1fr}.mac-tracker-workflow-run{grid-template-columns:1fr;align-items:start}.mac-tracker-workflow-run__top,.mac-tracker-workflow-run__meta,.mac-tracker-workflow-actions{grid-column:auto}.mac-tracker-workflow-actions{justify-content:flex-start;white-space:normal}}
+
+/* Dashboard: quiet botanical editorial composition.  The selectors are scoped so
+   the operational screens retain their existing layouts and behavior. */
+.mac-tracker-wrap--dashboard .mac-tracker-masthead{position:relative;min-height:140px;align-items:center;margin:0 -34px 22px;padding:29px 58px;overflow:hidden;background:linear-gradient(90deg,rgba(255,253,249,.98) 0%,rgba(255,253,249,.91) 48%,rgba(255,253,249,.42) 100%),url("editorial/olive-linen.webp") right center/cover no-repeat;border-bottom:1px solid var(--mac-line)}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead:after{position:absolute;z-index:0;top:28px;right:50px;width:112px;color:var(--mac-taupe);content:"BEAUTIFUL\A WEBSITES\A GROW\A BUSINESSES.";font:650 8px/1.75 "JetBrains Mono",monospace;letter-spacing:.19em;white-space:pre;opacity:.9}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__title{position:relative;z-index:1}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead h1{color:#1f211a;font:500 clamp(42px,4vw,58px)/.92 "Cormorant Garamond",Georgia,serif;letter-spacing:-.045em}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead p{max-width:570px;margin-top:8px;color:#6d675c;font:italic 500 15px/1.45 "Cormorant Garamond",Georgia,serif}
+.mac-tracker-wrap--dashboard .mac-tracker-page-content{max-width:1190px;gap:0}
+.mac-tracker-dashboard-layout{display:grid;gap:14px;padding-bottom:2px}
+.mac-tracker-wrap--dashboard .mac-tracker-dashboard-heading{display:flex;align-items:end;justify-content:space-between;gap:30px;padding:2px 2px 4px}
+.mac-tracker-wrap--dashboard .mac-tracker-dashboard-heading h2{margin:3px 0 1px;color:var(--mac-ink);font:500 30px/1 "Cormorant Garamond",Georgia,serif;letter-spacing:-.035em}
+.mac-tracker-wrap--dashboard .mac-tracker-dashboard-heading p:last-child{margin:0;color:var(--mac-text-muted);font-size:11px}
+.mac-tracker-wrap--dashboard .mac-tracker-date-range{align-items:center;gap:9px}
+.mac-tracker-wrap--dashboard .mac-tracker-date-range>label{position:relative;display:flex;align-items:center;min-width:162px}
+.mac-tracker-wrap--dashboard .mac-tracker-date-range>label>.dashicons{position:absolute;left:13px;color:var(--mac-olive-800);font-size:15px;pointer-events:none}
+.mac-tracker-wrap--dashboard .mac-tracker-date-range select{min-height:38px;width:100%;padding:0 34px;color:var(--mac-olive-900);background:var(--mac-paper);border-color:var(--mac-line-solid);border-radius:7px;font-size:11px;font-weight:650}
+.mac-tracker-wrap--dashboard .mac-tracker-date-range details>summary{min-height:38px;padding:0 13px;background:var(--mac-paper);border-color:var(--mac-line-solid);border-radius:7px;font-size:11px}
+.mac-tracker-wrap--dashboard .mac-tracker-dashboard-kpis{gap:12px}
+.mac-tracker-wrap--dashboard .mac-tracker-metric-card{position:relative;min-height:106px;padding:17px 18px 15px;overflow:hidden;background:linear-gradient(130deg,#fffdfa 0%,#fbf8f0 100%);border-color:rgba(102,91,66,.14);border-radius:10px;box-shadow:0 8px 22px rgba(68,55,36,.045)}
+.mac-tracker-wrap--dashboard .mac-tracker-metric-card:after{position:absolute;right:-13px;bottom:-44px;width:130px;height:130px;border:1px solid rgba(112,118,87,.10);border-radius:50%;content:""}
+.mac-tracker-wrap--dashboard .mac-tracker-metric-card>div{position:relative;z-index:1;display:grid;grid-template-columns:40px auto;grid-template-rows:auto auto;column-gap:11px}
+.mac-tracker-wrap--dashboard .mac-tracker-metric-card p{grid-column:2;margin:2px 0 2px;color:var(--mac-ink);font-size:11px;font-weight:650}
+.mac-tracker-wrap--dashboard .mac-tracker-metric-card strong{grid-column:2;grid-row:2;color:#23241d;font:500 31px/.9 "Cormorant Garamond",Georgia,serif;letter-spacing:-.025em}
+.mac-tracker-wrap--dashboard .mac-tracker-metric-card div>span{grid-column:2;margin:4px 0 0;color:var(--mac-text-muted);font-size:9px;line-height:1.35}
+.mac-tracker-wrap--dashboard .mac-tracker-metric-card>.dashicons{position:absolute;z-index:2;top:19px;left:19px;width:30px;height:30px;color:var(--mac-olive-800);background:#edf0e2;border-radius:50%;font-size:15px}
+.mac-tracker-wrap--dashboard .mac-tracker-dashboard-primary,.mac-tracker-wrap--dashboard .mac-tracker-analytics-grid{gap:12px}
+.mac-tracker-wrap--dashboard .mac-tracker-dashboard-primary{grid-template-columns:1.08fr .92fr}
+.mac-tracker-wrap--dashboard .mac-tracker-analytics-card,.mac-tracker-wrap--dashboard .mac-tracker-health-card{padding:17px;background:rgba(255,253,249,.92);border-color:rgba(102,91,66,.13);border-radius:10px;box-shadow:0 8px 22px rgba(68,55,36,.04)}
+.mac-tracker-wrap--dashboard .mac-tracker-analytics-card>header,.mac-tracker-wrap--dashboard .mac-tracker-health-card>header{align-items:center;margin-bottom:12px}
+.mac-tracker-wrap--dashboard .mac-tracker-analytics-card h2,.mac-tracker-wrap--dashboard .mac-tracker-health-card h2{font:500 23px/1 "Cormorant Garamond",Georgia,serif;letter-spacing:-.025em}
+.mac-tracker-wrap--dashboard .mac-tracker-analytics-card header>a{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 10px;color:var(--mac-olive-900);border:1px solid var(--mac-line-solid);border-radius:6px;font-size:10px;font-weight:650}
+.mac-tracker-wrap--dashboard .mac-tracker-analytics-card header>a:after{content:"→";font-size:14px;line-height:1}
+.mac-tracker-wrap--dashboard .mac-tracker-analytics-card header>span{color:var(--mac-text-muted);font-size:9px}
+.mac-tracker-wrap--dashboard .mac-tracker-recent-projects ol{gap:0}
+.mac-tracker-wrap--dashboard .mac-tracker-recent-projects li{min-height:45px;padding:6px 0;border-bottom-color:var(--mac-line)}
+.mac-tracker-wrap--dashboard .mac-tracker-recent-projects li:last-child{border-bottom:0}
+.mac-tracker-wrap--dashboard .mac-tracker-recent-projects img,.mac-tracker-wrap--dashboard .mac-tracker-recent-projects .mac-tracker-project-thumb{width:43px;height:32px;border-radius:4px}
+.mac-tracker-wrap--dashboard .mac-tracker-recent-projects li>div{gap:1px}
+.mac-tracker-wrap--dashboard .mac-tracker-recent-projects a{font-size:10px;line-height:1.25}
+.mac-tracker-wrap--dashboard .mac-tracker-recent-projects small{font-size:9px}
+.mac-tracker-wrap--dashboard .mac-tracker-recent-projects .mac-tracker-status{font-size:9px}
+.mac-tracker-wrap--dashboard .mac-tracker-tone-distribution{display:flex;flex-direction:column}
+.mac-tracker-wrap--dashboard .mac-tracker-tone-distribution .mac-tracker-distribution{flex:1;align-items:center;grid-template-columns:154px minmax(0,1fr);gap:17px}
+.mac-tracker-wrap--dashboard .mac-tracker-distribution__chart{width:148px;height:148px}
+.mac-tracker-wrap--dashboard .mac-tracker-distribution__chart:before{width:82px;height:82px;background:var(--mac-paper)}
+.mac-tracker-wrap--dashboard .mac-tracker-distribution__chart span{font-size:10px}
+.mac-tracker-wrap--dashboard .mac-tracker-distribution__chart strong{font:500 29px/.9 "Cormorant Garamond",Georgia,serif}
+.mac-tracker-wrap--dashboard .mac-tracker-distribution li{padding:4px 0;font-size:10px}
+.mac-tracker-wrap--dashboard .mac-tracker-distribution li i{width:9px;height:9px}
+.mac-tracker-wrap--dashboard .mac-tracker-analytics-grid--secondary .mac-tracker-analytics-card{min-height:229px}
+.mac-tracker-wrap--dashboard .mac-tracker-ranked-list{gap:10px}
+.mac-tracker-wrap--dashboard .mac-tracker-ranked-list li>div strong{font-size:10px}
+.mac-tracker-wrap--dashboard .mac-tracker-ranked-list li>div span{font-size:9px}
+.mac-tracker-wrap--dashboard .mac-tracker-ranked-list i{height:5px}
+.mac-tracker-wrap--dashboard .mac-tracker-metric-table{margin-top:1px}
+.mac-tracker-wrap--dashboard .mac-tracker-metric-table th{padding:7px 9px;background:#eee9df;font-size:8px;letter-spacing:.07em}
+.mac-tracker-wrap--dashboard .mac-tracker-metric-table td{padding:7px 9px;font-size:10px}
+.mac-tracker-wrap--dashboard .mac-tracker-metric-table .mac-tracker-color-key{font-size:9px}
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card{position:relative;min-height:72px;overflow:hidden;padding:15px 22px;background:linear-gradient(90deg,rgba(240,237,220,.96),rgba(245,241,229,.92)),url("editorial/olive-linen.webp") center/cover;border:1px solid rgba(102,91,66,.13);border-left:0;border-radius:9px;box-shadow:none}
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card:before{width:44px;height:44px;margin-right:11px;background:radial-gradient(circle at 40% 40%,#8f9777 0 14%,transparent 15%),linear-gradient(135deg,transparent 40%,#6e765a 41% 45%,transparent 46%);border-radius:50%;content:""}
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card>div{margin-right:auto}
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card h2{font:500 22px/1 "Cormorant Garamond",Georgia,serif}
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card dl{gap:0}
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card dl>div{min-width:67px;padding:0 12px;border-left:1px solid rgba(102,91,66,.14);text-align:center}
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card dt{font-size:8px;letter-spacing:.03em}
+.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card dd{font:500 21px/1 "Cormorant Garamond",Georgia,serif}
+.mac-tracker-wrap--dashboard .mac-tracker-dashboard-lower{grid-template-columns:1.18fr .82fr;gap:12px}
+.mac-tracker-wrap--dashboard .mac-tracker-timeline{gap:0}
+.mac-tracker-wrap--dashboard .mac-tracker-timeline li{grid-template-columns:9px minmax(0,1fr);min-height:39px;padding:6px 0;border-bottom:1px solid var(--mac-line)}
+.mac-tracker-wrap--dashboard .mac-tracker-timeline li:last-child{border-bottom:0}
+.mac-tracker-wrap--dashboard .mac-tracker-timeline strong{font-size:10px}
+.mac-tracker-wrap--dashboard .mac-tracker-timeline span{font-size:9px}
+.mac-tracker-wrap--dashboard .mac-tracker-timeline details{float:right;margin-top:-23px}
+.mac-tracker-wrap--dashboard .mac-tracker-timeline summary{color:var(--mac-text-muted);font-size:9px;cursor:pointer}
+.mac-tracker-wrap--dashboard .mac-tracker-timeline details p{clear:both;max-width:430px;margin:7px 0 0;color:var(--mac-text-muted);font-size:9px}
+.mac-tracker-wrap--dashboard .mac-tracker-dashboard-lower__side{gap:12px}
+.mac-tracker-wrap--dashboard .mac-tracker-health-card dl div{align-items:center;padding:8px 0;font-size:10px}
+.mac-tracker-wrap--dashboard .mac-tracker-health-card dt{display:flex;align-items:center;gap:8px;color:var(--mac-text)}
+.mac-tracker-wrap--dashboard .mac-tracker-health-card dt .dashicons{width:17px;height:17px;color:var(--mac-olive-800);font-size:15px}
+.mac-tracker-wrap--dashboard .mac-tracker-health-card dd{display:flex;align-items:center;gap:5px;font-size:9px;text-transform:none}
+.mac-tracker-wrap--dashboard .mac-tracker-health-card dd:before{width:6px;height:6px;background:var(--mac-success);border-radius:50%;content:""}
+.mac-tracker-wrap--dashboard .mac-tracker-health-card dd.is-muted:before{background:var(--mac-stone)}
+.mac-tracker-wrap--dashboard .mac-tracker-health-card__action{margin-top:7px;padding-top:10px}
+.mac-tracker-wrap--dashboard .mac-tracker-health-card__action .button{width:100%;justify-content:center;min-height:36px}
+.mac-tracker-wrap--dashboard .mac-tracker-editorial-band--side{min-height:132px;padding:18px 20px;background-position:center 42%;border-radius:9px}
+.mac-tracker-wrap--dashboard .mac-tracker-editorial-band--side blockquote{max-width:250px;font-size:23px}
+@media(max-width:1200px){.mac-tracker-wrap--dashboard .mac-tracker-masthead{margin-inline:-24px;padding-inline:48px}.mac-tracker-wrap--dashboard .mac-tracker-dashboard-primary{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-tone-distribution .mac-tracker-distribution{min-height:150px}.mac-tracker-wrap--dashboard .mac-tracker-dashboard-lower{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-dashboard-lower__side{grid-template-columns:1fr 1fr}.mac-tracker-wrap--dashboard .mac-tracker-editorial-band--side{min-height:100%}}
+@media(max-width:800px){.mac-tracker-wrap--dashboard .mac-tracker-masthead{min-height:124px;margin-inline:-14px;padding:24px 27px}.mac-tracker-wrap--dashboard .mac-tracker-masthead:after{right:25px;top:21px;font-size:7px}.mac-tracker-wrap--dashboard .mac-tracker-dashboard-heading{align-items:flex-start;flex-direction:column}.mac-tracker-wrap--dashboard .mac-tracker-date-range{width:100%}.mac-tracker-wrap--dashboard .mac-tracker-date-range>label{flex:1}.mac-tracker-wrap--dashboard .mac-tracker-metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.mac-tracker-wrap--dashboard .mac-tracker-dashboard-lower__side{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card{align-items:flex-start}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card dl{width:100%;flex-wrap:wrap}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card dl>div{min-width:20%;padding:7px 4px;border-left:0}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card:before{display:none}}
+@media(max-width:520px){.mac-tracker-wrap--dashboard .mac-tracker-masthead h1{font-size:42px}.mac-tracker-wrap--dashboard .mac-tracker-masthead p{max-width:300px;font-size:13px}.mac-tracker-wrap--dashboard .mac-tracker-masthead:after{display:none}.mac-tracker-wrap--dashboard .mac-tracker-metric-grid{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-analytics-grid--secondary{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-tone-distribution .mac-tracker-distribution{grid-template-columns:1fr}.mac-tracker-wrap--dashboard .mac-tracker-distribution__chart{margin:auto}.mac-tracker-wrap--dashboard .mac-tracker-pipeline-card dl>div{min-width:33.333%}.mac-tracker-wrap--dashboard .mac-tracker-timeline details{float:none;margin-top:3px}}
