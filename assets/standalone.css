@@ -120,7 +120,7 @@ html[data-mac-theme]{background:var(--mac-canvas)}
 /* Dashboard: quiet botanical editorial composition.  The selectors are scoped so
    the operational screens retain their existing layouts and behavior. */
 .mac-tracker-wrap--dashboard .mac-tracker-masthead{position:relative;min-height:140px;align-items:center;margin:0 -34px 22px;padding:29px 58px;overflow:hidden;background:linear-gradient(90deg,rgba(255,253,249,.98) 0%,rgba(255,253,249,.91) 48%,rgba(255,253,249,.42) 100%),url("editorial/olive-linen.webp") right center/cover no-repeat;border-bottom:1px solid var(--mac-line)}
-.mac-tracker-wrap--dashboard .mac-tracker-masthead:after{position:absolute;z-index:0;top:28px;right:50px;width:112px;color:var(--mac-taupe);content:"BEAUTIFUL\A WEBSITES\A GROW\A BUSINESSES.";font:650 8px/1.75 "JetBrains Mono",monospace;letter-spacing:.19em;white-space:pre;opacity:.9}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead:after{content:none}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead__title{position:relative;z-index:1}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead h1{color:#1f211a;font:500 clamp(42px,4vw,58px)/.92 "Cormorant Garamond",Georgia,serif;letter-spacing:-.045em}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead p{max-width:570px;margin-top:8px;color:#6d675c;font:italic 500 15px/1.45 "Cormorant Garamond",Georgia,serif}
@@ -676,3 +676,13 @@ html[data-mac-theme]{background:var(--mac-canvas)}
 .mac-tracker-wrap--projects .mac-tracker-filter-range>label{display:grid;gap:5px}
 .mac-tracker-wrap--projects .mac-tracker-filter-range .mac-tracker-filter-custom{position:absolute;z-index:35;top:calc(100% + 6px);right:0;left:auto;width:344px;grid-column:auto;grid-row:auto}
 @media(max-width:800px){.mac-tracker-wrap--dashboard .mac-tracker-masthead,.mac-tracker-wrap--projects .mac-tracker-masthead{min-height:128px}.mac-tracker-wrap--projects .mac-tracker-filter-range .mac-tracker-filter-custom{right:auto;left:0;width:min(344px,calc(100vw - 28px))}}
+
+/* Rising foliage: the header is a viewport through a much taller botanical layer. */
+.mac-tracker-wrap--dashboard .mac-tracker-masthead,.mac-tracker-wrap--projects .mac-tracker-masthead{isolation:isolate;overflow:hidden;background:linear-gradient(90deg,#fffdf8 0%,#fbf8ef 39%,#f2ede0 63%,#e6dfd0 100%)}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead::after,.mac-tracker-wrap--projects .mac-tracker-masthead::after{position:absolute;z-index:0;right:-3%;bottom:-455px;width:480px;height:720px;display:block;background:var(--mac-rising-foliage) center/contain no-repeat;content:"";filter:saturate(.66) contrast(.94);opacity:.13;pointer-events:none;transform:scale(1.2);transform-origin:bottom right}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead{--mac-rising-foliage:url("editorial/dashboard-rising-olive-v2.png")}
+.mac-tracker-wrap--projects .mac-tracker-masthead{--mac-rising-foliage:url("editorial/projects-rising-eucalyptus-v2.png")}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__art,.mac-tracker-wrap--projects .mac-tracker-masthead__art{position:absolute;z-index:1;right:9%;bottom:-515px;display:block;width:500px;height:750px;background:var(--mac-rising-foliage) center/contain no-repeat;filter:saturate(.82) contrast(.96);opacity:.96;pointer-events:none}
+.mac-tracker-wrap--projects .mac-tracker-masthead__art{right:6%;bottom:-495px;width:465px;height:698px}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__title,.mac-tracker-wrap--projects .mac-tracker-masthead__title{position:relative;z-index:2}
+@media(max-width:800px){.mac-tracker-wrap--dashboard .mac-tracker-masthead__art,.mac-tracker-wrap--projects .mac-tracker-masthead__art{right:-4%;bottom:-455px;width:420px;height:630px}.mac-tracker-wrap--dashboard .mac-tracker-masthead::after,.mac-tracker-wrap--projects .mac-tracker-masthead::after{right:-18%;bottom:-410px;width:390px;height:585px}}
