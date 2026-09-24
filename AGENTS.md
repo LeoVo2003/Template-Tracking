@@ -23,6 +23,7 @@ Work directly in one continuous task. Do not use the Planner -> Coder -> Tester 
 - Prefer the existing architecture, conventions, utilities, dependencies, and component patterns.
 - Do not refactor, rename broadly, reformat the project, or add dependencies outside the requested scope.
 - Do not push, merge, deploy, publish, release, or alter production data unless the user explicitly requests it or has given a standing instruction to push completed work.
+- Standing delivery instruction: after completing a requested WordPress plugin implementation, commit only the task-related files, push `origin/main`, bump the patch version in both plugin version declarations, then create and push the matching `v<version>` release tag so the GitHub workflow can build the WordPress update. Do not apply this release path when the user explicitly asks for local-only, draft, review-only, or different delivery work.
 - Keep local agent configuration such as `.agents/` out of commits.
 
 ## Completion report
