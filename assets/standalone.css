@@ -838,11 +838,11 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   top:0;
   right:0;
   bottom:0;
-  left:auto;
-  width:min(720px,62%);
+  left:0;
+  width:auto;
   height:auto;
-  opacity:1;
-  background:url("editorial/dashboard-header-olive-banner.png") right center/contain no-repeat;
+  opacity:.92;
+  background:url("editorial/user-foliage-09.png") right -20px center/520px auto no-repeat;
   content:"";
   filter:none;
   pointer-events:none;
