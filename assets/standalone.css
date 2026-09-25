@@ -842,7 +842,7 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   width:auto;
   height:auto;
   opacity:1;
-  background:url("editorial/dashboard-header-foliage.png") right center/auto 100% no-repeat;
+  background:url("editorial/dashboard-header-banner.jpg") right center/cover no-repeat;
   content:"";
   filter:none;
   pointer-events:none;
@@ -875,7 +875,7 @@ html[data-mac-theme]{background:var(--mac-canvas)}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead__art{
   display:block;
   position:absolute;
-  z-index:0;
+  z-index:1;
   top:-12px;
   right:-8%;
   bottom:auto;
