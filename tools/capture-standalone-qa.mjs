@@ -9,13 +9,13 @@ const [rawCss, oliveBytes, blossomBytes, dashboardFoliageBytes, projectsFoliageB
   readFile('assets/standalone.css', 'utf8'),
   readFile('assets/editorial/olive-linen.webp'),
   readFile('assets/editorial/forest-blossom.webp'),
-  readFile('assets/editorial/user-foliage-02.png'),
+  readFile('assets/editorial/user-foliage-03.png'),
   readFile('assets/editorial/user-foliage-10.png'),
 ]);
 const css = rawCss
   .replaceAll("url('editorial/olive-linen.webp')", `url('data:image/webp;base64,${oliveBytes.toString('base64')}')`)
   .replaceAll("url('editorial/forest-blossom.webp')", `url('data:image/webp;base64,${blossomBytes.toString('base64')}')`)
-  .replaceAll('url("editorial/user-foliage-02.png")', `url('data:image/png;base64,${dashboardFoliageBytes.toString('base64')}')`)
+  .replaceAll('url("editorial/user-foliage-03.png")', `url('data:image/png;base64,${dashboardFoliageBytes.toString('base64')}')`)
   .replaceAll('url("editorial/user-foliage-10.png")', `url('data:image/png;base64,${projectsFoliageBytes.toString('base64')}')`);
 const assetBase = pathToFileURL(`${resolve('assets')}\\`).href;
 

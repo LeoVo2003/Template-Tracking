@@ -782,3 +782,36 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead__art,.mac-tracker-wrap--projects .mac-tracker-masthead__art{right:-28%;bottom:-354px;width:490px;height:490px}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead__title,.mac-tracker-wrap--projects .mac-tracker-masthead__title{padding-left:10px}
 }
+
+/* Final masthead: a shallow paper horizon, bright on the canvas side and materially warmer around the rising branch. */
+.mac-tracker-wrap--dashboard .mac-tracker-masthead{--mac-rising-foliage:url("editorial/user-foliage-03.png")}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead,.mac-tracker-wrap--projects .mac-tracker-masthead{
+  min-height:132px;
+  margin-bottom:18px;
+  padding:22px 56px;
+  background:
+    linear-gradient(124deg,transparent 0%,rgba(255,255,255,.48) 35%,rgba(255,255,255,.12) 54%,transparent 69%),
+    linear-gradient(118deg,rgba(255,255,255,.32) 0%,rgba(255,255,255,.08) 37%,transparent 57%),
+    radial-gradient(ellipse 78% 160% at 88% -40%,rgba(255,254,249,.92) 0%,rgba(239,233,220,.5) 42%,transparent 72%),
+    linear-gradient(90deg,var(--mac-canvas) 0%,var(--mac-canvas) 43%,#eee8dc 68%,#e1d9cb 100%);
+}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead::before,.mac-tracker-wrap--projects .mac-tracker-masthead::before{display:none}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__title,.mac-tracker-wrap--projects .mac-tracker-masthead__title{padding-left:0}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__title::before,.mac-tracker-wrap--projects .mac-tracker-masthead__title::before{display:none}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__art,.mac-tracker-wrap--projects .mac-tracker-masthead__art{
+  right:8%;
+  bottom:-402px;
+  width:610px;
+  height:610px;
+  filter:saturate(.74) contrast(.91);
+  opacity:.76;
+  transform:scaleX(-1);
+  transform-origin:bottom right;
+  -webkit-mask-image:linear-gradient(to top,transparent 0%,rgba(0,0,0,.07) 25%,rgba(0,0,0,.52) 47%,#000 67%);
+  mask-image:linear-gradient(to top,transparent 0%,rgba(0,0,0,.07) 25%,rgba(0,0,0,.52) 47%,#000 67%);
+}
+.mac-tracker-wrap--projects .mac-tracker-masthead__art{right:7%;bottom:-387px;width:592px;height:592px;opacity:.64;transform:none}
+@media(max-width:800px){
+  .mac-tracker-wrap--dashboard .mac-tracker-masthead,.mac-tracker-wrap--projects .mac-tracker-masthead{min-height:120px;margin-bottom:14px;padding:20px 22px}
+  .mac-tracker-wrap--dashboard .mac-tracker-masthead__art,.mac-tracker-wrap--projects .mac-tracker-masthead__art{right:-18%;bottom:-345px;width:480px;height:480px}
+}
