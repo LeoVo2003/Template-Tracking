@@ -1110,7 +1110,7 @@ class MAC_Tracker_Admin {
 						<div class="mac-tracker-topbar__user"><?php echo get_avatar( $user->ID, 32 ); ?><span><strong><?php echo esc_html( $user->display_name ); ?></strong><small>Administrator</small></span></div>
 					</header>
 					<main class="mac-tracker-main" id="mac-tracker-main">
-						<header class="mac-tracker-masthead<?php echo in_array( $this->current_screen, array( 'dashboard', 'projects' ), true ) ? ' mac-tracker-masthead--' . esc_attr( $this->current_screen ) : ''; ?>"><div class="mac-tracker-masthead__title"><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><?php if ( in_array( $this->current_screen, array( 'dashboard', 'projects' ), true ) ) : ?><div class="mac-tracker-masthead__art" aria-hidden="true"></div><?php endif; ?><?php if ( 'dashboard' === $this->current_screen ) : ?><p class="mac-tracker-masthead__caption">Good websites grow businesses.</p><?php endif; ?></header>
+						<header class="mac-tracker-masthead<?php echo in_array( $this->current_screen, array( 'dashboard', 'projects' ), true ) ? ' mac-tracker-masthead--' . esc_attr( $this->current_screen ) : ''; ?>"><div class="mac-tracker-masthead__title"><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><?php if ( in_array( $this->current_screen, array( 'dashboard', 'projects' ), true ) ) : ?><div class="mac-tracker-masthead__art" aria-hidden="true"></div><?php endif; ?></header>
 						<div class="mac-tracker-page-content">
 		<?php
 	}
