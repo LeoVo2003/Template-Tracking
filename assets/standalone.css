@@ -841,8 +841,8 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   left:0;
   width:auto;
   height:auto;
-  opacity:.92;
-  background:url("editorial/user-foliage-09.png") right -20px center/520px auto no-repeat;
+  opacity:1;
+  background:url("editorial/dashboard-header-foliage.png") right center/auto 100% no-repeat;
   content:"";
   filter:none;
   pointer-events:none;
