@@ -842,7 +842,7 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   width:auto;
   height:auto;
   opacity:1;
-  background:url("editorial/dashboard-header-banner.png") right center/auto 100% no-repeat;
+  background:url("editorial/dashboard-header-banner.png") right 86%/auto 173% no-repeat;
   content:"";
   filter:none;
   pointer-events:none;
@@ -872,29 +872,11 @@ html[data-mac-theme]{background:var(--mac-canvas)}
 }
 .mac-tracker-wrap--dashboard .mac-tracker-page-content{position:relative;z-index:2}
 .mac-tracker-wrap--dashboard .mac-tracker-page-content>*{position:relative;z-index:1}
-.mac-tracker-wrap--dashboard .mac-tracker-masthead__art{
-  display:block;
-  position:absolute;
-  z-index:1;
-  top:-12px;
-  right:-8%;
-  bottom:auto;
-  width:680px;
-  height:1280px;
-  background:url("editorial/user-foliage-09.png") top center/680px auto no-repeat;
-  filter:saturate(.62) brightness(1.2);
-  opacity:.4;
-  pointer-events:none;
-  transform:rotate(-18deg);
-  transform-origin:72% 0;
-  -webkit-mask-image:linear-gradient(to top,transparent 0%,rgba(0,0,0,.12) 24%,rgba(0,0,0,.45) 52%,#000 78%);
-  mask-image:linear-gradient(to top,transparent 0%,rgba(0,0,0,.12) 24%,rgba(0,0,0,.45) 52%,#000 78%);
-}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__art{display:none}
 @media(max-width:1280px){
   .mac-tracker-wrap--dashboard .mac-tracker-masthead{margin-inline:-24px;padding-inline:24px}
 }
 @media(max-width:800px){
   .mac-tracker-wrap--dashboard .mac-tracker-masthead{min-height:96px;margin-inline:-14px;padding:14px 16px}
-  .mac-tracker-wrap--dashboard .mac-tracker-masthead__art{right:-30%;width:480px;height:900px}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead h1{font-size:24px}
 }
