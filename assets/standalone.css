@@ -820,9 +820,9 @@ html[data-mac-theme]{background:var(--mac-canvas)}
 .mac-tracker-wrap--dashboard .mac-tracker-app__workspace{overflow-x:clip}
 .mac-tracker-wrap--dashboard .mac-tracker-main{overflow-x:clip}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead{
-  min-height:112px;
+  min-height:168px;
   margin:0 -34px 14px;
-  padding:16px 34px 14px;
+  padding:28px 34px 22px;
   overflow:visible;
   isolation:isolate;
   background:linear-gradient(20deg,#F7F6F0 16%,rgba(255,253,247,.94) 32%,rgba(255,253,247,.62) 48%,rgba(255,253,247,.12) 68%,rgba(255,253,247,0) 88%);
@@ -834,7 +834,7 @@ html[data-mac-theme]{background:var(--mac-canvas)}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead::after{
   display:block;
   position:absolute;
-  z-index:0;
+  z-index:1;
   top:0;
   right:0;
   bottom:0;
@@ -842,7 +842,7 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   width:auto;
   height:auto;
   opacity:1;
-  background:url("editorial/dashboard-header-banner.jpg") right center/cover no-repeat;
+  background:url("editorial/dashboard-header-banner.png") right center/auto 100% no-repeat;
   content:"";
   filter:none;
   pointer-events:none;
@@ -870,7 +870,7 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   font-weight:400;
   line-height:1.5;
 }
-.mac-tracker-wrap--dashboard .mac-tracker-page-content{position:relative;z-index:auto}
+.mac-tracker-wrap--dashboard .mac-tracker-page-content{position:relative;z-index:2}
 .mac-tracker-wrap--dashboard .mac-tracker-page-content>*{position:relative;z-index:1}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead__art{
   display:block;
