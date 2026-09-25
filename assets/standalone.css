@@ -820,15 +820,13 @@ html[data-mac-theme]{background:var(--mac-canvas)}
 .mac-tracker-wrap--dashboard .mac-tracker-app__workspace{overflow-x:clip}
 .mac-tracker-wrap--dashboard .mac-tracker-main{overflow-x:clip}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead{
-  min-height:156px;
-  margin:0 -34px 16px;
-  padding:28px 48px 22px;
+  min-height:112px;
+  margin:0 -34px 14px;
+  padding:16px 34px 14px;
   overflow:visible;
   isolation:isolate;
-  background:
-    linear-gradient(90deg,rgba(255,253,247,.98) 0%,rgba(255,253,247,.94) 32%,rgba(255,253,247,.62) 48%,rgba(255,253,247,.12) 68%,rgba(255,253,247,0) 84%),
-    url("editorial/dashboard-hero-olive-branch.png") right center/cover no-repeat;
-  border-bottom:1px solid rgba(77,83,58,.12);
+  background:linear-gradient(20deg,#F7F6F0 16%,rgba(255,253,247,.94) 32%,rgba(255,253,247,.62) 48%,rgba(255,253,247,.12) 68%,rgba(255,253,247,0) 88%),url("editorial/dashboard-hero-olive-branch.png") right center/cover no-repeat;
+  border-bottom:1px solid rgb(77 83 58 / 5%);
   box-shadow:none;
 }
 .mac-tracker-wrap--dashboard .mac-tracker-masthead::before,
@@ -877,7 +875,7 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead{margin-inline:-24px;padding-inline:24px}
 }
 @media(max-width:800px){
-  .mac-tracker-wrap--dashboard .mac-tracker-masthead{min-height:124px;margin-inline:-14px;padding:20px 16px}
+  .mac-tracker-wrap--dashboard .mac-tracker-masthead{min-height:96px;margin-inline:-14px;padding:14px 16px}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead__art{right:-30%;width:480px;height:900px}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead h1{font-size:24px}
 }
