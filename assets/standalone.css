@@ -828,8 +828,26 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   border-bottom:0;
   box-shadow:none;
 }
-.mac-tracker-wrap--dashboard .mac-tracker-masthead::before,
-.mac-tracker-wrap--dashboard .mac-tracker-masthead::after{display:none}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead::before{display:none}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead::after{
+  display:block;
+  position:absolute;
+  z-index:0;
+  top:0;
+  right:0;
+  bottom:0;
+  left:0;
+  width:auto;
+  height:auto;
+  opacity:1;
+  background:url("editorial/user-foliage-09.png") right -8px top -220px/720px auto no-repeat;
+  content:"";
+  filter:saturate(1.05) contrast(1.08) brightness(.58);
+  pointer-events:none;
+  transform:none;
+  -webkit-mask-image:none;
+  mask-image:none;
+}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead__title{position:relative;z-index:2;max-width:460px;padding-left:0}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead h1{
   color:var(--mac-ink);
@@ -855,25 +873,26 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   display:block;
   position:absolute;
   z-index:0;
-  top:-18px;
-  right:-4%;
+  top:100%;
+  right:0;
   bottom:auto;
-  width:500px;
-  height:820px;
-  background:url("editorial/user-foliage-09.png") top center/500px auto no-repeat;
-  filter:saturate(.8) contrast(.94);
-  opacity:.94;
+  width:560px;
+  height:920px;
+  background:url("editorial/user-foliage-09.png") top center/560px auto no-repeat;
+  filter:saturate(.55) brightness(1.35);
+  opacity:.28;
   pointer-events:none;
   transform:rotate(-18deg);
-  transform-origin:78% 6%;
-  -webkit-mask-image:linear-gradient(to top,transparent 0 46%,rgba(0,0,0,.1) 62%,rgba(0,0,0,.55) 78%,#000 90%);
-  mask-image:linear-gradient(to top,transparent 0 46%,rgba(0,0,0,.1) 62%,rgba(0,0,0,.55) 78%,#000 90%);
+  transform-origin:74% 0;
+  -webkit-mask-image:linear-gradient(to top,transparent 0%,rgba(0,0,0,.25) 28%,rgba(0,0,0,.7) 62%,#000 100%);
+  mask-image:linear-gradient(to top,transparent 0%,rgba(0,0,0,.25) 28%,rgba(0,0,0,.7) 62%,#000 100%);
 }
 @media(max-width:1280px){
   .mac-tracker-wrap--dashboard .mac-tracker-masthead{margin-inline:-24px;padding-inline:24px}
 }
 @media(max-width:800px){
   .mac-tracker-wrap--dashboard .mac-tracker-masthead{min-height:96px;margin-inline:-14px;padding:18px 14px}
-  .mac-tracker-wrap--dashboard .mac-tracker-masthead__art{right:-28%;width:420px;height:560px}
+  .mac-tracker-wrap--dashboard .mac-tracker-masthead::after{background-size:440px auto}
+  .mac-tracker-wrap--dashboard .mac-tracker-masthead__art{right:-22%;width:400px;height:640px}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead h1{font-size:24px}
 }
