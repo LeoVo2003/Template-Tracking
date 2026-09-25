@@ -815,3 +815,57 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead,.mac-tracker-wrap--projects .mac-tracker-masthead{min-height:120px;margin-bottom:14px;padding:20px 22px}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead__art,.mac-tracker-wrap--projects .mac-tracker-masthead__art{right:-18%;bottom:-345px;width:480px;height:480px}
 }
+
+/* Dashboard hero matches the AI Analysis band: serif title, a full olive branch, and a vertical caption. */
+.mac-tracker-wrap--dashboard .mac-tracker-masthead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  min-height:188px;
+  margin:0 -34px 22px;
+  padding:32px 92px 32px 58px;
+  overflow:hidden;
+  isolation:isolate;
+  background:
+    linear-gradient(270deg,rgba(255,253,247,.88) 0 28px,rgba(255,253,247,0) 72px),
+    linear-gradient(90deg,rgba(255,253,247,.98) 0%,rgba(255,253,247,.94) 32%,rgba(255,253,247,.62) 48%,rgba(255,253,247,.12) 68%,rgba(255,253,247,0) 84%),
+    url("editorial/dashboard-hero-olive-branch.png") right center/cover no-repeat;
+  border-bottom:1px solid rgba(77,83,58,.12);
+  box-shadow:none;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead::before,
+.mac-tracker-wrap--dashboard .mac-tracker-masthead::after,
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__art{display:none}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__title{position:relative;z-index:2;max-width:520px;padding-left:0}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead h1{
+  color:#1f211a;
+  font:500 clamp(42px,4vw,56px)/.92 "Cormorant Garamond",Georgia,serif;
+  letter-spacing:-.045em;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__title>p{
+  max-width:420px;
+  margin-top:8px;
+  color:#6d675c;
+  font:italic 500 16px/1.4 "Cormorant Garamond",Georgia,serif;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__caption{
+  position:absolute;
+  z-index:2;
+  top:50%;
+  right:18px;
+  margin:0;
+  color:#8a8478;
+  font:600 9px/1.35 "JetBrains Mono",ui-monospace,monospace;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  writing-mode:vertical-rl;
+  transform:translateY(-50%);
+}
+@media(max-width:1280px){
+  .mac-tracker-wrap--dashboard .mac-tracker-masthead{margin-inline:-24px;padding-inline:48px 64px}
+}
+@media(max-width:800px){
+  .mac-tracker-wrap--dashboard .mac-tracker-masthead{min-height:136px;margin-inline:-14px;padding:22px 18px}
+  .mac-tracker-wrap--dashboard .mac-tracker-masthead__caption{display:none}
+  .mac-tracker-wrap--dashboard .mac-tracker-masthead h1{font-size:36px}
+}
