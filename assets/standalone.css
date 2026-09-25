@@ -730,3 +730,55 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead__art,.mac-tracker-wrap--projects .mac-tracker-masthead__art{right:-34%;bottom:-405px;width:530px;height:530px}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead::after,.mac-tracker-wrap--projects .mac-tracker-masthead::after{right:-36%;bottom:-400px;width:550px;height:550px}
 }
+
+/* Hero composition pass: one calm, continuous branch is more editorial than a doubled botanical backdrop. */
+.mac-tracker-wrap--dashboard .mac-tracker-masthead{--mac-rising-foliage:url("editorial/user-foliage-02.png")}
+.mac-tracker-wrap--projects .mac-tracker-masthead{--mac-rising-foliage:url("editorial/user-foliage-10.png")}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead,.mac-tracker-wrap--projects .mac-tracker-masthead{
+  min-height:156px;
+  background:
+    radial-gradient(ellipse 52% 135% at 84% 50%,rgba(222,215,197,.56),transparent 71%),
+    linear-gradient(90deg,var(--mac-canvas) 0%,var(--mac-canvas) 49%,#eee9dd 100%);
+  box-shadow:none;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead::after,.mac-tracker-wrap--projects .mac-tracker-masthead::after{display:none}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead::before,.mac-tracker-wrap--projects .mac-tracker-masthead::before{
+  position:absolute;
+  z-index:1;
+  right:0;
+  bottom:-14px;
+  left:0;
+  height:38px;
+  background:linear-gradient(180deg,rgba(243,240,232,0),rgba(243,240,232,.82));
+  content:"";
+  pointer-events:none;
+}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__art,.mac-tracker-wrap--projects .mac-tracker-masthead__art{
+  right:-8%;
+  bottom:-410px;
+  width:590px;
+  height:590px;
+  background:var(--mac-rising-foliage) center/contain no-repeat;
+  filter:saturate(.66) contrast(.9);
+  opacity:.72;
+  -webkit-mask-image:linear-gradient(to top,transparent 0%,rgba(0,0,0,.08) 26%,rgba(0,0,0,.55) 46%,#000 68%);
+  mask-image:linear-gradient(to top,transparent 0%,rgba(0,0,0,.08) 26%,rgba(0,0,0,.55) 46%,#000 68%);
+}
+.mac-tracker-wrap--projects .mac-tracker-masthead__art{right:-3%;bottom:-400px;width:575px;height:575px;opacity:.66}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__title,.mac-tracker-wrap--projects .mac-tracker-masthead__title{padding-left:14px}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__title::before,.mac-tracker-wrap--projects .mac-tracker-masthead__title::before{
+  position:absolute;
+  top:50%;
+  left:0;
+  width:3px;
+  height:34px;
+  background:linear-gradient(180deg,transparent,var(--mac-olive),transparent);
+  border-radius:99px;
+  content:"";
+  transform:translateY(-50%);
+}
+@media(max-width:800px){
+  .mac-tracker-wrap--dashboard .mac-tracker-masthead,.mac-tracker-wrap--projects .mac-tracker-masthead{min-height:128px}
+  .mac-tracker-wrap--dashboard .mac-tracker-masthead__art,.mac-tracker-wrap--projects .mac-tracker-masthead__art{right:-28%;bottom:-354px;width:490px;height:490px}
+  .mac-tracker-wrap--dashboard .mac-tracker-masthead__title,.mac-tracker-wrap--projects .mac-tracker-masthead__title{padding-left:10px}
+}
