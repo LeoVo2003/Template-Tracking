@@ -816,38 +816,23 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead__art,.mac-tracker-wrap--projects .mac-tracker-masthead__art{right:-18%;bottom:-345px;width:480px;height:480px}
 }
 
-/* Compact Dashboard header. The branch rises from under the page content and is clearest in the header. */
-.mac-tracker-wrap--dashboard .mac-tracker-main{overflow:visible}
+/* Dashboard header: the first olive-branch photo stays inside the band. A second, fainter branch rises from the content through the top of the header. */
+.mac-tracker-wrap--dashboard .mac-tracker-app__workspace{overflow-x:clip}
+.mac-tracker-wrap--dashboard .mac-tracker-main{overflow-x:clip}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead{
-  min-height:108px;
-  margin:0 -34px 14px;
-  padding:20px 34px 16px;
+  min-height:156px;
+  margin:0 -34px 16px;
+  padding:28px 48px 22px;
   overflow:visible;
   isolation:isolate;
-  background:linear-gradient(90deg,var(--mac-canvas) 0%,var(--mac-canvas) 48%,#efe8dc 100%);
-  border-bottom:0;
+  background:
+    linear-gradient(90deg,rgba(255,253,247,.98) 0%,rgba(255,253,247,.94) 32%,rgba(255,253,247,.62) 48%,rgba(255,253,247,.12) 68%,rgba(255,253,247,0) 84%),
+    url("editorial/dashboard-hero-olive-branch.png") right center/cover no-repeat;
+  border-bottom:1px solid rgba(77,83,58,.12);
   box-shadow:none;
 }
-.mac-tracker-wrap--dashboard .mac-tracker-masthead::before{display:none}
-.mac-tracker-wrap--dashboard .mac-tracker-masthead::after{
-  display:block;
-  position:absolute;
-  z-index:0;
-  top:0;
-  right:0;
-  bottom:0;
-  left:0;
-  width:auto;
-  height:auto;
-  opacity:1;
-  background:url("editorial/user-foliage-09.png") right -8px top -220px/720px auto no-repeat;
-  content:"";
-  filter:saturate(1.05) contrast(1.08) brightness(.58);
-  pointer-events:none;
-  transform:none;
-  -webkit-mask-image:none;
-  mask-image:none;
-}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead::before,
+.mac-tracker-wrap--dashboard .mac-tracker-masthead::after{display:none;content:none;width:auto;height:auto;opacity:0}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead__title{position:relative;z-index:2;max-width:460px;padding-left:0}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead h1{
   color:var(--mac-ink);
@@ -868,31 +853,31 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   font-weight:400;
   line-height:1.5;
 }
-.mac-tracker-wrap--dashboard .mac-tracker-page-content{position:relative;z-index:1}
+.mac-tracker-wrap--dashboard .mac-tracker-page-content{position:relative;z-index:auto}
+.mac-tracker-wrap--dashboard .mac-tracker-page-content>*{position:relative;z-index:1}
 .mac-tracker-wrap--dashboard .mac-tracker-masthead__art{
   display:block;
   position:absolute;
   z-index:0;
-  top:100%;
-  right:0;
+  top:-12px;
+  right:-8%;
   bottom:auto;
-  width:560px;
-  height:920px;
-  background:url("editorial/user-foliage-09.png") top center/560px auto no-repeat;
-  filter:saturate(.55) brightness(1.35);
-  opacity:.28;
+  width:680px;
+  height:1280px;
+  background:url("editorial/user-foliage-09.png") top center/680px auto no-repeat;
+  filter:saturate(.62) brightness(1.2);
+  opacity:.4;
   pointer-events:none;
   transform:rotate(-18deg);
-  transform-origin:74% 0;
-  -webkit-mask-image:linear-gradient(to top,transparent 0%,rgba(0,0,0,.25) 28%,rgba(0,0,0,.7) 62%,#000 100%);
-  mask-image:linear-gradient(to top,transparent 0%,rgba(0,0,0,.25) 28%,rgba(0,0,0,.7) 62%,#000 100%);
+  transform-origin:72% 0;
+  -webkit-mask-image:linear-gradient(to top,transparent 0%,rgba(0,0,0,.12) 24%,rgba(0,0,0,.45) 52%,#000 78%);
+  mask-image:linear-gradient(to top,transparent 0%,rgba(0,0,0,.12) 24%,rgba(0,0,0,.45) 52%,#000 78%);
 }
 @media(max-width:1280px){
   .mac-tracker-wrap--dashboard .mac-tracker-masthead{margin-inline:-24px;padding-inline:24px}
 }
 @media(max-width:800px){
-  .mac-tracker-wrap--dashboard .mac-tracker-masthead{min-height:96px;margin-inline:-14px;padding:18px 14px}
-  .mac-tracker-wrap--dashboard .mac-tracker-masthead::after{background-size:440px auto}
-  .mac-tracker-wrap--dashboard .mac-tracker-masthead__art{right:-22%;width:400px;height:640px}
+  .mac-tracker-wrap--dashboard .mac-tracker-masthead{min-height:124px;margin-inline:-14px;padding:20px 16px}
+  .mac-tracker-wrap--dashboard .mac-tracker-masthead__art{right:-30%;width:480px;height:900px}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead h1{font-size:24px}
 }
