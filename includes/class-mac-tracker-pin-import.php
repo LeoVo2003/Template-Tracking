@@ -35,7 +35,6 @@ class MAC_Tracker_Pin_Import {
 		$duplicate_ids = array();
 		$seen_pin_ids = array();
 		$roster_ids = array();
-		$latest_pin_time = '';
 		$errors   = array();
 		$row_no   = 1;
 		while ( false !== ( $values = fgetcsv( $handle ) ) ) {
@@ -67,7 +66,6 @@ class MAC_Tracker_Pin_Import {
 
 			$layout = $row['layout_web'] ?? $row['layout_url'] ?? $row['layout'] ?? '';
 			$done   = MAC_Tracker_Time::csv_bangkok_to_utc( $row['date'] ?? $row['done_date'] ?? '', $row['time'] ?? '' );
-			if ( $done && ( '' === $latest_pin_time || $done > $latest_pin_time ) ) { $latest_pin_time = $done; }
 			$pin    = $this->repository->upsert_pin(
 				array(
 					'wpm_project_id'  => $project_id,
@@ -102,7 +100,6 @@ class MAC_Tracker_Pin_Import {
 
 		fclose( $handle );
 		$this->repository->set_roster_ids( $roster_ids );
-		$this->repository->set_roster_cutoff( $latest_pin_time );
 		delete_option( 'mac_tracker_baseline_compared_at' );
 		update_option( 'mac_tracker_roster_source_rows', $rows_read, false );
 		return array( 'imported' => $imported, 'roster' => count( array_unique( $roster_ids ) ), 'rows_read' => $rows_read, 'duplicates' => count( $duplicate_ids ), 'errors' => $errors );

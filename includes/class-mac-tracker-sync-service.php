@@ -31,30 +31,6 @@ class MAC_Tracker_Sync_Service {
 		wp_schedule_event( time() + 300, 'hourly', self::CRON_HOOK );
 	}
 
-	/** Queue a manual run and return immediately to the admin page. */
-	public function queue_background_sync( $mode = 'sync' ) {
-		if ( ! $this->is_configured() ) {
-			return new WP_Error( 'mac_tracker_wpm_unconfigured', 'Save the HTTPS WPM endpoint and API header value before syncing.' );
-		}
-		if ( $this->is_running() ) {
-			return new WP_Error( 'mac_tracker_sync_running', 'A sync is already running.' );
-		}
-		if ( ! wp_next_scheduled( self::MANUAL_CRON_HOOK ) ) {
-			// Make the event due before calling spawn_cron(). The old five-second
-			// delay could leave a manual sync queued forever on a quiet site.
-			$scheduled = wp_schedule_single_event( time(), self::MANUAL_CRON_HOOK, array(), true );
-			if ( is_wp_error( $scheduled ) ) {
-				return $scheduled;
-			}
-		}
-		update_option( 'mac_tracker_sync_queued_at', MAC_Tracker_Time::now_utc(), false );
-		update_option( 'mac_tracker_sync_mode', 'compare' === $mode ? 'compare' : 'sync', false );
-		if ( function_exists( 'spawn_cron' ) ) {
-			spawn_cron();
-		}
-		return true;
-	}
-
 	public function run_scheduled() {
 		if ( $this->is_configured() && $this->repository->baseline_is_compared() ) {
 			$this->run_sync();
@@ -327,10 +303,6 @@ class MAC_Tracker_Sync_Service {
 	private function task_is_in_scope( array $task ) {
 		$when = MAC_Tracker_Time::normalize_utc( $task['due_at'] ?: $task['completed_at'] );
 		return '' !== (string) $when && $when >= MAC_TRACKER_PROJECT_SYNC_START;
-	}
-	private function task_sort_value( array $task ) {
-		$when = MAC_Tracker_Time::normalize_utc( $task['due_at'] ?: $task['completed_at'] );
-		return (int) strtotime( $when ?: '1970-01-01 00:00:00' ) * 1000000 + (int) $task['id'];
 	}
 	private function duration( $started ) { return 'duration=' . number_format( microtime( true ) - $started, 1 ) . 's'; }
 	private function with_duration( $message, $started ) { return $message . ', ' . $this->duration( $started ); }

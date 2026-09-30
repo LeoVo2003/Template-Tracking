@@ -189,13 +189,6 @@ class MAC_Tracker_Repository {
 		return array_map( 'intval', (array) $this->wpdb->get_col( "SELECT wpm_project_id FROM {$this->pins} ORDER BY pin_position ASC, id ASC" ) );
 	}
 
-	/** Count retired direct-domain snapshots without touching Action Design or CSV pin data. */
-	public function domain_snapshot_count() {
-		return (int) $this->wpdb->get_var(
-			$this->wpdb->prepare( "SELECT COUNT(*) FROM {$this->projects} WHERE record_kind = %s", 'domain' )
-		);
-	}
-
 	/**
 	 * One-time cleanup for domain rows made by pre-0.7.2 tracker logic.
 	 * Related color records are removed as well so the color table has no orphan IDs.
@@ -267,8 +260,6 @@ class MAC_Tracker_Repository {
 	public function roster_ids() {
 		return array_values( array_unique( array_filter( array_map( 'absint', (array) get_option( 'mac_tracker_roster_ids', array() ) ) ) ) );
 	}
-	public function set_roster_cutoff( $utc ) { update_option( 'mac_tracker_roster_cutoff_utc', $utc, false ); }
-	public function roster_cutoff() { return (string) get_option( 'mac_tracker_roster_cutoff_utc', '' ); }
 	/** The one-time baseline comparison establishes when ordinary sync begins. */
 	public function mark_baseline_compared( $utc ) { update_option( 'mac_tracker_baseline_compared_at', (string) $utc, false ); }
 	public function baseline_compared_at() { return (string) get_option( 'mac_tracker_baseline_compared_at', '' ); }
@@ -358,7 +349,6 @@ class MAC_Tracker_Repository {
 		delete_option( 'mac_tracker_sync_queued_at' );
 		delete_option( 'mac_tracker_sync_mode' );
 		delete_option( 'mac_tracker_roster_ids' );
-		delete_option( 'mac_tracker_roster_cutoff_utc' );
 		delete_option( 'mac_tracker_roster_source_rows' );
 		delete_option( 'mac_tracker_baseline_compared_at' );
 		return true;
@@ -517,15 +507,7 @@ class MAC_Tracker_Repository {
 		);
 	}
 
-	public function dashboard_stats() {
-		return (array) $this->wpdb->get_row(
-			"SELECT COUNT(*) AS snapshots, COUNT(DISTINCT p.wpm_project_id) AS projects, SUM(p.record_kind = 'action_design') AS action_design, SUM(p.record_kind = 'csv_pin') AS csv_pins FROM {$this->projects} p",
-			ARRAY_A
-		);
-	}
-
 	public function pin_count() { return (int) $this->wpdb->get_var( "SELECT COUNT(*) FROM {$this->pins}" ); }
-	public function latest_log() { return $this->wpdb->get_row( "SELECT * FROM {$this->logs} ORDER BY id DESC LIMIT 1", ARRAY_A ); }
 	public function recent_logs( $limit = 8 ) { return (array) $this->wpdb->get_results( $this->wpdb->prepare( "SELECT * FROM {$this->logs} ORDER BY id DESC LIMIT %d", max( 1, absint( $limit ) ) ), ARRAY_A ); }
 
 	public function begin_sync_log() {
@@ -659,11 +641,6 @@ class MAC_Tracker_Repository {
 		$query_args = array_merge( $args, array( $per_page, ( $page - 1 ) * $per_page ) );
 		$rows = (array) $this->wpdb->get_results( $this->wpdb->prepare( $query, $query_args ), ARRAY_A );
 		return array( 'rows' => $rows, 'total' => $total, 'per_page' => $per_page, 'paged' => $page, 'total_pages' => max( 1, (int) ceil( $total / $per_page ) ) );
-	}
-
-	/** Compatibility helper for bounded callers. */
-	public function color_review_rows( $limit = 32 ) {
-		return array_slice( $this->color_review_page( 'pending', 1, 100 )['rows'], 0, max( 1, min( 100, absint( $limit ) ) ) );
 	}
 
 	/** IDs without a prior extraction; one batch is deliberately bounded. */
@@ -1264,16 +1241,6 @@ class MAC_Tracker_Repository {
 		return (int) $this->wpdb->query( $this->wpdb->prepare( $sql, array_merge( array( sanitize_text_field( $message ) ), $ids ) ) );
 	}
 
-	/** Revisit only categories affected by a visual taxonomy adjustment. */
-	public function requeue_visual_tones_by_labels( array $labels ) {
-		$labels = array_values( array_intersect( array_map( 'sanitize_text_field', $labels ), $this->visual_tones() ) );
-		if ( empty( $labels ) ) { return 0; }
-		$placeholders = implode( ',', array_fill( 0, count( $labels ), '%s' ) );
-		$args = array_merge( array( MAC_Tracker_Time::now_utc() ), $labels );
-		$sql = "UPDATE {$this->visuals} v SET pipeline_status = 'analysis_queued', tone = '', tone_group = '', precise_tone = '', confidence = '', tone_reason = '', tone_status = 'pending', tone_token = '', ai_raw = '', next_retry_at = NULL, updated_at = %s WHERE screenshot_url <> '' AND capture_bundle_json <> '' AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')} AND (lease_until IS NULL OR lease_until <= UTC_TIMESTAMP()) AND pipeline_status NOT IN ('capturing', 'analyzing') AND tone IN ({$placeholders})";
-		return (int) $this->wpdb->query( $this->wpdb->prepare( $sql, $args ) );
-	}
-
 	/** Queue stored captures or fresh captures without deleting the existing image. */
 	public function requeue_visual_items( array $snapshot_ids, $mode ) {
 		$ids = array_values( array_unique( array_filter( array_map( 'absint', $snapshot_ids ) ) ) );
@@ -1308,12 +1275,6 @@ class MAC_Tracker_Repository {
 
 	public function visual_diagnostic_attachment_id( $snapshot_id ) {
 		return absint( $this->wpdb->get_var( $this->wpdb->prepare( "SELECT diagnostic_attachment_id FROM {$this->visuals} WHERE project_id = %d", absint( $snapshot_id ) ) ) );
-	}
-
-	public function requeue_failed_visual_items() {
-		$now = MAC_Tracker_Time::now_utc();
-		$result = $this->wpdb->query( $this->wpdb->prepare( "UPDATE {$this->visuals} v SET pipeline_status = IF(screenshot_url <> '', 'analysis_queued', 'capture_queued'), capture_token = '', tone_token = '', capture_status = IF(screenshot_url <> '', 'captured', 'pending'), tone_status = 'pending', ai_raw = '', next_retry_at = NULL, last_error_code = '', last_error_message = NULL, last_error_at = NULL, updated_at = %s WHERE pipeline_status IN ('failed', 'retry_wait') AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')}", $now ) );
-		return false === $result ? new WP_Error( 'mac_tracker_visual_retry', $this->wpdb->last_error ?: 'Unable to retry failed visual work.' ) : (int) $result;
 	}
 
 	/** Queue only security-blocked exact targets for the self-hosted runner. */
