@@ -30,6 +30,32 @@ class MAC_Tracker_Activator {
 		flush_rewrite_rules();
 	}
 
+	/** Create the public project ledger page once; never overwrite an existing page. */
+	private static function ensure_public_projects_page() {
+		$page_id = (int) get_option( 'mac_tracker_public_page_id', 0 );
+		if ( $page_id > 0 && 'trash' !== get_post_status( $page_id ) ) {
+			return;
+		}
+		$existing = get_page_by_path( 'projects', OBJECT, 'page' );
+		if ( $existing ) {
+			// Respect a hand-made page: only adopt it when it already carries the shortcode.
+			if ( has_shortcode( (string) $existing->post_content, 'mac_tracker_projects' ) ) {
+				update_option( 'mac_tracker_public_page_id', (int) $existing->ID, false );
+			}
+			return;
+		}
+		$new_id = wp_insert_post( array(
+			'post_title'   => 'Projects',
+			'post_name'    => 'projects',
+			'post_content' => '[mac_tracker_projects]',
+			'post_status'  => 'publish',
+			'post_type'    => 'page',
+		) );
+		if ( $new_id && ! is_wp_error( $new_id ) ) {
+			update_option( 'mac_tracker_public_page_id', (int) $new_id, false );
+		}
+	}
+
 	private static function migrate() {
 		global $wpdb;
 		$previous_version = (string) get_option( 'mac_tracker_db_version', '' );
@@ -302,6 +328,10 @@ class MAC_Tracker_Activator {
 				$requeued = ( new MAC_Tracker_Repository() )->requeue_legacy_ai_for_direct_vision();
 				update_option( 'mac_tracker_visual_direct_vision_requeued_count', $requeued, false );
 			}
+		}
+		if ( version_compare( $previous_version, '0.20.70', '<' ) ) {
+			// Public project ledger: a real WordPress page, no login required.
+			self::ensure_public_projects_page();
 		}
 		// Split human approval from the legacy manual tone flag and preserve old locks.
 		$wpdb->query( "UPDATE {$visuals} SET human_locked = 1 WHERE manual_locked = 1 AND human_locked = 0" );
