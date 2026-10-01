@@ -7048,7 +7048,12 @@ html[data-mac-theme] {
 }
 
 .mac-tracker-wrap--dashboard .mac-tracker-masthead,
-.mac-tracker-wrap--projects .mac-tracker-masthead {
+.mac-tracker-wrap--projects .mac-tracker-masthead,
+.mac-tracker-wrap--visuals .mac-tracker-masthead,
+.mac-tracker-wrap--colors .mac-tracker-masthead,
+.mac-tracker-wrap--skipped .mac-tracker-masthead,
+.mac-tracker-wrap--settings .mac-tracker-masthead,
+.mac-tracker-wrap--pins .mac-tracker-masthead {
   position: relative;
   width: auto;
   max-width: none;
@@ -7057,6 +7062,7 @@ html[data-mac-theme] {
   padding: 28px 34px 22px;
   overflow: hidden;
   isolation: isolate;
+  --mac-masthead-plate-size: 173%;
   background: linear-gradient(20deg,#F7F6F0 16%,rgba(255,253,247,.94) 32%,rgba(255,253,247,.62) 48%,rgba(255,253,247,.12) 68%,rgba(255,253,247,0) 88%);
   background-color: #F7F6F0;
   border-bottom: 1px solid rgb(77 83 58 / 5%);
@@ -7069,19 +7075,49 @@ html[data-mac-theme] {
 }
 
 .mac-tracker-wrap--projects .mac-tracker-masthead {
-  --mac-masthead-plate: url("editorial/banner-library/08-right-classic.jpg");
+  --mac-masthead-plate: url("editorial/masthead-projects.png");
+  --mac-masthead-plate-size: 128%;
+}
+
+.mac-tracker-wrap--visuals .mac-tracker-masthead,
+.mac-tracker-wrap--colors .mac-tracker-masthead {
+  --mac-masthead-plate: url("editorial/masthead-analysis.png");
+}
+
+.mac-tracker-wrap--skipped .mac-tracker-masthead {
+  --mac-masthead-plate: url("editorial/masthead-skipped.png");
+}
+
+.mac-tracker-wrap--settings .mac-tracker-masthead,
+.mac-tracker-wrap--pins .mac-tracker-masthead {
+  --mac-masthead-plate: url("editorial/masthead-settings.png");
 }
 
 .mac-tracker-wrap--dashboard .mac-tracker-masthead::before,
 .mac-tracker-wrap--projects .mac-tracker-masthead::before,
+.mac-tracker-wrap--visuals .mac-tracker-masthead::before,
+.mac-tracker-wrap--colors .mac-tracker-masthead::before,
+.mac-tracker-wrap--skipped .mac-tracker-masthead::before,
+.mac-tracker-wrap--settings .mac-tracker-masthead::before,
+.mac-tracker-wrap--pins .mac-tracker-masthead::before,
 .mac-tracker-wrap--dashboard .mac-tracker-masthead__art,
-.mac-tracker-wrap--projects .mac-tracker-masthead__art {
+.mac-tracker-wrap--projects .mac-tracker-masthead__art,
+.mac-tracker-wrap--visuals .mac-tracker-masthead__art,
+.mac-tracker-wrap--colors .mac-tracker-masthead__art,
+.mac-tracker-wrap--skipped .mac-tracker-masthead__art,
+.mac-tracker-wrap--settings .mac-tracker-masthead__art,
+.mac-tracker-wrap--pins .mac-tracker-masthead__art {
   display: none;
   content: none;
 }
 
 .mac-tracker-wrap--dashboard .mac-tracker-masthead::after,
-.mac-tracker-wrap--projects .mac-tracker-masthead::after {
+.mac-tracker-wrap--projects .mac-tracker-masthead::after,
+.mac-tracker-wrap--visuals .mac-tracker-masthead::after,
+.mac-tracker-wrap--colors .mac-tracker-masthead::after,
+.mac-tracker-wrap--skipped .mac-tracker-masthead::after,
+.mac-tracker-wrap--settings .mac-tracker-masthead::after,
+.mac-tracker-wrap--pins .mac-tracker-masthead::after {
   display: block;
   position: absolute;
   z-index: 1;
@@ -7090,7 +7126,10 @@ html[data-mac-theme] {
   height: auto;
   margin: 0;
   opacity: 1;
-  background: var(--mac-masthead-plate) right 86%/auto 173% no-repeat;
+  background-image: var(--mac-masthead-plate);
+  background-repeat: no-repeat;
+  background-position: right 86%;
+  background-size: auto var(--mac-masthead-plate-size);
   content: "";
   filter: none;
   pointer-events: none;
@@ -7101,17 +7140,37 @@ html[data-mac-theme] {
 
 .mac-tracker-wrap--dashboard .mac-tracker-masthead__title,
 .mac-tracker-wrap--projects .mac-tracker-masthead__title,
+.mac-tracker-wrap--visuals .mac-tracker-masthead__title,
+.mac-tracker-wrap--colors .mac-tracker-masthead__title,
+.mac-tracker-wrap--skipped .mac-tracker-masthead__title,
+.mac-tracker-wrap--settings .mac-tracker-masthead__title,
+.mac-tracker-wrap--pins .mac-tracker-masthead__title,
 .mac-tracker-wrap--dashboard .mac-tracker-masthead h1,
 .mac-tracker-wrap--projects .mac-tracker-masthead h1,
+.mac-tracker-wrap--visuals .mac-tracker-masthead h1,
+.mac-tracker-wrap--colors .mac-tracker-masthead h1,
+.mac-tracker-wrap--skipped .mac-tracker-masthead h1,
+.mac-tracker-wrap--settings .mac-tracker-masthead h1,
+.mac-tracker-wrap--pins .mac-tracker-masthead h1,
 .mac-tracker-wrap--dashboard .mac-tracker-masthead p,
-.mac-tracker-wrap--projects .mac-tracker-masthead p {
+.mac-tracker-wrap--projects .mac-tracker-masthead p,
+.mac-tracker-wrap--visuals .mac-tracker-masthead p,
+.mac-tracker-wrap--colors .mac-tracker-masthead p,
+.mac-tracker-wrap--skipped .mac-tracker-masthead p,
+.mac-tracker-wrap--settings .mac-tracker-masthead p,
+.mac-tracker-wrap--pins .mac-tracker-masthead p {
   position: relative;
   z-index: 2;
   font-family: Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 }
 
 .mac-tracker-wrap--dashboard .mac-tracker-masthead h1,
-.mac-tracker-wrap--projects .mac-tracker-masthead h1 {
+.mac-tracker-wrap--projects .mac-tracker-masthead h1,
+.mac-tracker-wrap--visuals .mac-tracker-masthead h1,
+.mac-tracker-wrap--colors .mac-tracker-masthead h1,
+.mac-tracker-wrap--skipped .mac-tracker-masthead h1,
+.mac-tracker-wrap--settings .mac-tracker-masthead h1,
+.mac-tracker-wrap--pins .mac-tracker-masthead h1 {
   color: var(--mac-ink);
   font-size: 26px;
   font-weight: 720;
@@ -7120,7 +7179,12 @@ html[data-mac-theme] {
 }
 
 .mac-tracker-wrap--dashboard .mac-tracker-masthead p,
-.mac-tracker-wrap--projects .mac-tracker-masthead p {
+.mac-tracker-wrap--projects .mac-tracker-masthead p,
+.mac-tracker-wrap--visuals .mac-tracker-masthead p,
+.mac-tracker-wrap--colors .mac-tracker-masthead p,
+.mac-tracker-wrap--skipped .mac-tracker-masthead p,
+.mac-tracker-wrap--settings .mac-tracker-masthead p,
+.mac-tracker-wrap--pins .mac-tracker-masthead p {
   max-width: 470px;
   margin-top: 5px;
   color: var(--mac-text-muted);
