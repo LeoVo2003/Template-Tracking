@@ -21,8 +21,8 @@ class MAC_Tracker_App {
 	}
 
 	public static function register_rewrite_rules() {
-		add_rewrite_rule( '^mac-project-tracker/?$', 'index.php?' . self::QUERY_VAR . '=dashboard', 'top' );
-		add_rewrite_rule( '^mac-project-tracker/(projects|analysis|skipped|settings)/?$', 'index.php?' . self::QUERY_VAR . '=$matches[1]', 'top' );
+		add_rewrite_rule( '^mac-project-tracker/?$', 'index.php?' . self::QUERY_VAR . '=projects', 'top' );
+		add_rewrite_rule( '^mac-project-tracker/(dashboard|projects|analysis|skipped|settings)/?$', 'index.php?' . self::QUERY_VAR . '=$matches[1]', 'top' );
 	}
 
 	public function query_vars( $vars ) {
@@ -33,8 +33,8 @@ class MAC_Tracker_App {
 	/** Return a clean application URL without coupling renderers to rewrite internals. */
 	public static function url( $screen = 'dashboard', array $args = array() ) {
 		$paths = array(
-			'dashboard' => 'mac-project-tracker/',
-			'projects'  => 'mac-project-tracker/projects/',
+			'dashboard' => 'mac-project-tracker/dashboard/',
+			'projects'  => 'mac-project-tracker/',
 			'analysis'  => 'mac-project-tracker/analysis/',
 			'visuals'   => 'mac-project-tracker/analysis/',
 			'colors'    => 'mac-project-tracker/analysis/',
@@ -59,32 +59,39 @@ class MAC_Tracker_App {
 		}
 		$path = trim( $path, '/' );
 		if ( 'mac-project-tracker' === $path ) {
-			return 'dashboard';
+			return 'projects';
 		}
-		if ( preg_match( '#^mac-project-tracker/(projects|analysis|skipped|settings)$#', $path, $match ) ) {
+		if ( preg_match( '#^mac-project-tracker/(dashboard|projects|analysis|skipped|settings)$#', $path, $match ) ) {
 			return $match[1];
 		}
 		return '';
 	}
 
 	public function render() {
+		if ( $this->is_plain_front_request() ) {
+			wp_safe_redirect( self::url( 'projects' ) );
+			exit;
+		}
+
 		$screen = $this->requested_screen();
 		if ( '' === $screen ) {
 			return;
 		}
 
-		if ( ! is_user_logged_in() ) {
-			auth_redirect();
-			exit;
-		}
-		if ( ! current_user_can( 'manage_options' ) ) {
+		$is_operator = is_user_logged_in() && current_user_can( 'manage_options' );
+		$public_ledger = ( 'projects' === $screen && ! $is_operator );
+		if ( ! $public_ledger && ! $is_operator ) {
+			if ( ! is_user_logged_in() ) {
+				auth_redirect();
+				exit;
+			}
 			wp_die( esc_html__( 'You do not have permission to access MAC Tracker.' ), '', array( 'response' => 403 ) );
 		}
 
 		status_header( 200 );
 		nocache_headers();
 		$this->admin->set_standalone( true );
-		$this->admin->set_public_view( false );
+		$this->admin->set_public_view( $public_ledger );
 		$this->admin->enqueue_standalone_assets();
 		$renderers = array(
 			'dashboard' => 'render_dashboard',
@@ -98,8 +105,8 @@ class MAC_Tracker_App {
 		<head>
 			<meta charset="<?php bloginfo( 'charset' ); ?>">
 			<meta name="viewport" content="width=device-width, initial-scale=1">
-			<meta name="robots" content="noindex,nofollow,noarchive">
-			<title><?php echo esc_html( 'MAC Project Tracker' ); ?></title>
+			<?php if ( ! $public_ledger ) : ?><meta name="robots" content="noindex,nofollow,noarchive"><?php endif; ?>
+			<title><?php echo esc_html( $public_ledger ? 'Projects' : 'MAC Project Tracker' ); ?></title>
 			<?php wp_print_styles( array( 'dashicons', 'mac-tracker-fonts', 'mac-project-tracker-standalone' ) ); ?>
 		</head>
 		<body class="mac-tracker-standalone">
@@ -137,6 +144,20 @@ class MAC_Tracker_App {
 		}
 		wp_safe_redirect( $url );
 		exit;
+	}
+
+	/** Send the site homepage to the public project ledger. */
+	private function is_plain_front_request() {
+		if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			return false;
+		}
+		if ( 'GET' !== strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) ) ) ) {
+			return false;
+		}
+		if ( '' !== $this->requested_screen() || ! is_front_page() ) {
+			return false;
+		}
+		return true;
 	}
 
 	private function current_url() {

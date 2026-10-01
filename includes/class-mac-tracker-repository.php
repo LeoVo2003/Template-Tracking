@@ -395,8 +395,8 @@ class MAC_Tracker_Repository {
 				$args[]  = (int) $search;
 			} else {
 				$like    = '%' . $this->wpdb->esc_like( $search ) . '%';
-				$where[] = '(p.name LIKE %s OR p.zip_code LIKE %s OR p.website_url LIKE %s)';
-				$args    = array_merge( $args, array( $like, $like, $like ) );
+				$where[] = '(p.name LIKE %s OR p.zip_code LIKE %s OR p.website_url LIKE %s OR p.domain LIKE %s OR p.layout_url LIKE %s OR LOWER(p.layout_url) LIKE %s)';
+				$args    = array_merge( $args, array( $like, $like, $like, $like, $like, '%' . $this->wpdb->esc_like( $this->template_search_token( $search ) ) . '%' ) );
 			}
 		}
 
@@ -440,20 +440,24 @@ class MAC_Tracker_Repository {
 		if ( '__missing' === $layout || 'missing' === $layout || 'no' === $layout ) {
 			$where[] = "p.layout_url = ''";
 		} elseif ( 'external' === $layout ) {
-			// Only MAC's canonical /demo-xxx template URLs belong to a template
-			// group. Every other non-empty URL is intentionally one External layout.
-			$where[] = "p.layout_url <> '' AND LOWER(p.layout_url) NOT REGEXP '^(https?:)?//templates\\.macusaone\\.com/demo-[a-z0-9]+([/?#]|$)'";
+			// A MAC template is /demo-f01/, /demo-f01/home/ or /demo-f01/home-02/,
+			// including older demo-f01 hostnames. Anything else is external.
+			$where[] = "p.layout_url <> '' AND LOWER(p.layout_url) NOT REGEXP '(^|[./])demo-[a-z][a-z0-9]*([./?#]|$)'";
 		} elseif ( 'yes' === $layout ) {
 			$where[] = "p.layout_url <> ''";
-		// `demo:s01` remains accepted for saved legacy links; controls only expose
-		// codes actually present in templates.macusaone.com/demo-xxx URLs.
-		} elseif ( preg_match( '/^(?:demo:|template:)([a-z0-9]+)$/i', strtolower( $layout ), $layout_match ) ) {
+		} elseif ( preg_match( '/^(?:demo:|template:)([a-z][a-z0-9]*)(?::(home|[0-9]{2}))?$/i', strtolower( $layout ), $layout_match ) ) {
 			$template = strtolower( $layout_match[1] );
-			// Match the same complete family recognized by the Dashboard. Snapshot
-			// URLs can originate from an older template host, so host name is not
-			// part of the family identity.
-			$where[] = 'LOWER(p.layout_url) REGEXP %s';
-			$args[]  = '(^|/)demo-' . preg_quote( $template, '/' ) . '([/?#]|$)';
+			$home     = isset( $layout_match[2] ) ? strtolower( $layout_match[2] ) : '';
+			$where[]  = 'LOWER(p.layout_url) REGEXP %s';
+			$args[]   = '(^|[./])demo-' . preg_quote( $template, '/' ) . '([./?#]|$)';
+			if ( 'home' === $home ) {
+				$where[] = '(LOWER(p.layout_url) REGEXP %s OR LOWER(p.layout_url) NOT REGEXP %s)';
+				$args[]  = 'demo-' . preg_quote( $template, '/' ) . '[./]home(-0*1)?([/?#]|$)';
+				$args[]  = 'demo-' . preg_quote( $template, '/' ) . '[./]home-';
+			} elseif ( '' !== $home ) {
+				$where[] = 'LOWER(p.layout_url) REGEXP %s';
+				$args[]  = 'home-0*' . (int) $home . '([/?#]|$)';
+			}
 		} elseif ( '' !== $layout ) {
 			$where[] = 'p.layout_url = %s';
 			$args[]  = $layout;
@@ -543,27 +547,69 @@ class MAC_Tracker_Repository {
 	}
 
 	/**
-	 * Presentation groups for the Projects layout filter.  Values are deliberately
-	 * stable and do not expose a long, duplicated list of raw layout URLs.
+	 * Template families follow templates.macusaone.com: /demo-f01/ lists
+	 * /demo-f01/home/ and /demo-f01/home-02/. Family options match every home.
 	 */
 	public function list_layout_groups() {
 		$groups = array();
 		foreach ( $this->list_layouts() as $layout_url ) {
-			$raw   = trim( (string) $layout_url );
-			$parts = wp_parse_url( $raw );
-			$host  = strtolower( (string) ( $parts['host'] ?? '' ) );
-			if ( preg_match( '/^(demo-[a-z0-9]+)$/i', $host, $matches ) || preg_match( '#(?:^|/)demo-([a-z0-9]+)(?:/|[?#]|$)#i', $raw, $matches ) ) {
-				$key = strtolower( (string) ( $matches[1] ?? '' ) );
-				$key = preg_replace( '/^demo-/', '', $key );
-				if ( '' === $key ) { continue; }
+			$identity = self::template_identity( $layout_url );
+			if ( ! $identity ) {
+				continue;
+			}
+			$key = $identity['code'];
+			if ( ! isset( $groups[ $key ] ) ) {
 				$groups[ $key ] = array(
 					'value' => 'template:' . $key,
-					'label' => strtoupper( $key ),
+					'label' => 'Demo ' . strtoupper( $key ),
+					'homes' => array(),
 				);
 			}
+			if ( '' === $identity['home'] ) {
+				continue;
+			}
+			$home_value = '01' === $identity['home'] ? 'home' : $identity['home'];
+			$groups[ $key ]['homes'][ $identity['home'] ] = array(
+				'value' => 'template:' . $key . ':' . $home_value,
+				'label' => 'Demo ' . strtoupper( $key ) . ' — Home ' . $identity['home'],
+			);
 		}
 		ksort( $groups, SORT_NATURAL );
+		foreach ( $groups as $key => $group ) {
+			ksort( $group['homes'], SORT_NATURAL );
+			$groups[ $key ]['homes'] = array_values( $group['homes'] );
+		}
 		return array_values( $groups );
+	}
+
+	/**
+	 * Identify a MAC template URL. Home 01 is the default /home/ page.
+	 * A family root such as /demo-f01/ has an empty home.
+	 */
+	public static function template_identity( $url ) {
+		$raw = strtolower( trim( (string) $url ) );
+		if ( ! preg_match( '/(?:^|[.\/])(demo-([a-z][a-z0-9]*))(?=[.\/?#]|$)/', $raw, $code ) ) {
+			return null;
+		}
+		$home = '';
+		if ( preg_match( '/home-0*([0-9]{1,2})(?=[\/?#]|$)/', $raw, $home_match ) ) {
+			$home = str_pad( (string) (int) $home_match[1], 2, '0', STR_PAD_LEFT );
+		} elseif ( preg_match( '/\/home(?=[\/?#]|$)/', $raw ) ) {
+			$home = '01';
+		}
+		return array( 'code' => $code[2], 'home' => $home );
+	}
+
+	/** Turn "Demo F01" or "s00" into the layout path token demo-f01. */
+	private function template_search_token( $search ) {
+		$compact = strtolower( (string) preg_replace( '/[^a-z0-9]+/i', '', (string) $search ) );
+		if ( preg_match( '/^(?:demo)?([a-z][0-9]{2,3})$/', $compact, $match ) ) {
+			return 'demo-' . $match[1];
+		}
+		if ( preg_match( '/home0*([0-9]{1,2})$/', $compact, $match ) ) {
+			return 'home-' . str_pad( (string) (int) $match[1], 2, '0', STR_PAD_LEFT );
+		}
+		return strtolower( (string) $search );
 	}
 
 	/** Strip decorative emoji so one person has one filter option. */

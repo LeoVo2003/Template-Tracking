@@ -125,9 +125,9 @@ class MAC_Tracker_Admin {
 		return class_exists( 'MAC_Tracker_App' ) ? MAC_Tracker_App::url( 'projects' ) : home_url( '/' );
 	}
 
-	/** Projects URL that respects the current admin or public view. */
+	/** Projects URL. Guests and admins both stay on /mac-project-tracker/. */
 	private function projects_url( array $args = array() ) {
-		$url = $this->public_view ? $this->public_projects_url() : $this->app_url( 'projects' );
+		$url = $this->app_url( 'projects' );
 		return $args ? add_query_arg( $args, $url ) : $url;
 	}
 
@@ -284,15 +284,14 @@ class MAC_Tracker_Admin {
 		?>
 		<section class="mac-tracker-project-intro">
 			<div><p class="mac-tracker-eyebrow">Project ledger</p><h2><?php echo esc_html( number_format_i18n( $page['total'] ) ); ?> delivered project<?php echo 1 === (int) $page['total'] ? '' : 's'; ?></h2><p>Search, filter and review the current local snapshot.</p></div>
-			<?php if ( ! $this->public_view ) { $this->sync_buttons(); } ?>
 		</section>
 		<?php if ( ! $this->public_view ) { $this->notices(); } ?>
 
 		<form class="mac-tracker-filters" method="get" action="<?php echo esc_url( $this->projects_url() ); ?>">
 			<?php if ( ! $this->standalone ) : ?><input type="hidden" name="page" value="mac-project-tracker"><?php endif; ?>
-			<label class="mac-tracker-filter-search"><span>Search</span><input type="search" name="search" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="Project, domain, ZIP or WPM ID"></label>
+			<label class="mac-tracker-filter-search"><span>Search</span><input type="search" name="search" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="Project, template, domain, ZIP or WPM ID"></label>
 			<label><span>Assignee</span><select name="assignee"><option value="">All assignees</option><?php foreach ( $this->repository->list_assignees() as $name ) : ?><option value="<?php echo esc_attr( $name ); ?>" <?php selected( $filters['assignee'], $name ); ?>><?php echo esc_html( $name ); ?></option><?php endforeach; ?></select></label>
-			<label><span>Layout</span><select name="layout"><option value="">All layouts</option><?php if ( $layout_groups ) : ?><optgroup label="Templates"><?php foreach ( $layout_groups as $group ) : ?><option value="<?php echo esc_attr( $group['value'] ); ?>" <?php selected( $filters['layout'], $group['value'] ); ?>><?php echo esc_html( $group['label'] ); ?></option><?php endforeach; ?></optgroup><?php endif; ?><optgroup label="Other"><option value="external" <?php selected( $filters['layout'], 'external' ); ?>>External layout</option><option value="missing" <?php selected( $filters['layout'], 'missing' ); ?>>Missing layout</option></optgroup></select></label>
+			<label><span>Template</span><select name="layout"><option value="">All templates</option><?php if ( $layout_groups ) : ?><optgroup label="Templates"><?php foreach ( $layout_groups as $group ) : ?><option value="<?php echo esc_attr( $group['value'] ); ?>" <?php selected( $filters['layout'], $group['value'] ); ?>><?php echo esc_html( $group['label'] ); ?></option><?php foreach ( (array) ( $group['homes'] ?? array() ) as $home ) : ?><option value="<?php echo esc_attr( $home['value'] ); ?>" <?php selected( $filters['layout'], $home['value'] ); ?>><?php echo esc_html( '— ' . $home['label'] ); ?></option><?php endforeach; ?><?php endforeach; ?></optgroup><?php endif; ?><optgroup label="Other"><option value="external" <?php selected( $filters['layout'], 'external' ); ?>>External layout</option><option value="missing" <?php selected( $filters['layout'], 'missing' ); ?>>Missing layout</option></optgroup></select></label>
 			<label><span>AI tone</span><select name="tone"><option value="">All tones</option><option value="pending" <?php selected( $filters['tone'], 'pending' ); ?>>Waiting for AI</option><?php if ( $legacy_tone_filter ) : ?><option value="<?php echo esc_attr( $legacy_tone_filter ); ?>" selected><?php echo esc_html( 'Exact saved tone: ' . $legacy_tone_filter ); ?></option><?php endif; ?><?php foreach ( $tone_filter_groups as $group ) : ?><optgroup label="<?php echo esc_attr( $group['label'] ); ?>"><option value="<?php echo esc_attr( $group['value'] ); ?>" <?php selected( $filters['tone'], $group['value'] ); ?>><?php echo esc_html( $group['label'] . ' — all variants' ); ?></option><?php foreach ( $group['children'] as $child ) : ?><option value="<?php echo esc_attr( $child['value'] ); ?>" <?php selected( $filters['tone'], $child['value'] ); ?>><?php echo esc_html( '— ' . $child['label'] ); ?></option><?php endforeach; ?></optgroup><?php endforeach; ?></select></label>
 			<div class="mac-tracker-filter-range"><label><span>Date range</span><select name="range"><option value="month" <?php selected( $filters['range'], 'month' ); ?>>This month</option><option value="30" <?php selected( $filters['range'], '30' ); ?>>Last 30 days</option><option value="90" <?php selected( $filters['range'], '90' ); ?>>Last 90 days</option><option value="all" <?php selected( $filters['range'], 'all' ); ?>>All time</option><option value="custom" <?php selected( $filters['range'], 'custom' ); ?>>Custom</option></select></label><div class="mac-tracker-filter-custom" data-mac-project-custom-range role="group" aria-label="Custom date range" hidden><label><span>From</span><input type="date" name="custom_from" value="<?php echo esc_attr( $filters['custom_from'] ); ?>"></label><label><span>To</span><input type="date" name="custom_to" value="<?php echo esc_attr( $filters['custom_to'] ); ?>"></label></div></div>
 			<input type="hidden" name="orderby" value="<?php echo esc_attr( $filters['orderby'] ); ?>"><input type="hidden" name="order" value="<?php echo esc_attr( $filters['order'] ); ?>">
@@ -697,10 +696,6 @@ class MAC_Tracker_Admin {
 	public function handle_load_project_rows_ajax() {
 		check_ajax_referer( 'mac_tracker_load_project_rows', 'nonce' );
 		if ( ! current_user_can( 'manage_options' ) ) {
-			if ( ! $this->public_projects_enabled() ) {
-				wp_send_json_error( array( 'message' => 'You are not allowed to load project records.' ), 403 );
-			}
-			// Public ledger: the same read-only rows, without admin actions.
 			$this->set_public_view( true );
 			$this->set_standalone( true );
 		}
@@ -1198,7 +1193,7 @@ class MAC_Tracker_Admin {
 					<?php endif; ?>
 					</header>
 					<main class="mac-tracker-main" id="mac-tracker-main">
-						<header class="mac-tracker-masthead<?php echo in_array( $this->current_screen, array( 'dashboard', 'projects' ), true ) ? ' mac-tracker-masthead--' . esc_attr( $this->current_screen ) : ''; ?>"><div class="mac-tracker-masthead__title"><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div><?php if ( 'projects' === $this->current_screen ) : ?><div class="mac-tracker-masthead__art" aria-hidden="true"></div><?php endif; ?></header>
+						<header class="mac-tracker-masthead<?php echo in_array( $this->current_screen, array( 'dashboard', 'projects' ), true ) ? ' mac-tracker-masthead--' . esc_attr( $this->current_screen ) : ''; ?>"><div class="mac-tracker-masthead__title"><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div></header>
 						<div class="mac-tracker-page-content">
 		<?php
 	}
@@ -1403,16 +1398,6 @@ class MAC_Tracker_Admin {
 				<?php endforeach; ?>
 			</div>
 			<div class="mac-tracker-appearance__actions"><p data-mac-theme-status aria-live="polite">Previewing <?php echo esc_html( $themes[ $current ][0] ); ?>.</p><button class="button button-primary" type="button" data-mac-theme-save>Save appearance</button></div>
-		</section>
-		<section class="mac-tracker-panel mac-tracker-public-ledger">
-			<div class="mac-tracker-panel__head"><div><p class="mac-tracker-eyebrow">Public page</p><h2>Public project ledger</h2><p>A real WordPress page showing the project table. No login required — share the link freely.</p></div></div>
-			<?php if ( $this->public_projects_enabled() ) : ?>
-				<p><span class="dashicons dashicons-yes-alt" aria-hidden="true"></span> Live at <a href="<?php echo esc_url( $this->public_projects_url() ); ?>" target="_blank" rel="noopener"><?php echo esc_html( $this->public_projects_url() ); ?></a></p>
-			<?php else : ?>
-				<p><span class="dashicons dashicons-warning" aria-hidden="true"></span> The public page is missing. Re-save this plugin's update routine or create a page containing the shortcode below.</p>
-			<?php endif; ?>
-			<p>Shortcode for manual placement: <code>[mac_tracker_projects]</code></p>
-			<p><small>Read-only: visitors can search, filter and sort, but cannot sync, edit or skip projects. Move the page to Trash to take it offline.</small></p>
 		</section>
 		<?php
 	}

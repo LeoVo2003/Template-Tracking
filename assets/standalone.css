@@ -880,3 +880,16 @@ html[data-mac-theme]{background:var(--mac-canvas)}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead{min-height:96px;margin-inline:-14px;padding:14px 16px}
   .mac-tracker-wrap--dashboard .mac-tracker-masthead h1{font-size:24px}
 }
+
+/* Health actions stay one line. Projects header reuses the dashboard banner composition. */
+.mac-tracker-wrap--dashboard .mac-tracker-health-card__action .mac-tracker-sync-actions{display:flex;flex-direction:column;align-items:stretch;gap:8px;width:100%}
+.mac-tracker-wrap--dashboard .mac-tracker-health-card__action .mac-tracker-sync-actions form,.mac-tracker-wrap--dashboard .mac-tracker-health-card__action .mac-tracker-sync-actions .button{width:100%;white-space:nowrap;justify-content:center}
+.mac-tracker-wrap--projects .mac-tracker-app__workspace,.mac-tracker-wrap--projects .mac-tracker-main{overflow-x:clip}
+.mac-tracker-wrap--projects .mac-tracker-masthead{min-height:115px;margin:0 -34px 14px;padding:28px 34px 22px;overflow:hidden;isolation:isolate;background:linear-gradient(20deg,#F7F6F0 16%,rgba(255,253,247,.94) 32%,rgba(255,253,247,.62) 48%,rgba(255,253,247,.12) 68%,rgba(255,253,247,0) 88%);background-color:#F7F6F0;border-bottom:1px solid rgb(77 83 58 / 5%);box-shadow:none}
+.mac-tracker-wrap--projects .mac-tracker-masthead::before{display:none;content:none}
+.mac-tracker-wrap--projects .mac-tracker-masthead::after{display:block;position:absolute;z-index:1;top:0;right:0;bottom:0;left:0;width:auto;height:auto;opacity:1;background:url("editorial/banner-library/08-right-classic.jpg") right 86%/auto 173% no-repeat;content:"";filter:none;pointer-events:none;transform:none;-webkit-mask-image:none;mask-image:none}
+.mac-tracker-wrap--projects .mac-tracker-masthead__art{display:none}
+.mac-tracker-wrap--projects .mac-tracker-masthead__title,.mac-tracker-wrap--projects .mac-tracker-masthead h1,.mac-tracker-wrap--projects .mac-tracker-masthead p{position:relative;z-index:2}
+.mac-tracker-wrap--dashboard .mac-tracker-masthead{min-height:115px}
+@media(max-width:1280px){.mac-tracker-wrap--projects .mac-tracker-masthead{margin-inline:-24px;padding-inline:24px}}
+@media(max-width:800px){.mac-tracker-wrap--dashboard .mac-tracker-masthead,.mac-tracker-wrap--projects .mac-tracker-masthead{min-height:115px}}
