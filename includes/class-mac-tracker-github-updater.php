@@ -34,7 +34,7 @@ class MAC_Tracker_GitHub_Updater {
 		return $links;
 	}
 
-	/** Clear only this plugin's cache, refresh WordPress' transient, then return to Plugins. */
+	/** Clear only this plugin's cache, refresh WordPress' transient, then return. */
 	public function handle_check_updates() {
 		if ( ! current_user_can( 'update_plugins' ) ) {
 			wp_die( esc_html__( 'You do not have permission to check plugin updates.' ) );
@@ -50,13 +50,41 @@ class MAC_Tracker_GitHub_Updater {
 			wp_update_plugins();
 		}
 
-		wp_safe_redirect( add_query_arg( array( 'mac_tracker_update_check' => $state, 'mac_tracker_latest' => $version ), admin_url( 'plugins.php' ) ) );
+		$ref      = sanitize_key( wp_unslash( $_REQUEST['mac_tracker_ref'] ?? '' ) );
+		$redirect = 'dashboard' === $ref ? admin_url( 'admin.php?page=mac-project-tracker-dashboard' ) : admin_url( 'plugins.php' );
+		wp_safe_redirect( add_query_arg( array( 'mac_tracker_update_check' => $state, 'mac_tracker_latest' => $version ), $redirect ) );
 		exit;
+	}
+
+	/**
+	 * Cached-only release state for the dashboard health card.
+	 * Reads the transient without performing any HTTP request.
+	 *
+	 * @return array{checked:bool,version:string,available:bool}
+	 */
+	public function cached_update_state() {
+		$cached = get_site_transient( self::CACHE_KEY );
+		if ( ! is_array( $cached ) || ! empty( $cached['_unavailable'] ) || empty( $cached['tag_name'] ) ) {
+			return array( 'checked' => false, 'version' => '', 'available' => false );
+		}
+		$version = $this->release_version( $cached );
+		return array(
+			'checked'   => true,
+			'version'   => $version,
+			'available' => '' !== $version && version_compare( $version, MAC_TRACKER_VERSION, '>' ),
+		);
 	}
 
 	/** Render a precise result after the manual check without exposing credentials. */
 	public function check_update_notice() {
-		if ( ! is_admin() || empty( $GLOBALS['pagenow'] ) || 'plugins.php' !== $GLOBALS['pagenow'] || empty( $_GET['mac_tracker_update_check'] ) ) {
+		if ( ! is_admin() || empty( $_GET['mac_tracker_update_check'] ) ) {
+			return;
+		}
+		$pagenow = $GLOBALS['pagenow'] ?? '';
+		$page    = sanitize_key( wp_unslash( $_GET['page'] ?? '' ) );
+		$is_plugins_page   = 'plugins.php' === $pagenow;
+		$is_tracker_dash   = 'admin.php' === $pagenow && 'mac-project-tracker-dashboard' === $page;
+		if ( ! $is_plugins_page && ! $is_tracker_dash ) {
 			return;
 		}
 		$state   = sanitize_key( wp_unslash( $_GET['mac_tracker_update_check'] ) );

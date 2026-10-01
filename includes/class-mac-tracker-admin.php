@@ -13,12 +13,25 @@ class MAC_Tracker_Admin {
 	private $standalone = false;
 	private $public_view = false;
 	private $dashboard_fragment = false;
+	private $github_updater;
 
 	public function __construct( MAC_Tracker_Repository $repository, MAC_Tracker_Sync_Service $sync, MAC_Tracker_Elementor_Color_Service $colors ) {
 		$this->repository = $repository;
 		$this->sync       = $sync;
 		$this->colors     = $colors;
 		$this->github_actions = new MAC_Tracker_GitHub_Actions();
+		$this->github_updater = new MAC_Tracker_GitHub_Updater();
+	}
+
+	/**
+	 * Front-end hooks. Registered on every request because the public ledger
+	 * shortcode must render outside wp-admin, where is_admin() is false.
+	 */
+	public function register_public() {
+		// Public ledger: read-only projects page, no login required.
+		add_action( 'wp_ajax_nopriv_mac_tracker_load_project_rows', array( $this, 'handle_load_project_rows_ajax' ) );
+		add_shortcode( 'mac_tracker_projects', array( $this, 'shortcode_projects' ) );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_public_assets' ) );
 	}
 
 	public function register() {
@@ -57,10 +70,6 @@ class MAC_Tracker_Admin {
 		add_action( 'wp_ajax_mac_tracker_load_project_rows', array( $this, 'handle_load_project_rows_ajax' ) );
 		add_action( 'wp_ajax_mac_tracker_load_dashboard', array( $this, 'handle_load_dashboard_ajax' ) );
 		add_action( 'wp_ajax_mac_tracker_save_ui_theme', array( $this, 'handle_save_ui_theme_ajax' ) );
-		// Public ledger: read-only projects page, no login required.
-		add_action( 'wp_ajax_nopriv_mac_tracker_load_project_rows', array( $this, 'handle_load_project_rows_ajax' ) );
-		add_shortcode( 'mac_tracker_projects', array( $this, 'shortcode_projects' ) );
-		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_public_assets' ) );
 	}
 
 	public function set_standalone( $standalone ) {
@@ -71,9 +80,9 @@ class MAC_Tracker_Admin {
 		$this->public_view = (bool) $public_view;
 	}
 
-	/** Shortcode: public read-only project ledger. Usage: [mac_tracker_projects] */
+	/** Shortcode: project ledger. Admins keep full controls; guests get a read-only view. Usage: [mac_tracker_projects] */
 	public function shortcode_projects( $atts ) {
-		$this->set_public_view( true );
+		$this->set_public_view( ! current_user_can( 'manage_options' ) );
 		$this->set_standalone( true );
 		ob_start();
 		$this->render_projects();
@@ -93,7 +102,7 @@ class MAC_Tracker_Admin {
 		if ( get_queried_object_id() !== $page_id && ! has_shortcode( (string) $post->post_content, 'mac_tracker_projects' ) ) {
 			return;
 		}
-		$this->set_public_view( true );
+		$this->set_public_view( ! current_user_can( 'manage_options' ) );
 		$this->set_standalone( true );
 		$this->enqueue_common_assets( true );
 	}
@@ -218,6 +227,17 @@ class MAC_Tracker_Admin {
 		$review_count = (int) ( $visual_counts['review'] ?? 0 );
 		$locked_count = (int) ( $visual_counts['locked'] ?? 0 );
 		$settings = (array) get_option( 'mac_tracker_settings', array() );
+		$plugin_state = $this->github_updater->cached_update_state();
+		if ( $plugin_state['available'] ) {
+			$plugin_health_class = '';
+			$plugin_health_label = 'v' . $plugin_state['version'] . ' ready';
+		} elseif ( $plugin_state['checked'] ) {
+			$plugin_health_class = 'is-good';
+			$plugin_health_label = 'v' . MAC_TRACKER_VERSION . ' · latest';
+		} else {
+			$plugin_health_class = 'is-muted';
+			$plugin_health_label = 'Not checked yet';
+		}
 		if ( ! $this->dashboard_fragment ) {
 			$this->page_start( 'Dashboard', 'Track project volume, visual trends and automation health.', 'dashboard' );
 		}
@@ -245,7 +265,7 @@ class MAC_Tracker_Admin {
 		<section class="mac-tracker-pipeline-card" aria-label="Visual Tone pipeline summary"><span class="mac-tracker-pipeline-card__mark mac-tracker-leaf-mark" aria-hidden="true"><i></i><i></i><i></i></span><div><p class="mac-tracker-eyebrow">Visual Tone pipeline</p><h2>Current processing snapshot</h2></div><dl><div><dt>Captured</dt><dd><?php echo esc_html( number_format_i18n( (int) ( $visual_stats['captured'] ?? 0 ) ) ); ?></dd></div><div><dt>Analyzed</dt><dd><?php echo esc_html( number_format_i18n( (int) ( $visual_stats['classified'] ?? 0 ) ) ); ?></dd></div><div><dt>Review</dt><dd><?php echo esc_html( number_format_i18n( $review_count ) ); ?></dd></div><div><dt>Locked</dt><dd><?php echo esc_html( number_format_i18n( $locked_count ) ); ?></dd></div><div><dt>Failed</dt><dd><?php echo esc_html( number_format_i18n( (int) ( $visual_stats['failed'] ?? 0 ) ) ); ?></dd></div></dl></section>
 		<div class="mac-tracker-dashboard-lower">
 			<section class="mac-tracker-analytics-card"><header><div><p class="mac-tracker-eyebrow">Sync summary</p><h2>Recent WPM activity</h2></div><span>Newest first</span></header><?php if ( empty( $logs ) ) : ?><div class="mac-tracker-empty"><strong>No comparison yet</strong><p>Connect WPM, then run the first baseline comparison.</p></div><?php else : ?><ol class="mac-tracker-timeline"><?php foreach ( $logs as $log ) : ?><li><i class="is-<?php echo esc_attr( $this->status_class( $log['status'] ) ); ?>"></i><div><strong><?php echo esc_html( ucfirst( (string) $log['status'] ) . ' · ' . number_format_i18n( (int) $log['processed'] ) . ' projects processed' ); ?></strong><span><?php echo esc_html( MAC_Tracker_Time::bangkok_label( $log['started_at'] ) ); ?></span><details><summary>View technical details</summary><p><?php echo esc_html( $log['message'] ); ?></p></details></div></li><?php endforeach; ?></ol><?php endif; ?></section>
-			<div class="mac-tracker-dashboard-lower__side"><section class="mac-tracker-health-card"><header><div><p class="mac-tracker-eyebrow">System health</p><h2>Connections &amp; automation</h2></div></header><dl><div><dt><span class="dashicons dashicons-wordpress" aria-hidden="true"></span>WPM</dt><dd class="<?php echo ! empty( $settings['wpm_endpoint'] ) && get_option( 'mac_tracker_wpm_secret', '' ) ? 'is-good' : 'is-muted'; ?>"><?php echo ! empty( $settings['wpm_endpoint'] ) && get_option( 'mac_tracker_wpm_secret', '' ) ? 'Configured' : 'Needs setup'; ?></dd></div><div><dt><span class="dashicons dashicons-github" aria-hidden="true"></span>GitHub</dt><dd class="<?php echo get_option( 'mac_tracker_github_dispatch_token', '' ) ? 'is-good' : 'is-muted'; ?>"><?php echo get_option( 'mac_tracker_github_dispatch_token', '' ) ? 'Configured' : 'Needs setup'; ?></dd></div><div><dt><span class="dashicons dashicons-controls-repeat" aria-hidden="true"></span>Automation</dt><dd class="<?php echo 'auto' === get_option( 'mac_tracker_visual_mode', 'manual' ) ? 'is-good' : 'is-muted'; ?>"><?php echo 'auto' === get_option( 'mac_tracker_visual_mode', 'manual' ) ? 'Auto' : 'Manual'; ?></dd></div><div><dt><span class="dashicons dashicons-admin-generic" aria-hidden="true"></span>AI strategy</dt><dd><?php echo esc_html( strtoupper( (string) get_option( 'mac_tracker_visual_ai_strategy', 'smart' ) ) ); ?></dd></div></dl><footer class="mac-tracker-health-card__action"><?php $this->sync_buttons(); ?></footer></section><?php $this->editorial_footer_band( 'dashboard', 'side' ); ?></div>
+			<div class="mac-tracker-dashboard-lower__side"><section class="mac-tracker-health-card"><header><div><p class="mac-tracker-eyebrow">System health</p><h2>Connections &amp; automation</h2></div></header><dl><div><dt><span class="dashicons dashicons-wordpress" aria-hidden="true"></span>WPM</dt><dd class="<?php echo ! empty( $settings['wpm_endpoint'] ) && get_option( 'mac_tracker_wpm_secret', '' ) ? 'is-good' : 'is-muted'; ?>"><?php echo ! empty( $settings['wpm_endpoint'] ) && get_option( 'mac_tracker_wpm_secret', '' ) ? 'Configured' : 'Needs setup'; ?></dd></div><div><dt><span class="dashicons dashicons-github" aria-hidden="true"></span>GitHub</dt><dd class="<?php echo get_option( 'mac_tracker_github_dispatch_token', '' ) ? 'is-good' : 'is-muted'; ?>"><?php echo get_option( 'mac_tracker_github_dispatch_token', '' ) ? 'Configured' : 'Needs setup'; ?></dd></div><div><dt><span class="dashicons dashicons-controls-repeat" aria-hidden="true"></span>Automation</dt><dd class="<?php echo 'auto' === get_option( 'mac_tracker_visual_mode', 'manual' ) ? 'is-good' : 'is-muted'; ?>"><?php echo 'auto' === get_option( 'mac_tracker_visual_mode', 'manual' ) ? 'Auto' : 'Manual'; ?></dd></div><div><dt><span class="dashicons dashicons-admin-generic" aria-hidden="true"></span>AI strategy</dt><dd><?php echo esc_html( strtoupper( (string) get_option( 'mac_tracker_visual_ai_strategy', 'smart' ) ) ); ?></dd></div><div><dt><span class="dashicons dashicons-admin-plugins" aria-hidden="true"></span>Plugin</dt><dd class="<?php echo esc_attr( $plugin_health_class ); ?>"><?php echo esc_html( $plugin_health_label ); ?></dd></div></dl><footer class="mac-tracker-health-card__action"><?php $this->sync_buttons(); ?></footer></section><?php $this->editorial_footer_band( 'dashboard', 'side' ); ?></div>
 		</div>
 		</div>
 		<?php if ( ! $this->dashboard_fragment ) { $this->page_end( false ); }
@@ -1240,6 +1260,9 @@ class MAC_Tracker_Admin {
 				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_compare_wpm' ); ?><input type="hidden" name="action" value="mac_tracker_compare_wpm"><button class="button button-primary" type="submit" <?php disabled( $this->sync->is_running() || $this->sync->is_queued() ); ?>>Compare baseline</button></form>
 			<?php else : ?>
 				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_queue_sync' ); ?><input type="hidden" name="action" value="mac_tracker_queue_sync"><button class="button button-primary" type="submit" <?php disabled( $this->sync->is_running() || $this->sync->is_queued() ); ?>><span class="dashicons dashicons-update"></span><?php echo esc_html( $this->sync->is_running() ? 'Syncing…' : ( $this->sync->is_queued() ? 'Queued' : 'Sync new Action Design' ) ); ?></button></form>
+			<?php endif; ?>
+			<?php if ( current_user_can( 'update_plugins' ) ) : ?>
+				<a class="button" href="<?php echo esc_url( wp_nonce_url( add_query_arg( 'mac_tracker_ref', 'dashboard', admin_url( 'admin-post.php?action=mac_tracker_check_updates' ) ), 'mac_tracker_check_updates' ) ); ?>"><span class="dashicons dashicons-admin-plugins"></span>Check plugin updates</a>
 			<?php endif; ?>
 		</div>
 		<?php
