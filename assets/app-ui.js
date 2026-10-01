@@ -392,10 +392,114 @@
     });
   }
 
+  function bindProjectSearch() {
+    var form = document.querySelector('[data-mac-project-filters-form]');
+    if (!form || form.dataset.macSearchBound || !window.macTrackerApp?.projectRowsNonce) return;
+    form.dataset.macSearchBound = '1';
+    var timer = 0;
+    var requestId = 0;
+
+    function filtersFromForm() {
+      var filters = {};
+      new FormData(form).forEach(function (value, key) { filters[key] = value; });
+      filters.per_page = 'all';
+      return filters;
+    }
+
+    function paint(filters, data) {
+      var shell = document.querySelector('[data-mac-project-shell]');
+      var body = shell?.querySelector('[data-mac-project-rows]');
+      var empty = shell?.querySelector('[data-mac-project-empty]');
+      var table = shell?.querySelector('[data-mac-project-table]');
+      var total = Number(data.total || 0);
+      if (body) body.innerHTML = data.html || '';
+      if (empty) empty.hidden = total > 0;
+      if (table) table.hidden = total < 1;
+      var totalNode = document.querySelector('[data-mac-project-total]');
+      var plural = document.querySelector('[data-mac-project-plural]');
+      if (totalNode) totalNode.textContent = total.toLocaleString();
+      if (plural) plural.textContent = total === 1 ? '' : 's';
+      var summary = shell?.querySelector('.mac-tracker-table-footer > span');
+      if (summary) summary.textContent = total ? ('Showing 1–' + Math.min(Number(data.shown || total), total) + ' of ' + total) : 'Showing 0 of 0';
+      var pager = shell?.querySelector('.mac-tracker-pagination');
+      if (pager) pager.hidden = true;
+      var lazy = shell?.querySelector('[data-mac-project-lazy-load]');
+      if (lazy) {
+        lazy.hidden = !data.has_more;
+        lazy.setAttribute('data-mac-project-page', '1');
+        lazy.setAttribute('data-mac-project-total', String(total));
+        lazy.setAttribute('data-mac-project-filters', JSON.stringify(filters));
+        delete lazy.dataset.macProjectBound;
+        var note = lazy.querySelector('p');
+        if (note) note.textContent = 'Showing the first ' + (data.shown || 0) + ' of ' + total + ' records.';
+        hydrateProjectRows(shell);
+      }
+      var params = new URLSearchParams();
+      Object.keys(filters).forEach(function (key) {
+        if ('per_page' === key || '' === String(filters[key] || '')) return;
+        params.set(key, filters[key]);
+      });
+      var action = form.getAttribute('action') || window.location.pathname;
+      var query = params.toString();
+      history.replaceState(null, '', query ? action.split('?')[0] + '?' + query : action.split('?')[0]);
+    }
+
+    function run() {
+      var filters = filtersFromForm();
+      var ticket = ++requestId;
+      var shell = document.querySelector('[data-mac-project-shell]');
+      if (shell) shell.setAttribute('aria-busy', 'true');
+      fetch(macTrackerApp.ajaxUrl, {
+        method: 'POST', credentials: 'same-origin',
+        body: new URLSearchParams({ action: 'mac_tracker_load_project_rows', nonce: macTrackerApp.projectRowsNonce, filters: JSON.stringify(filters), paged: '1' })
+      })
+        .then(function (response) { return response.json(); })
+        .then(function (payload) {
+          if (ticket !== requestId) return;
+          if (!payload.success) throw new Error(payload.data?.message || 'Could not search projects.');
+          paint(filters, payload.data || {});
+        })
+        .catch(function () {})
+        .finally(function () {
+          if (ticket === requestId && shell) shell.removeAttribute('aria-busy');
+        });
+    }
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      window.clearTimeout(timer);
+      run();
+    });
+    form.querySelector('input[name="search"]')?.addEventListener('input', function () {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(run, 180);
+    });
+    form.querySelector('.mac-tracker-filter-actions a')?.addEventListener('click', function (event) {
+      event.preventDefault();
+      form.querySelectorAll('input, select').forEach(function (field) {
+        if ('orderby' === field.name) field.value = 'date';
+        else if ('order' === field.name) field.value = 'desc';
+        else if ('range' === field.name) field.value = 'all';
+        else if ('SELECT' === field.tagName) field.value = '';
+        else if ('hidden' !== field.type) field.value = '';
+      });
+      window.clearTimeout(timer);
+      run();
+    });
+    document.querySelector('.mac-tracker-global-search')?.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var field = form.querySelector('input[name="search"]');
+      if (field) field.value = this.querySelector('input')?.value || '';
+      window.clearTimeout(timer);
+      run();
+    });
+  }
+
   if (window.macTrackerApp?.theme) setTheme(macTrackerApp.theme);
   setupLocalTabs();
   hydrateLazyCards(document);
   hydrateProjectRows(document);
+  bindProjectSearch();
 
   bindDashboardRange(document);
 }());

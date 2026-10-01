@@ -284,11 +284,11 @@ class MAC_Tracker_Admin {
 		$this->page_start( 'Projects', 'Browse delivered projects and visual metadata.', 'projects' );
 		?>
 		<section class="mac-tracker-project-intro">
-			<div><p class="mac-tracker-eyebrow">Project ledger</p><h2><?php echo esc_html( number_format_i18n( $page['total'] ) ); ?> delivered project<?php echo 1 === (int) $page['total'] ? '' : 's'; ?></h2><p>Search, filter and review the current local snapshot.</p></div>
+			<div><p class="mac-tracker-eyebrow">Project ledger</p><h2><span data-mac-project-total><?php echo esc_html( number_format_i18n( $page['total'] ) ); ?></span> delivered project<span data-mac-project-plural><?php echo 1 === (int) $page['total'] ? '' : 's'; ?></span></h2><p>Search, filter and review the current local snapshot.</p></div>
 		</section>
 		<?php if ( ! $this->public_view ) { $this->notices(); } ?>
 
-		<form class="mac-tracker-filters" method="get" action="<?php echo esc_url( $this->projects_url() ); ?>">
+		<form class="mac-tracker-filters" method="get" action="<?php echo esc_url( $this->projects_url() ); ?>" data-mac-project-filters-form>
 			<?php if ( ! $this->standalone ) : ?><input type="hidden" name="page" value="mac-project-tracker"><?php endif; ?>
 			<label class="mac-tracker-filter-search"><span>Search</span><input type="search" name="search" value="<?php echo esc_attr( $filters['search'] ); ?>" placeholder="Project, template, domain, ZIP or WPM ID"></label>
 			<label><span>Assignee</span><select name="assignee"><option value="">All assignees</option><?php foreach ( $this->repository->list_assignees() as $name ) : ?><option value="<?php echo esc_attr( $name ); ?>" <?php selected( $filters['assignee'], $name ); ?>><?php echo esc_html( $name ); ?></option><?php endforeach; ?></select></label>
@@ -299,20 +299,17 @@ class MAC_Tracker_Admin {
 			<div class="mac-tracker-filter-actions"><button type="submit" class="button button-primary">Apply filters</button><a class="button" href="<?php echo esc_url( $this->projects_url() ); ?>">Clear</a></div>
 		</form>
 
-		<section class="mac-tracker-table-shell">
-			<?php if ( empty( $page['rows'] ) ) : ?>
-				<div class="mac-tracker-empty"><span class="dashicons dashicons-archive"></span><strong>No project snapshots yet</strong><p>Import the pin baseline or save WPM Settings and run a background sync.</p></div>
-			<?php else : ?>
-				<div class="mac-tracker-table-scroll"><table class="widefat mac-tracker-project-table"><thead><tr>
+		<section class="mac-tracker-table-shell" data-mac-project-shell>
+			<div class="mac-tracker-empty" data-mac-project-empty <?php echo empty( $page['rows'] ) ? '' : 'hidden'; ?>><span class="dashicons dashicons-archive"></span><strong>No matching projects</strong><p>Nothing in the current snapshot matches this search.</p></div>
+			<div class="mac-tracker-table-scroll" data-mac-project-table <?php echo empty( $page['rows'] ) ? 'hidden' : ''; ?>><table class="widefat mac-tracker-project-table"><thead><tr>
 					<th scope="col" class="mac-tracker-col--thumbnail">Thumbnail</th><?php $this->sort_header( 'project', 'Project', $filters ); ?><?php $this->sort_header( 'layout', 'Template', $filters ); ?><?php $this->sort_header( 'palette', 'Color', $filters ); ?><?php $this->sort_header( 'tone', 'Tone', $filters ); ?><th scope="col">Status</th><?php $this->sort_header( 'assignee', 'User', $filters ); ?><?php $this->sort_header( 'date', 'Time', $filters, 'mac-tracker-col--date' ); ?><?php if ( ! $this->public_view ) : ?><th scope="col" class="mac-tracker-col--options"><span class="screen-reader-text">Options</span></th><?php endif; ?>
-				</tr></thead><tbody>
+				</tr></thead><tbody data-mac-project-rows>
 					<?php foreach ( $page['rows'] as $row ) : $this->render_project_row( $row ); endforeach; ?>
 				</tbody></table></div>
 				<?php if ( ! empty( $filters['all_mode'] ) && (int) $page['total_pages'] > 1 ) : ?>
 					<div class="mac-tracker-project-lazy-load" data-mac-project-lazy-load data-mac-project-page="1" data-mac-project-total="<?php echo esc_attr( $page['total'] ); ?>" data-mac-project-filters="<?php echo esc_attr( wp_json_encode( $this->project_fragment_filters( $filters ) ) ); ?>"><p>Showing the first <?php echo esc_html( number_format_i18n( count( $page['rows'] ) ) ); ?> of <?php echo esc_html( number_format_i18n( $page['total'] ) ); ?> records. More records load as you reach this point.</p><button type="button" class="button" data-mac-project-load-more>Load next 100</button></div>
 				<?php endif; ?>
 				<?php $this->pagination( $page, $filters ); ?>
-			<?php endif; ?>
 		</section>
 		<?php $this->page_end();
 	}

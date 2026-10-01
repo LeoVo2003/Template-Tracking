@@ -34,7 +34,7 @@ class MAC_Tracker_App {
 	public static function url( $screen = 'dashboard', array $args = array() ) {
 		$paths = array(
 			'dashboard' => 'mac-project-tracker/dashboard/',
-			'projects'  => 'mac-project-tracker/',
+			'projects'  => 'mac-project-tracker/projects/',
 			'analysis'  => 'mac-project-tracker/analysis/',
 			'visuals'   => 'mac-project-tracker/analysis/',
 			'colors'    => 'mac-project-tracker/analysis/',
