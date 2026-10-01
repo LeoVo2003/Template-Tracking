@@ -20,6 +20,7 @@ class MAC_Tracker_GitHub_Updater {
 		add_filter( 'plugins_api', array( $this, 'filter_plugin_information' ), 20, 3 );
 		add_filter( 'plugin_action_links_' . plugin_basename( MAC_TRACKER_FILE ), array( $this, 'plugin_action_links' ) );
 		add_action( 'admin_post_mac_tracker_check_updates', array( $this, 'handle_check_updates' ) );
+		add_action( 'wp_ajax_mac_tracker_install_update', array( $this, 'handle_install_update' ) );
 		add_action( 'admin_notices', array( $this, 'check_update_notice' ) );
 	}
 
@@ -73,6 +74,41 @@ class MAC_Tracker_GitHub_Updater {
 			'version'   => $version,
 			'available' => '' !== $version && version_compare( $version, MAC_TRACKER_VERSION, '>' ),
 		);
+	}
+
+	/** Install the cached GitHub release and stay on the current tracker screen. */
+	public function handle_install_update() {
+		if ( ! current_user_can( 'update_plugins' ) ) {
+			wp_send_json_error( array( 'message' => 'You are not allowed to update this plugin.' ), 403 );
+		}
+		check_ajax_referer( 'mac_tracker_install_update' );
+		delete_site_transient( self::CACHE_KEY );
+		wp_clean_plugins_cache( true );
+		if ( function_exists( 'wp_update_plugins' ) ) {
+			wp_update_plugins();
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/misc.php';
+		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+		require_once ABSPATH . 'wp-admin/includes/class-plugin-upgrader.php';
+		require_once ABSPATH . 'wp-admin/includes/class-automatic-upgrader-skin.php';
+
+		$plugin   = plugin_basename( MAC_TRACKER_FILE );
+		$skin     = new Automatic_Upgrader_Skin();
+		$upgrader = new Plugin_Upgrader( $skin );
+		ob_start();
+		$result = $upgrader->upgrade( $plugin );
+		ob_end_clean();
+		if ( is_wp_error( $result ) ) {
+			wp_send_json_error( array( 'message' => $result->get_error_message() ), 500 );
+		}
+		if ( false === $result ) {
+			$errors  = method_exists( $skin, 'get_errors' ) ? $skin->get_errors() : null;
+			$message = is_wp_error( $errors ) && $errors->get_error_message() ? $errors->get_error_message() : 'The update did not install.';
+			wp_send_json_error( array( 'message' => $message ), 500 );
+		}
+		wp_send_json_success( array( 'message' => 'Plugin updated.' ) );
 	}
 
 	/** Render a precise result after the manual check without exposing credentials. */

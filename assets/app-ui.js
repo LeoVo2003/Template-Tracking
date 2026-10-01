@@ -392,6 +392,31 @@
     });
   }
 
+  function bindPluginUpdate() {
+    document.addEventListener('click', function (event) {
+      var button = event.target.closest('[data-mac-install-update]');
+      if (!button || button.disabled || !window.macTrackerApp?.updateNonce) return;
+      event.preventDefault();
+      var label = button.innerHTML;
+      button.disabled = true;
+      button.textContent = 'Updating…';
+      fetch(macTrackerApp.ajaxUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        body: new URLSearchParams({ action: 'mac_tracker_install_update', nonce: macTrackerApp.updateNonce })
+      }).then(function (response) {
+        return response.json().catch(function () { return { success: false, data: { message: 'The update did not finish.' } }; });
+      }).then(function (payload) {
+        if (!payload.success) throw new Error((payload.data && payload.data.message) || 'The update did not finish.');
+        window.location.reload();
+      }).catch(function (error) {
+        button.disabled = false;
+        button.innerHTML = label;
+        window.alert(error.message || 'The update did not finish.');
+      });
+    });
+  }
+
   function bindProjectSearch() {
     var form = document.querySelector('[data-mac-project-filters-form]');
     if (!form || form.dataset.macSearchBound || !window.macTrackerApp?.projectRowsNonce) return;
@@ -500,6 +525,7 @@
   hydrateLazyCards(document);
   hydrateProjectRows(document);
   bindProjectSearch();
+  bindPluginUpdate();
 
   bindDashboardRange(document);
 }());

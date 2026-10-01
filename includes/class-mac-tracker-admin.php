@@ -178,6 +178,7 @@ class MAC_Tracker_Admin {
 			'projectRowsNonce' => wp_create_nonce( 'mac_tracker_load_project_rows' ),
 			'dashboardNonce' => wp_create_nonce( 'mac_tracker_load_dashboard' ),
 			'themeNonce'    => wp_create_nonce( 'mac_tracker_save_ui_theme' ),
+			'updateNonce'   => wp_create_nonce( 'mac_tracker_install_update' ),
 			'theme'         => $this->ui_theme(),
 			'standalone'    => (bool) $this->standalone,
 		) );
@@ -1191,7 +1192,7 @@ class MAC_Tracker_Admin {
 					<?php endif; ?>
 					</header>
 					<main class="mac-tracker-main" id="mac-tracker-main">
-						<header class="mac-tracker-masthead<?php echo in_array( $this->current_screen, array( 'dashboard', 'projects' ), true ) ? ' mac-tracker-masthead--' . esc_attr( $this->current_screen ) : ''; ?>"><div class="mac-tracker-masthead__title"><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div></header>
+						<header class="mac-tracker-masthead"><div class="mac-tracker-masthead__title"><h1><?php echo esc_html( $title ); ?></h1><p><?php echo esc_html( $description ); ?></p></div></header>
 						<div class="mac-tracker-page-content">
 		<?php
 	}
@@ -1257,8 +1258,7 @@ class MAC_Tracker_Admin {
 			<?php if ( current_user_can( 'update_plugins' ) ) : ?>
 				<?php $plugin_state = $this->github_updater->cached_update_state(); ?>
 				<?php if ( ! empty( $plugin_state['available'] ) ) : ?>
-					<?php $plugin_file = plugin_basename( MAC_TRACKER_FILE ); ?>
-					<a class="button button-primary" href="<?php echo esc_url( wp_nonce_url( self_admin_url( 'update.php?action=upgrade-plugin&plugin=' . rawurlencode( $plugin_file ) ), 'upgrade-plugin_' . $plugin_file ) ); ?>"><span class="dashicons dashicons-update"></span><?php echo esc_html( 'Update to v' . $plugin_state['version'] ); ?></a>
+					<button type="button" class="button button-primary" data-mac-install-update><span class="dashicons dashicons-update"></span><?php echo esc_html( 'Update to v' . $plugin_state['version'] ); ?></button>
 				<?php else : ?>
 					<a class="button" href="<?php echo esc_url( wp_nonce_url( add_query_arg( 'mac_tracker_ref', 'dashboard', admin_url( 'admin-post.php?action=mac_tracker_check_updates' ) ), 'mac_tracker_check_updates' ) ); ?>"><span class="dashicons dashicons-admin-plugins"></span>Check plugin updates</a>
 				<?php endif; ?>

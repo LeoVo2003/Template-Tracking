@@ -7046,3 +7046,86 @@ html[data-mac-theme] {
   margin: 14px 0 0;
   justify-self: stretch;
 }
+
+.mac-tracker-wrap--dashboard .mac-tracker-masthead,
+.mac-tracker-wrap--projects .mac-tracker-masthead {
+  position: relative;
+  width: auto;
+  max-width: none;
+  align-items: center;
+  margin: 0 -34px 14px;
+  padding: 28px 34px 22px;
+  overflow: hidden;
+  isolation: isolate;
+  background: linear-gradient(20deg,#F7F6F0 16%,rgba(255,253,247,.94) 32%,rgba(255,253,247,.62) 48%,rgba(255,253,247,.12) 68%,rgba(255,253,247,0) 88%);
+  background-color: #F7F6F0;
+  border-bottom: 1px solid rgb(77 83 58 / 5%);
+  box-shadow: none;
+  min-height: 115px;
+}
+
+.mac-tracker-wrap--dashboard .mac-tracker-masthead {
+  --mac-masthead-plate: url("editorial/dashboard-header-banner.png");
+}
+
+.mac-tracker-wrap--projects .mac-tracker-masthead {
+  --mac-masthead-plate: url("editorial/banner-library/08-right-classic.jpg");
+}
+
+.mac-tracker-wrap--dashboard .mac-tracker-masthead::before,
+.mac-tracker-wrap--projects .mac-tracker-masthead::before,
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__art,
+.mac-tracker-wrap--projects .mac-tracker-masthead__art {
+  display: none;
+  content: none;
+}
+
+.mac-tracker-wrap--dashboard .mac-tracker-masthead::after,
+.mac-tracker-wrap--projects .mac-tracker-masthead::after {
+  display: block;
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  opacity: 1;
+  background: var(--mac-masthead-plate) right 86%/auto 173% no-repeat;
+  content: "";
+  filter: none;
+  pointer-events: none;
+  transform: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.mac-tracker-wrap--dashboard .mac-tracker-masthead__title,
+.mac-tracker-wrap--projects .mac-tracker-masthead__title,
+.mac-tracker-wrap--dashboard .mac-tracker-masthead h1,
+.mac-tracker-wrap--projects .mac-tracker-masthead h1,
+.mac-tracker-wrap--dashboard .mac-tracker-masthead p,
+.mac-tracker-wrap--projects .mac-tracker-masthead p {
+  position: relative;
+  z-index: 2;
+  font-family: Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+
+.mac-tracker-wrap--dashboard .mac-tracker-masthead h1,
+.mac-tracker-wrap--projects .mac-tracker-masthead h1 {
+  color: var(--mac-ink);
+  font-size: 26px;
+  font-weight: 720;
+  line-height: 1.12;
+  letter-spacing: -.035em;
+}
+
+.mac-tracker-wrap--dashboard .mac-tracker-masthead p,
+.mac-tracker-wrap--projects .mac-tracker-masthead p {
+  max-width: 470px;
+  margin-top: 5px;
+  color: var(--mac-text-muted);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.5;
+}
