@@ -81,7 +81,7 @@ class MAC_Tracker_GitHub_Updater {
 		if ( ! current_user_can( 'update_plugins' ) ) {
 			wp_send_json_error( array( 'message' => 'You are not allowed to update this plugin.' ), 403 );
 		}
-		check_ajax_referer( 'mac_tracker_install_update' );
+		check_ajax_referer( 'mac_tracker_install_update', 'nonce' );
 		delete_site_transient( self::CACHE_KEY );
 		wp_clean_plugins_cache( true );
 		if ( function_exists( 'wp_update_plugins' ) ) {
@@ -92,20 +92,23 @@ class MAC_Tracker_GitHub_Updater {
 		require_once ABSPATH . 'wp-admin/includes/misc.php';
 		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 		require_once ABSPATH . 'wp-admin/includes/class-plugin-upgrader.php';
-		require_once ABSPATH . 'wp-admin/includes/class-automatic-upgrader-skin.php';
+		require_once ABSPATH . 'wp-admin/includes/class-wp-ajax-upgrader-skin.php';
 
 		$plugin   = plugin_basename( MAC_TRACKER_FILE );
-		$skin     = new Automatic_Upgrader_Skin();
+		$skin     = new WP_Ajax_Upgrader_Skin();
 		$upgrader = new Plugin_Upgrader( $skin );
+		// bulk_upgrade is what core uses for AJAX plugin updates; unlike upgrade()
+		// it keeps the plugin active, so the dashboard stays reachable.
 		ob_start();
-		$result = $upgrader->upgrade( $plugin );
+		$results = $upgrader->bulk_upgrade( array( $plugin ) );
 		ob_end_clean();
+		$result = is_array( $results ) ? ( $results[ $plugin ] ?? null ) : $results;
 		if ( is_wp_error( $result ) ) {
 			wp_send_json_error( array( 'message' => $result->get_error_message() ), 500 );
 		}
-		if ( false === $result ) {
+		if ( empty( $result ) ) {
 			$errors  = method_exists( $skin, 'get_errors' ) ? $skin->get_errors() : null;
-			$message = is_wp_error( $errors ) && $errors->get_error_message() ? $errors->get_error_message() : 'The update did not install.';
+			$message = is_wp_error( $errors ) && $errors->get_error_message() ? $errors->get_error_message() : 'WordPress did not install the update. Try again from Plugins.';
 			wp_send_json_error( array( 'message' => $message ), 500 );
 		}
 		wp_send_json_success( array( 'message' => 'Plugin updated.' ) );

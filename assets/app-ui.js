@@ -405,7 +405,7 @@
         credentials: 'same-origin',
         body: new URLSearchParams({ action: 'mac_tracker_install_update', nonce: macTrackerApp.updateNonce })
       }).then(function (response) {
-        return response.json().catch(function () { return { success: false, data: { message: 'The update did not finish.' } }; });
+        return response.json().catch(function () { return { success: false, data: { message: 'The server answered with an unexpected response (HTTP ' + response.status + ').' } }; });
       }).then(function (payload) {
         if (!payload.success) throw new Error((payload.data && payload.data.message) || 'The update did not finish.');
         window.location.reload();
