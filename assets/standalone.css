@@ -3270,8 +3270,40 @@ html[data-mac-theme] {
   font-size: 12px;
 }
 
-.mac-tracker-project-table th {
+.mac-tracker-project-table th,
+.mac-tracker-skipped-table th {
   font-size: 10px;
+}
+
+/* Skipped list reads at the same scale as the Projects table. */
+.mac-tracker-skipped-table td {
+  padding: 13px 12px;
+  font-size: 12px;
+}
+
+.mac-tracker-skipped-table td:first-child a {
+  color: var(--mac-ink);
+  font-size: 14px;
+  font-weight: 680;
+  text-decoration: none;
+}
+
+.mac-tracker-skipped-table td:first-child a:hover {
+  text-decoration: underline;
+}
+
+.mac-tracker-skipped-table .mac-tracker-url {
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.mac-tracker-skipped-table .button {
+  min-height: 34px;
+  font-size: 11px;
+}
+
+.mac-tracker-wrap--skipped .mac-tracker-skipped-table thead th {
+  background: #f0ede5;
 }
 
 .mac-tracker-project-name {
