@@ -406,6 +406,95 @@
     });
   }
 
+  /**
+   * Branded replacement for alert()/confirm(). Resolves true on confirm, false on cancel/Esc/backdrop.
+   * options: { icon, title, message, versions:[from,to], confirm, cancel (null = no cancel), busy }
+   * With busy:true no buttons are shown and the returned promise's .close() dismisses it.
+   */
+  function macDialog(options) {
+    var opts = options || {};
+    var previous = document.activeElement;
+    var overlay = document.createElement('div');
+    overlay.className = 'mac-tracker-dialog' + (opts.busy ? ' is-busy' : '');
+    var card = document.createElement('div');
+    card.className = 'mac-tracker-dialog__card';
+    card.setAttribute('role', opts.busy ? 'alertdialog' : 'dialog');
+    card.setAttribute('aria-modal', 'true');
+    card.setAttribute('aria-labelledby', 'mac-tracker-dialog-title');
+
+    var icon = document.createElement('span');
+    icon.className = 'mac-tracker-dialog__icon dashicons dashicons-' + (opts.busy ? 'update' : (opts.icon || 'info-outline'));
+    icon.setAttribute('aria-hidden', 'true');
+    var title = document.createElement('h2');
+    title.id = 'mac-tracker-dialog-title';
+    title.textContent = opts.title || '';
+    card.appendChild(icon);
+    card.appendChild(title);
+    if (opts.versions) {
+      var versions = document.createElement('p');
+      versions.className = 'mac-tracker-dialog__versions';
+      versions.innerHTML = '<span></span><i class="dashicons dashicons-arrow-right-alt" aria-hidden="true"></i><strong></strong>';
+      versions.querySelector('span').textContent = 'v' + opts.versions[0];
+      versions.querySelector('strong').textContent = 'v' + opts.versions[1];
+      card.appendChild(versions);
+    }
+    if (opts.message) {
+      var message = document.createElement('p');
+      message.className = 'mac-tracker-dialog__message';
+      message.textContent = opts.message;
+      card.appendChild(message);
+    }
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    document.body.classList.add('mac-tracker-dialog-open');
+
+    var finish;
+    var promise = new Promise(function (resolve) { finish = resolve; });
+    function close(result) {
+      document.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      document.body.classList.remove('mac-tracker-dialog-open');
+      if (previous && previous.focus && document.contains(previous)) previous.focus();
+      finish(!!result);
+    }
+    function onKey(event) {
+      if (opts.busy) { if ('Escape' === event.key) event.preventDefault(); return; }
+      if ('Escape' === event.key) { event.preventDefault(); close(false); return; }
+      if ('Tab' !== event.key) return;
+      var focusable = Array.from(card.querySelectorAll('button'));
+      if (!focusable.length) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+    document.addEventListener('keydown', onKey, true);
+
+    if (!opts.busy) {
+      var actions = document.createElement('div');
+      actions.className = 'mac-tracker-dialog__actions';
+      if (null !== opts.cancel) {
+        var cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'mac-tracker-dialog__button';
+        cancel.textContent = opts.cancel || 'Cancel';
+        cancel.addEventListener('click', function () { close(false); });
+        actions.appendChild(cancel);
+      }
+      var confirm = document.createElement('button');
+      confirm.type = 'button';
+      confirm.className = 'mac-tracker-dialog__button is-primary';
+      confirm.textContent = opts.confirm || 'OK';
+      confirm.addEventListener('click', function () { close(true); });
+      actions.appendChild(confirm);
+      card.appendChild(actions);
+      overlay.addEventListener('mousedown', function (event) { if (event.target === overlay) close(false); });
+      confirm.focus();
+    }
+    promise.close = function () { close(false); };
+    return promise;
+  }
+
   function pluginAjax(action, nonce) {
     return fetch(macTrackerApp.ajaxUrl, {
       method: 'POST',
@@ -423,8 +512,13 @@
     var label = button.innerHTML;
     button.disabled = true;
     button.textContent = 'Updating…';
+    var busy = macDialog({ busy: true, title: 'Updating MAC Project Tracker', message: 'Installing the new version. Please keep this tab open.' });
     return pluginAjax('mac_tracker_install_update', macTrackerApp.updateNonce).then(function () {
       button.textContent = 'Reloading…';
+      var card = document.querySelector('.mac-tracker-dialog__card h2');
+      if (card) card.textContent = 'Update installed';
+      var note = document.querySelector('.mac-tracker-dialog__message');
+      if (note) note.textContent = 'Reloading the dashboard…';
       // Right after files are swapped the next request can briefly hit a half-loaded
       // plugin (WordPress critical error). Probe a clean URL until it is healthy.
       var clean = new URL(window.location.href);
@@ -441,9 +535,10 @@
         });
       }());
     }).catch(function (error) {
+      busy.close();
       button.disabled = false;
       button.innerHTML = label;
-      window.alert(error.message || 'The update did not finish.');
+      return macDialog({ icon: 'warning', title: 'The update did not finish', message: error.message || 'Please try again from the Plugins page.', cancel: null, confirm: 'Close' });
     });
   }
 
@@ -465,18 +560,25 @@
         check.disabled = false;
         check.innerHTML = label;
         if (!info.available) {
-          window.alert('MAC Project Tracker is up to date (v' + info.current + ').');
-          return;
+          return macDialog({ icon: 'yes-alt', title: 'You are up to date', message: 'MAC Project Tracker v' + info.current + ' is the latest version.', cancel: null, confirm: 'Close' });
         }
-        if (window.confirm('MAC Project Tracker v' + info.version + ' is available (you have v' + info.current + ').\n\nUpdate now?')) {
+        return macDialog({
+          icon: 'update',
+          title: 'Update available',
+          versions: [info.current, info.version],
+          message: 'The plugin installs in place and this page reloads when it finishes.',
+          confirm: 'Update now',
+          cancel: 'Not now'
+        }).then(function (yes) {
+          if (!yes) return;
           check.removeAttribute('data-mac-check-update');
           check.setAttribute('data-mac-install-update', '');
-          installPluginUpdate(check);
-        }
+          return installPluginUpdate(check);
+        });
       }).catch(function (error) {
         check.disabled = false;
         check.innerHTML = label;
-        window.alert(error.message || 'The update check did not finish.');
+        return macDialog({ icon: 'warning', title: 'Could not check for updates', message: error.message || 'Please try again shortly.', cancel: null, confirm: 'Close' });
       });
     });
   }
