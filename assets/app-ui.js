@@ -406,42 +406,77 @@
     });
   }
 
+  function pluginAjax(action, nonce) {
+    return fetch(macTrackerApp.ajaxUrl, {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: new URLSearchParams({ action: action, nonce: nonce })
+    }).then(function (response) {
+      return response.json().catch(function () { return { success: false, data: { message: 'The server answered with an unexpected response (HTTP ' + response.status + ').' } }; });
+    }).then(function (payload) {
+      if (!payload.success) throw new Error((payload.data && payload.data.message) || 'The request did not finish.');
+      return payload.data || {};
+    });
+  }
+
+  function installPluginUpdate(button) {
+    var label = button.innerHTML;
+    button.disabled = true;
+    button.textContent = 'Updating…';
+    return pluginAjax('mac_tracker_install_update', macTrackerApp.updateNonce).then(function () {
+      button.textContent = 'Reloading…';
+      // Right after files are swapped the next request can briefly hit a half-loaded
+      // plugin (WordPress critical error). Probe a clean URL until it is healthy.
+      var clean = new URL(window.location.href);
+      clean.searchParams.delete('mac_tracker_update_check');
+      clean.searchParams.delete('mac_tracker_latest');
+      var attempts = 0;
+      (function probe() {
+        attempts += 1;
+        fetch(clean.href, { credentials: 'same-origin', cache: 'no-store' }).then(function (page) {
+          return page.text().then(function (html) { return page.ok && html.indexOf('critical error') === -1; });
+        }).catch(function () { return false; }).then(function (healthy) {
+          if (healthy || attempts >= 6) { window.location.href = clean.href; return; }
+          window.setTimeout(probe, 1500);
+        });
+      }());
+    }).catch(function (error) {
+      button.disabled = false;
+      button.innerHTML = label;
+      window.alert(error.message || 'The update did not finish.');
+    });
+  }
+
   function bindPluginUpdate() {
     document.addEventListener('click', function (event) {
-      var button = event.target.closest('[data-mac-install-update]');
-      if (!button || button.disabled || !window.macTrackerApp?.updateNonce) return;
+      var install = event.target.closest('[data-mac-install-update]');
+      if (install && !install.disabled && window.macTrackerApp?.updateNonce) {
+        event.preventDefault();
+        installPluginUpdate(install);
+        return;
+      }
+      var check = event.target.closest('[data-mac-check-update]');
+      if (!check || check.disabled || !window.macTrackerApp?.checkNonce) return;
       event.preventDefault();
-      var label = button.innerHTML;
-      button.disabled = true;
-      button.textContent = 'Updating…';
-      fetch(macTrackerApp.ajaxUrl, {
-        method: 'POST',
-        credentials: 'same-origin',
-        body: new URLSearchParams({ action: 'mac_tracker_install_update', nonce: macTrackerApp.updateNonce })
-      }).then(function (response) {
-        return response.json().catch(function () { return { success: false, data: { message: 'The server answered with an unexpected response (HTTP ' + response.status + ').' } }; });
-      }).then(function (payload) {
-        if (!payload.success) throw new Error((payload.data && payload.data.message) || 'The update did not finish.');
-        button.textContent = 'Reloading…';
-        // Right after files are swapped the next request can briefly hit a half-loaded
-        // plugin (WordPress critical error). Probe a clean URL until it is healthy.
-        var clean = new URL(window.location.href);
-        clean.searchParams.delete('mac_tracker_update_check');
-        clean.searchParams.delete('mac_tracker_latest');
-        var attempts = 0;
-        (function probe() {
-          attempts += 1;
-          fetch(clean.href, { credentials: 'same-origin', cache: 'no-store' }).then(function (page) {
-            return page.text().then(function (html) { return page.ok && html.indexOf('critical error') === -1; });
-          }).catch(function () { return false; }).then(function (healthy) {
-            if (healthy || attempts >= 6) { window.location.href = clean.href; return; }
-            window.setTimeout(probe, 1500);
-          });
-        }());
+      var label = check.innerHTML;
+      check.disabled = true;
+      check.textContent = 'Checking…';
+      pluginAjax('mac_tracker_check_update', macTrackerApp.checkNonce).then(function (info) {
+        check.disabled = false;
+        check.innerHTML = label;
+        if (!info.available) {
+          window.alert('MAC Project Tracker is up to date (v' + info.current + ').');
+          return;
+        }
+        if (window.confirm('MAC Project Tracker v' + info.version + ' is available (you have v' + info.current + ').\n\nUpdate now?')) {
+          check.removeAttribute('data-mac-check-update');
+          check.setAttribute('data-mac-install-update', '');
+          installPluginUpdate(check);
+        }
       }).catch(function (error) {
-        button.disabled = false;
-        button.innerHTML = label;
-        window.alert(error.message || 'The update did not finish.');
+        check.disabled = false;
+        check.innerHTML = label;
+        window.alert(error.message || 'The update check did not finish.');
       });
     });
   }

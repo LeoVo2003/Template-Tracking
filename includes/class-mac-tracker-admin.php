@@ -181,6 +181,7 @@ class MAC_Tracker_Admin {
 			'dashboardNonce' => wp_create_nonce( 'mac_tracker_load_dashboard' ),
 			'themeNonce'    => wp_create_nonce( 'mac_tracker_save_ui_theme' ),
 			'updateNonce'   => wp_create_nonce( 'mac_tracker_install_update' ),
+			'checkNonce'    => wp_create_nonce( 'mac_tracker_check_update' ),
 			'theme'         => $this->ui_theme(),
 			'standalone'    => (bool) $this->standalone,
 		) );
@@ -537,10 +538,14 @@ class MAC_Tracker_Admin {
 		$ai_strategy = in_array( get_option( 'mac_tracker_visual_ai_strategy', 'smart' ), array( 'off', 'qwen', 'gemini', 'smart' ), true ) ? get_option( 'mac_tracker_visual_ai_strategy', 'smart' ) : 'smart';
 		$classifier_mode = in_array( get_option( 'mac_tracker_visual_classifier_mode', 'direct_vision' ), array( 'legacy', 'benchmark_only', 'direct_vision' ), true ) ? get_option( 'mac_tracker_visual_classifier_mode', 'direct_vision' ) : 'direct_vision';
 		$automation = $this->repository->visual_automation_observability();
+		ob_start();
+		?>
+		<nav class="mac-tracker-ai-tabs" aria-label="Settings sections" role="tablist"><button type="button" class="is-active" role="tab" aria-selected="true" data-settings-tab="appearance">Appearance</button><button type="button" role="tab" aria-selected="false" data-settings-tab="import">Import</button><button type="button" role="tab" aria-selected="false" data-settings-tab="connections">Connections</button><button type="button" role="tab" aria-selected="false" data-settings-tab="automation">Automation</button><button type="button" role="tab" aria-selected="false" data-settings-tab="data">Data Management</button></nav>
+		<?php
+		$this->masthead_extra = ob_get_clean();
 		$this->page_start( 'Settings', 'Connections, imports, automation and data controls.', 'settings' );
 		$this->notices();
 		?>
-		<nav class="mac-tracker-settings-tabs" aria-label="Settings sections" role="tablist"><button type="button" class="is-active" role="tab" aria-selected="true" data-settings-tab="appearance">Appearance</button><button type="button" role="tab" aria-selected="false" data-settings-tab="import">Import</button><button type="button" role="tab" aria-selected="false" data-settings-tab="connections">Connections</button><button type="button" role="tab" aria-selected="false" data-settings-tab="automation">Automation</button><button type="button" role="tab" aria-selected="false" data-settings-tab="data">Data Management</button></nav>
 		<section class="mac-tracker-settings-panel" data-settings-panel="appearance" role="tabpanel"><?php $this->render_appearance_content(); ?></section>
 		<section class="mac-tracker-settings-panel" data-settings-panel="import" role="tabpanel" hidden><?php $this->render_pin_import_content(); ?></section>
 		<section class="mac-tracker-settings-panel" data-settings-panel="connections" role="tabpanel" hidden>
@@ -563,10 +568,15 @@ class MAC_Tracker_Admin {
 	public function render_skipped_projects() {
 		$this->require_capability();
 		$rows = $this->repository->excluded_projects();
+		ob_start();
+		?>
+		<label class="mac-tracker-masthead__search"><span class="screen-reader-text">Search skipped projects</span><span class="dashicons dashicons-search" aria-hidden="true"></span><input type="search" placeholder="Search project or website" data-skipped-search></label>
+		<?php
+		$this->masthead_extra = ob_get_clean();
 		$this->page_start( 'Skipped Projects', 'Projects excluded from automated visual processing.', 'skipped' );
 		$this->notices();
 		?>
-		<section class="mac-tracker-skipped-toolbar"><div><p class="mac-tracker-eyebrow">Exclusion registry</p><h2><?php echo esc_html( number_format_i18n( count( $rows ) ) ); ?> skipped project<?php echo 1 === count( $rows ) ? '' : 's'; ?></h2></div><label><span class="screen-reader-text">Search skipped projects</span><span class="dashicons dashicons-search"></span><input type="search" placeholder="Search project or website" data-skipped-search></label></section>
+		<section class="mac-tracker-skipped-toolbar"><div><p class="mac-tracker-eyebrow">Exclusion registry</p><h2><?php echo esc_html( number_format_i18n( count( $rows ) ) ); ?> skipped project<?php echo 1 === count( $rows ) ? '' : 's'; ?></h2></div></section>
 		<section class="mac-tracker-table-shell">
 			<table class="widefat mac-tracker-skipped-table" data-skipped-table>
 				<thead><tr><th>Project</th><th>WPM ID</th><th>Website</th><th>Reason</th><th>Skipped by</th><th>Skipped at</th><th>Actions</th></tr></thead>
@@ -1271,7 +1281,7 @@ class MAC_Tracker_Admin {
 				<?php if ( ! empty( $plugin_state['available'] ) ) : ?>
 					<button type="button" class="button button-primary" data-mac-install-update><span class="dashicons dashicons-update"></span><?php echo esc_html( 'Update to v' . $plugin_state['version'] ); ?></button>
 				<?php else : ?>
-					<a class="button" href="<?php echo esc_url( wp_nonce_url( add_query_arg( 'mac_tracker_ref', 'dashboard', admin_url( 'admin-post.php?action=mac_tracker_check_updates' ) ), 'mac_tracker_check_updates' ) ); ?>"><span class="dashicons dashicons-admin-plugins"></span>Check plugin updates</a>
+					<button type="button" class="button" data-mac-check-update><span class="dashicons dashicons-admin-plugins"></span>Check plugin updates</button>
 				<?php endif; ?>
 			<?php endif; ?>
 		</div>

@@ -3354,8 +3354,10 @@ html[data-mac-theme] {
   max-width: 100%;
 }
 
-.mac-tracker-ai-tabs a {
+.mac-tracker-ai-tabs a,
+.mac-tracker-ai-tabs button {
   display: inline-flex;
+  font-family: inherit;
   min-height: 32px;
   align-items: center;
   gap: 6px;
@@ -3371,8 +3373,8 @@ html[data-mac-theme] {
   font-size: 11px;
 }
 
-.mac-tracker-wrap--visuals .mac-tracker-masthead.mac-tracker-masthead--with-tabs {
-  /* Same height as Dashboard/Projects: tabs sit beside the title, not under it. */
+.mac-tracker-root .mac-tracker-masthead.mac-tracker-masthead--with-tabs {
+  /* Same height as Dashboard/Projects: tabs/controls sit beside the title, not under it. */
   --mac-masthead-plate-size: 173%;
   flex-flow: row wrap;
   align-items: center;
@@ -3380,10 +3382,35 @@ html[data-mac-theme] {
   gap: 12px 40px;
 }
 
-.mac-tracker-wrap--visuals .mac-tracker-masthead--with-tabs .mac-tracker-ai-tabs {
+.mac-tracker-masthead--with-tabs .mac-tracker-ai-tabs,
+.mac-tracker-masthead--with-tabs .mac-tracker-masthead__search {
   position: relative;
   z-index: 2;
   margin: 0;
+}
+
+.mac-tracker-masthead__search {
+  display: block;
+}
+
+.mac-tracker-masthead__search .dashicons {
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  color: var(--mac-muted);
+  transform: translateY(-50%);
+}
+
+.mac-tracker-masthead__search input {
+  width: 300px;
+  max-width: 100%;
+  min-height: 36px;
+  margin: 0;
+  padding: 0 12px 0 35px;
+  background: rgba(255,253,247,.9);
+  border: 1px solid var(--mac-line-solid);
+  border-radius: 8px;
+  font-size: 12px;
 }
 
 .mac-tracker-fragment-skeleton {

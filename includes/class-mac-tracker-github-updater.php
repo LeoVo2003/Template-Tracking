@@ -21,6 +21,7 @@ class MAC_Tracker_GitHub_Updater {
 		add_filter( 'plugin_action_links_' . plugin_basename( MAC_TRACKER_FILE ), array( $this, 'plugin_action_links' ) );
 		add_action( 'admin_post_mac_tracker_check_updates', array( $this, 'handle_check_updates' ) );
 		add_action( 'wp_ajax_mac_tracker_install_update', array( $this, 'handle_install_update' ) );
+		add_action( 'wp_ajax_mac_tracker_check_update', array( $this, 'handle_ajax_check_update' ) );
 		add_action( 'admin_notices', array( $this, 'check_update_notice' ) );
 	}
 
@@ -73,6 +74,32 @@ class MAC_Tracker_GitHub_Updater {
 			'checked'   => true,
 			'version'   => $version,
 			'available' => '' !== $version && version_compare( $version, MAC_TRACKER_VERSION, '>' ),
+		);
+	}
+
+	/** Check GitHub without leaving the page; the browser asks whether to install. */
+	public function handle_ajax_check_update() {
+		if ( ! current_user_can( 'update_plugins' ) ) {
+			wp_send_json_error( array( 'message' => 'You are not allowed to update this plugin.' ), 403 );
+		}
+		check_ajax_referer( 'mac_tracker_check_update', 'nonce' );
+		delete_site_transient( self::CACHE_KEY );
+		wp_clean_plugins_cache( true );
+
+		$release = $this->get_latest_release();
+		$version = is_array( $release ) ? $this->release_version( $release ) : '';
+		if ( '' === $version ) {
+			wp_send_json_error( array( 'message' => 'GitHub could not be checked right now. Try again shortly.' ), 502 );
+		}
+		if ( function_exists( 'wp_update_plugins' ) ) {
+			wp_update_plugins();
+		}
+		wp_send_json_success(
+			array(
+				'available' => version_compare( $version, MAC_TRACKER_VERSION, '>' ),
+				'version'   => $version,
+				'current'   => MAC_TRACKER_VERSION,
+			)
 		);
 	}
 
