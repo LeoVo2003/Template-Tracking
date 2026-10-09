@@ -7186,6 +7186,17 @@ html[data-mac-theme] {
   justify-self: stretch;
 }
 
+/* Masthead pages run edge to edge under the top bar, like Dashboard/Projects. */
+.mac-tracker-wrap--visuals .mac-tracker-main,
+.mac-tracker-wrap--colors .mac-tracker-main,
+.mac-tracker-wrap--skipped .mac-tracker-main,
+.mac-tracker-wrap--settings .mac-tracker-main,
+.mac-tracker-wrap--pins .mac-tracker-main {
+  padding-top: 0;
+  background: var(--mac-canvas);
+  overflow-x: clip;
+}
+
 .mac-tracker-wrap--dashboard .mac-tracker-masthead,
 .mac-tracker-wrap--projects .mac-tracker-masthead,
 .mac-tracker-wrap--visuals .mac-tracker-masthead,
