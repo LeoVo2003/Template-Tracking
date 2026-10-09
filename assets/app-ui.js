@@ -422,7 +422,22 @@
         return response.json().catch(function () { return { success: false, data: { message: 'The server answered with an unexpected response (HTTP ' + response.status + ').' } }; });
       }).then(function (payload) {
         if (!payload.success) throw new Error((payload.data && payload.data.message) || 'The update did not finish.');
-        window.location.reload();
+        button.textContent = 'Reloading…';
+        // Right after files are swapped the next request can briefly hit a half-loaded
+        // plugin (WordPress critical error). Probe a clean URL until it is healthy.
+        var clean = new URL(window.location.href);
+        clean.searchParams.delete('mac_tracker_update_check');
+        clean.searchParams.delete('mac_tracker_latest');
+        var attempts = 0;
+        (function probe() {
+          attempts += 1;
+          fetch(clean.href, { credentials: 'same-origin', cache: 'no-store' }).then(function (page) {
+            return page.text().then(function (html) { return page.ok && html.indexOf('critical error') === -1; });
+          }).catch(function () { return false; }).then(function (healthy) {
+            if (healthy || attempts >= 6) { window.location.href = clean.href; return; }
+            window.setTimeout(probe, 1500);
+          });
+        }());
       }).catch(function (error) {
         button.disabled = false;
         button.innerHTML = label;

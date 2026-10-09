@@ -4123,9 +4123,45 @@ html[data-mac-theme] {
   grid-template-columns: repeat(2,minmax(0,1fr));
 }
 
-.mac-tracker-advanced-controls[open]>.mac-tracker-visual-mode>:nth-child(-n+3),
+/* The form also holds hidden nonce inputs, so span by element, not by index. */
+.mac-tracker-advanced-controls[open]>.mac-tracker-visual-mode>fieldset,
+.mac-tracker-advanced-controls[open]>.mac-tracker-visual-mode>label:has(select),
 .mac-tracker-advanced-controls[open]>.mac-tracker-visual-mode>.mac-tracker-auto-save-status {
   grid-column: 1/-1;
+}
+
+.mac-tracker-advanced-controls .mac-tracker-visual-mode fieldset {
+  gap: 3px;
+  padding: 3px;
+  background: var(--mac-panel);
+  border: 1px solid var(--mac-line-solid);
+  border-radius: 9px;
+}
+
+.mac-tracker-advanced-controls .mac-tracker-visual-mode fieldset span {
+  min-height: 30px;
+  border-radius: 7px;
+  color: var(--mac-text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+
+.mac-tracker-advanced-controls .mac-tracker-visual-mode fieldset input:not(:checked)+span:hover {
+  color: var(--mac-ink);
+  background: rgba(77,83,58,.08);
+}
+
+.mac-tracker-advanced-controls .mac-tracker-visual-mode fieldset input:focus-visible+span {
+  outline: 2px solid rgba(77,83,58,.45);
+  outline-offset: 1px;
+}
+
+.mac-tracker-advanced-controls .mac-tracker-visual-mode fieldset input:checked+span {
+  color: #fff;
+  background: var(--mac-olive-800);
+  box-shadow: 0 1px 2px rgba(50,52,38,.2);
 }
 
 .mac-tracker-edit-row form {
