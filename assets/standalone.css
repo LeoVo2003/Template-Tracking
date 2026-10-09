@@ -3372,11 +3372,18 @@ html[data-mac-theme] {
 }
 
 .mac-tracker-wrap--visuals .mac-tracker-masthead.mac-tracker-masthead--with-tabs {
-  --mac-masthead-plate-size: 125%;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 14px;
+  /* Same height as Dashboard/Projects: tabs sit beside the title, not under it. */
+  --mac-masthead-plate-size: 173%;
+  flex-flow: row wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px 40px;
+}
+
+.mac-tracker-wrap--visuals .mac-tracker-masthead--with-tabs .mac-tracker-ai-tabs {
+  position: relative;
+  z-index: 2;
+  margin: 0;
 }
 
 .mac-tracker-fragment-skeleton {
