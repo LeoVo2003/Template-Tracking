@@ -1636,13 +1636,17 @@ code {
 
 .mac-tracker-ai-tabs span {
   display: grid;
-  min-width: 20px;
-  height: 20px;
+  min-width: 18px;
+  height: 18px;
   place-items: center;
   padding: 0 5px;
-  background: rgba(255,255,255,.18);
+  background: rgb(77 83 58 / 12%);
   border-radius: 99px;
   font-size: 9px;
+}
+
+.mac-tracker-ai-tabs .is-active span {
+  background: rgba(255,255,255,.2);
 }
 
 .mac-tracker-color-tabs span {
@@ -3340,37 +3344,39 @@ html[data-mac-theme] {
 }
 
 .mac-tracker-ai-tabs {
-  align-items: center;
-  padding: 5px;
-  background: #e9e5dc;
-  border: 1px solid var(--mac-line);
-  border-radius: 9px;
-  position: sticky;
-  z-index: 45;
-  top: calc(var(--mac-topbar) + 8px);
-  width: max-content;
-  max-width: 100%;
-  overflow: auto;
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  max-width: 100%;
 }
 
 .mac-tracker-ai-tabs a {
   display: inline-flex;
-  min-height: 35px;
+  min-height: 28px;
   align-items: center;
-  gap: 7px;
-  padding: 0 13px;
+  gap: 6px;
+  padding: 0 11px;
   color: var(--mac-text);
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
+  background: rgba(255,253,247,.78);
+  border: 1px solid var(--mac-line);
+  border-radius: 8px;
   text-decoration: none;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
+}
+
+.mac-tracker-wrap--visuals .mac-tracker-masthead.mac-tracker-masthead--with-tabs {
+  --mac-masthead-plate-size: 125%;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 14px;
 }
 
 .mac-tracker-fragment-skeleton {
@@ -3442,14 +3448,27 @@ html[data-mac-theme] {
 }
 
 .mac-tracker-automation-observability div {
-  padding: 9px;
-  border-radius: 7px;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid var(--mac-line);
+  border-radius: 8px;
   background: var(--mac-panel);
 }
 
 .mac-tracker-automation-observability dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   color: var(--mac-text-muted);
-  font-size: 10px;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.mac-tracker-automation-observability dt .dashicons {
+  width: 13px;
+  height: 13px;
+  color: var(--mac-olive-700);
+  font-size: 13px;
 }
 
 .mac-tracker-automation-observability dd {
@@ -3889,31 +3908,42 @@ html[data-mac-theme] {
 .mac-tracker-visual-tools {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 18px;
+  gap: 12px;
   background: #f0ede6;
   border: 1px solid var(--mac-line);
   border-radius: 9px;
   margin: 0;
-  padding: 18px 20px;
+  padding: 11px 16px;
   box-shadow: var(--mac-shadow-sm);
 }
 
-.mac-tracker-visual-tools>div:first-child {
+.mac-tracker-visual-tools__mark {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  color: var(--mac-olive-700);
+  font-size: 22px;
+}
+
+.mac-tracker-visual-tools>div:first-of-type {
+  flex: 1 1 0;
   min-width: 0;
 }
 
 .mac-tracker-visual-tools__actions {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
-  gap: 7px;
-  flex-wrap: wrap;
-  max-width: 780px;
+  gap: 6px;
+  flex-wrap: nowrap;
 }
 
 .mac-tracker-visual-tools__actions .button {
-  min-height: 38px;
+  min-height: 30px;
+  padding: 0 11px;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .mac-tracker-visual-gallery {
@@ -3990,35 +4020,39 @@ html[data-mac-theme] {
 }
 
 .mac-tracker-visual-auto--v4 {
-  align-items: start;
-  grid-template-columns: minmax(0,1fr) minmax(250px,310px);
-  gap: 28px;
-  padding: 23px 24px;
-  background: linear-gradient(125deg,var(--mac-paper),var(--mac-surface));
+  align-items: center;
+  grid-template-columns: minmax(0,1fr) minmax(220px,260px);
+  gap: 20px;
+  padding: 16px 18px;
+  background: var(--mac-paper);
 }
 
 .mac-tracker-visual-auto--v4>div:first-child {
   display: grid;
-  grid-template-columns: minmax(220px,.8fr) minmax(0,1.2fr);
-  grid-template-areas: "heading metrics";
+  grid-template-columns: max-content minmax(0,1fr);
   align-items: center;
-  gap: 20px;
+  column-gap: 24px;
 }
 
 .mac-tracker-visual-auto--v4>div:first-child>p {
   grid-column: 1;
+  margin: 0;
 }
 
 .mac-tracker-visual-auto--v4>div:first-child>h2 {
   grid-column: 1;
+  margin: 2px 0 0;
+  font-size: 19px;
 }
 
 .mac-tracker-visual-auto--v4>div:first-child>.mac-tracker-automation-state {
   grid-column: 1;
+  margin-top: 10px;
 }
 
 .mac-tracker-visual-auto--v4>div:first-child>.mac-tracker-automation-observability {
-  grid-area: metrics;
+  grid-column: 2;
+  grid-row: 1/4;
   margin: 0;
 }
 
@@ -4107,13 +4141,27 @@ html[data-mac-theme] {
 }
 
 @media(max-width:1100px) {
+  .mac-tracker-visual-tools {
+    flex-wrap: wrap;
+  }
+
+  .mac-tracker-visual-tools>div:first-of-type {
+    flex-basis: calc(100% - 40px);
+  }
+
+  .mac-tracker-visual-tools__actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
   .mac-tracker-visual-auto--v4>div:first-child {
     grid-template-columns: 1fr;
-    grid-template-areas: "heading" "metrics";
   }
 
   .mac-tracker-visual-auto--v4>div:first-child>.mac-tracker-automation-observability {
-    grid-area: metrics;
+    grid-column: 1;
+    grid-row: auto;
+    margin-top: 14px;
   }
 
   .mac-tracker-edit-row form {
@@ -4230,29 +4278,27 @@ html[data-mac-theme] {
 
 .mac-tracker-visual-card__quick-actions {
   margin-top: auto;
+  display: flex;
+  flex-wrap: nowrap;
   align-items: center;
-  justify-content: flex-start;
-  display: grid;
-  grid-template-columns: repeat(2,minmax(0,1fr));
-  gap: 8px;
-  padding: 0 14px 15px;
+  gap: 5px;
+  padding: 0 14px 14px;
 }
 
 .mac-tracker-visual-card__quick-actions .button {
+  flex: 1 1 auto;
   margin: 0;
   display: flex;
   min-width: 0;
-  min-height: 38px;
+  min-height: 30px;
   align-items: center;
   justify-content: center;
-  padding: 6px 8px;
-  line-height: 1.15;
+  padding: 0 5px;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1;
   text-align: center;
-  white-space: normal;
-}
-
-.mac-tracker-visual-card__quick-actions .button:only-child {
-  grid-column: 1/-1;
+  white-space: nowrap;
 }
 
 .mac-tracker-visual-status {
@@ -4303,12 +4349,11 @@ html[data-mac-theme] {
 }
 
 .mac-tracker-analysis-footer {
-  justify-content: space-between;
+  position: relative;
   display: grid;
   align-items: center;
   margin-top: 18px;
-  grid-template-columns: minmax(0,1fr) auto;
-  gap: 0;
+  grid-template-columns: minmax(0,1fr);
   padding: 0;
   background: var(--mac-paper);
   border: 1px solid var(--mac-line);
@@ -4317,15 +4362,16 @@ html[data-mac-theme] {
 }
 
 .mac-tracker-analysis-pagination {
+  grid-area: 1/1;
   justify-content: space-between;
   color: var(--mac-text-muted);
   font-size: 10px;
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(165px,1fr) auto minmax(165px,1fr);
+  grid-template-columns: minmax(120px,1fr) auto minmax(120px,1fr);
   align-items: center;
   gap: 12px;
-  padding: 12px 15px;
+  padding: 10px 15px;
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -4402,16 +4448,16 @@ html[data-mac-theme] {
   color: var(--mac-text-muted);
   font-size: 10px;
   font-weight: 650;
-  grid-column: 2;
+  position: relative;
+  z-index: 1;
+  grid-area: 1/1;
   justify-self: end;
   margin: 0 15px 0 0;
-  padding-left: 15px;
-  border-left: 1px solid var(--mac-line);
 }
 
 .mac-tracker-analysis-page-size select {
   width: auto;
-  min-height: 34px;
+  min-height: 30px;
   padding: 4px 27px 4px 9px;
   min-width: 76px;
 }
@@ -4594,18 +4640,13 @@ html[data-mac-theme] {
   min-height: 32px;
 }
 
-@media(min-width:1080px) {
-  .mac-tracker-visual-card__quick-actions {
-    grid-template-columns: repeat(4,minmax(0,1fr));
-  }
-}
-
 @media(max-width:700px) {
   .mac-tracker-analysis-footer {
     grid-template-columns: 1fr;
   }
 
   .mac-tracker-analysis-pagination {
+    grid-area: auto;
     grid-template-columns: 1fr;
     justify-items: stretch;
   }
@@ -4620,7 +4661,8 @@ html[data-mac-theme] {
   }
 
   .mac-tracker-analysis-page-size {
-    grid-column: auto;
+    position: static;
+    grid-area: auto;
     justify-self: stretch;
     justify-content: space-between;
     margin: 0;
@@ -4638,9 +4680,6 @@ html[data-mac-theme] {
     justify-content: flex-start;
   }
 
-  .mac-tracker-visual-card__quick-actions {
-    grid-template-columns: repeat(2,minmax(0,1fr));
-  }
 }
 
 @media(min-width:701px) {
