@@ -392,6 +392,20 @@
     });
   }
 
+  function bindAdvancedControls() {
+    function closeAll(except) {
+      document.querySelectorAll('.mac-tracker-advanced-controls[open]').forEach(function (details) {
+        if (details !== except) details.open = false;
+      });
+    }
+    document.addEventListener('click', function (event) {
+      closeAll(event.target.closest('.mac-tracker-advanced-controls'));
+    });
+    document.addEventListener('keydown', function (event) {
+      if ('Escape' === event.key) closeAll(null);
+    });
+  }
+
   function bindPluginUpdate() {
     document.addEventListener('click', function (event) {
       var button = event.target.closest('[data-mac-install-update]');
@@ -526,6 +540,7 @@
   hydrateProjectRows(document);
   bindProjectSearch();
   bindPluginUpdate();
+  bindAdvancedControls();
 
   bindDashboardRange(document);
 }());

@@ -3356,7 +3356,7 @@ html[data-mac-theme] {
 
 .mac-tracker-ai-tabs a {
   display: inline-flex;
-  min-height: 28px;
+  min-height: 32px;
   align-items: center;
   gap: 6px;
   padding: 0 11px;
@@ -3444,38 +3444,44 @@ html[data-mac-theme] {
   display: grid;
   gap: 7px;
   margin: 14px 0 0;
-  grid-template-columns: repeat(4,minmax(0,1fr));
+  grid-template-columns: repeat(2,minmax(0,1fr));
 }
 
 .mac-tracker-automation-observability div {
+  position: relative;
+  min-width: 0;
   text-align: left;
-  padding: 8px 10px;
+  padding: 9px 12px 9px 34px;
   border: 1px solid var(--mac-line);
-  border-radius: 8px;
-  background: var(--mac-panel);
+  border-radius: 9px;
+  background: var(--mac-surface);
 }
 
 .mac-tracker-automation-observability dt {
-  display: flex;
-  align-items: center;
-  gap: 5px;
   color: var(--mac-text-muted);
-  font-size: 9px;
+  font-size: 10px;
   white-space: nowrap;
 }
 
 .mac-tracker-automation-observability dt .dashicons {
-  width: 13px;
-  height: 13px;
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
   color: var(--mac-olive-700);
-  font-size: 13px;
+  font-size: 16px;
+  transform: translateY(-50%);
 }
 
 .mac-tracker-automation-observability dd {
-  margin: 2px 0 0;
+  margin: 3px 0 0;
   color: var(--mac-ink);
   font-weight: 650;
-  font-size: 11px;
+  font-size: 10.5px;
+  white-space: nowrap;
 }
 
 .mac-tracker-advanced-controls .mac-tracker-visual-mode {
@@ -3940,7 +3946,7 @@ html[data-mac-theme] {
 }
 
 .mac-tracker-visual-tools__actions .button {
-  min-height: 30px;
+  min-height: 34px;
   padding: 0 11px;
   font-size: 11px;
   white-space: nowrap;
@@ -4015,13 +4021,9 @@ html[data-mac-theme] {
   white-space: nowrap;
 }
 
-.mac-tracker-color-card__actions>.mac-tracker-button--skip {
-  margin-left: auto;
-}
-
 .mac-tracker-visual-auto--v4 {
   align-items: center;
-  grid-template-columns: minmax(0,1fr) minmax(220px,260px);
+  grid-template-columns: minmax(0,1fr) minmax(190px,220px);
   gap: 20px;
   padding: 16px 18px;
   background: var(--mac-paper);
@@ -4068,30 +4070,62 @@ html[data-mac-theme] {
 }
 
 .mac-tracker-advanced-controls {
-  padding: 10px 12px;
-  border: 1px solid var(--mac-line);
-  border-radius: 8px;
-  background: var(--mac-surface);
+  position: relative;
 }
 
 .mac-tracker-advanced-controls summary {
-  color: var(--mac-olive-900);
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
   display: flex;
+  min-height: 40px;
   align-items: center;
   justify-content: space-between;
-  min-height: 34px;
+  padding: 0 12px;
+  color: var(--mac-olive-900);
+  background: var(--mac-surface);
+  border: 1px solid var(--mac-line-solid);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+}
+
+.mac-tracker-advanced-controls summary::-webkit-details-marker {
+  display: none;
+}
+
+.mac-tracker-advanced-controls summary:hover {
+  background: var(--mac-panel);
 }
 
 .mac-tracker-advanced-controls summary::after {
   content: '⌄';
   font-size: 14px;
+  line-height: 1;
 }
 
 .mac-tracker-advanced-controls[open] summary::after {
   transform: rotate(180deg);
+}
+
+.mac-tracker-advanced-controls[open]>.mac-tracker-visual-mode {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  padding: 14px;
+  background: var(--mac-surface);
+  border: 1px solid rgba(77,83,58,.2);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(50,52,38,.16);
+  grid-template-columns: repeat(2,minmax(0,1fr));
+}
+
+.mac-tracker-advanced-controls[open]>.mac-tracker-visual-mode>:nth-child(-n+3),
+.mac-tracker-advanced-controls[open]>.mac-tracker-visual-mode>.mac-tracker-auto-save-status {
+  grid-column: 1/-1;
 }
 
 .mac-tracker-edit-row form {
@@ -4290,7 +4324,7 @@ html[data-mac-theme] {
   margin: 0;
   display: flex;
   min-width: 0;
-  min-height: 30px;
+  min-height: 34px;
   align-items: center;
   justify-content: center;
   padding: 0 5px;
@@ -4457,7 +4491,7 @@ html[data-mac-theme] {
 
 .mac-tracker-analysis-page-size select {
   width: auto;
-  min-height: 30px;
+  min-height: 34px;
   padding: 4px 27px 4px 9px;
   min-width: 76px;
 }
@@ -4779,48 +4813,49 @@ html[data-mac-theme] {
 .mac-tracker-color-swatches {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .mac-tracker-color-swatches span {
-  display: grid;
-  gap: 4px;
-  justify-items: center;
-  min-width: 62px;
-  padding: 7px 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px 4px 5px;
   background: var(--mac-surface);
   border: 1px solid var(--mac-line);
-  border-radius: 8px;
+  border-radius: 999px;
 }
 
 .mac-tracker-color-swatches i {
+  flex: 0 0 auto;
   background: var(--mac-tracker-swatch);
-  border: 2px solid var(--mac-paper);
-  box-shadow: 0 0 0 1px var(--mac-line);
-  width: 32px;
-  height: 32px;
+  box-shadow: 0 0 0 1px rgb(77 83 58 / 22%);
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
 }
 
 .mac-tracker-color-swatches code {
-  font-size: 9px;
+  padding: 0;
+  color: var(--mac-text);
+  background: transparent;
+  font: 500 10px "JetBrains Mono",monospace;
 }
 
 .mac-tracker-color-variables {
   margin: 0;
-  padding: 9px 10px;
-  background: var(--mac-panel);
-  border-radius: 7px;
+  padding: 0;
+  background: transparent;
 }
 
 .mac-tracker-color-card__actions {
   display: flex;
   justify-content: flex-start;
   flex-wrap: wrap;
-  align-items: end;
+  align-items: center;
   gap: 8px;
   padding-top: 13px;
-  border-top-color: var(--mac-line);
+  border-top: 1px solid var(--mac-line);
 }
 
 .mac-tracker-color-card__actions .button {
@@ -4828,18 +4863,40 @@ html[data-mac-theme] {
 }
 
 .mac-tracker-palette-editor {
+  order: 1;
   display: grid;
-  align-items: end;
+  align-items: center;
   gap: 8px;
-  flex: 1 1 290px;
+  flex: 1 1 100%;
   grid-template-columns: minmax(0,1fr) auto;
+}
+
+.mac-tracker-color-extract {
+  order: 2;
+}
+
+.mac-tracker-color-card__actions>form:last-child {
+  order: 3;
+  margin-left: auto;
 }
 
 .mac-tracker-palette-editor input {
   width: 100%;
   min-width: 0;
   min-height: 36px;
+  padding: 0 11px;
+  color: var(--mac-text);
   background: var(--mac-surface);
+  border: 1px solid var(--mac-line-solid);
+  border-radius: 8px;
+  box-shadow: none;
+  font: 500 11px "JetBrains Mono",monospace;
+}
+
+.mac-tracker-palette-editor input:focus {
+  border-color: var(--mac-olive-700);
+  outline: 0;
+  box-shadow: 0 0 0 3px rgb(77 83 58 / 14%);
 }
 
 .mac-tracker-workflow-list {
