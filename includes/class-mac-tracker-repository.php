@@ -1466,12 +1466,14 @@ class MAC_Tracker_Repository {
 				$names[] = $core . ' ' . $suffix;
 			}
 		}
+		$names[] = 'Nude';
 		return $names;
 	}
 
 	public function simplify_visual_tone_name( $tone ) {
-		$aliases = array( 'taupe' => 'nâu', 'nude' => 'nâu', 'ivory' => 'kem', 'cream' => 'kem', 'champagne' => 'kem' );
+		$aliases = array( 'ivory' => 'kem', 'cream' => 'kem', 'champagne' => 'kem' );
 		$poetic = array( 'khói', 'khoi', 'plush', 'mist', 'sage', 'spa', 'sữa', 'sua' );
+		$warm = array( 'nâu', 'be', 'kem', 'nude', 'taupe' );
 		$canvas = array( 'be', 'kem', 'xám', 'trắng', 'đen' );
 		$clean = array();
 		foreach ( $this->visual_tone_tokens( $tone ) as $part ) {
@@ -1480,6 +1482,18 @@ class MAC_Tracker_Repository {
 				continue;
 			}
 			$clean[] = $part;
+		}
+		if ( $clean && ! array_diff( $clean, $warm ) ) {
+			if ( in_array( 'nude', $clean, true ) || in_array( 'taupe', $clean, true ) ) {
+				return 'Nude';
+			}
+			if ( in_array( 'nâu', $clean, true ) ) {
+				return 'Nâu';
+			}
+			if ( in_array( 'be', $clean, true ) ) {
+				return 'Be';
+			}
+			return $this->title_visual_tone( $clean[0] );
 		}
 		if ( count( $clean ) > 2 ) {
 			$last = $clean[ count( $clean ) - 1 ];
@@ -1567,7 +1581,7 @@ class MAC_Tracker_Repository {
 		$brand_map = array(
 			'Vàng' => 'yellow', 'Đỏ' => 'red', 'Hồng' => 'pink', 'Xanh' => 'blue',
 			'Xanh lá' => 'green', 'Xanh dương' => 'blue',
-			'Tím' => 'purple', 'Cam' => 'orange', 'Nâu' => 'brown', 'Đen' => 'black',
+			'Tím' => 'purple', 'Cam' => 'orange', 			'Nâu' => 'brown', 'Nude' => 'beige', 'Đen' => 'black',
 			'Xám' => 'gray', 'Trắng' => 'white', 'Kem' => 'cream', 'Be' => 'beige',
 		);
 		if ( 0 === strpos( $tone, 'Xanh lá' ) ) {
@@ -1646,6 +1660,7 @@ class MAC_Tracker_Repository {
 			'Trắng' => array( '#FFFFFF', '#F3F3F0', '#FFFEFC', '#BDBDB5', '#343434' ),
 			'Kem' => array( '#F4D9AE', '#FFF0D4', '#FFF9EE', '#D3AA70', '#5A3E20' ),
 			'Be' => array( '#CBB39E', '#EEE1D4', '#FBF5EF', '#A38770', '#4B3A2C' ),
+			'Nude' => array( '#C4B2A3', '#F3EBE3', '#FBF6F1', '#9A8574', '#4A3B32' ),
 			'Xám' => array( '#8D9297', '#DDE0E2', '#F5F6F7', '#686E73', '#282B2E' ),
 			'Tím' => array( '#8A5AA6', '#E8DDF0', '#FBF7FE', '#684080', '#33203F' ),
 			'Cam' => array( '#E47B35', '#FADCC7', '#FFF5ED', '#B8571D', '#51250E' ),

@@ -3,7 +3,8 @@ export const CORE_COLORS = ['đỏ', 'cam', 'vàng', 'xanh lá', 'xanh dương',
 export const SUFFIXES = ['', 'trắng', 'đen', 'be', 'kem', 'đỏ', 'xanh lá', 'xanh dương'];
 export const CHROMATIC_COLORS = ['đỏ', 'cam', 'vàng', 'xanh lá', 'xanh dương', 'tím', 'hồng', 'nâu'];
 export const CANVAS_COLORS = ['be', 'kem', 'xám', 'trắng', 'đen'];
-export const COLOR_ALIASES = { taupe: 'nâu', nude: 'nâu', ivory: 'kem', cream: 'kem', champagne: 'kem' };
+export const COLOR_ALIASES = { ivory: 'kem', cream: 'kem', champagne: 'kem' };
+export const WARM_NEUTRALS = ['nâu', 'be', 'kem', 'nude', 'taupe'];
 export const POETIC_WORDS = ['khói', 'khoi', 'plush', 'mist', 'sage', 'spa', 'sữa', 'sua'];
 export const REVIEW_TONE = 'Cần duyệt';
 
@@ -26,12 +27,18 @@ export function toneTokens(value) {
   return parts.filter(Boolean);
 }
 
-/** Drop fashion words and keep at most brand + canvas. Nâu taupe kem → Nâu kem. */
+/** One warm-neutral word is enough. Nude nếu suông nude/taupe; không thì Nâu. */
 export function simplifyToneName(value) {
   const parts = toneTokens(value).map((part) => COLOR_ALIASES[part] || part).filter((part, index, list) => {
     if (POETIC_WORDS.includes(part)) return false;
     return part !== list[index - 1];
   });
+  if (parts.length && parts.every((part) => WARM_NEUTRALS.includes(part))) {
+    if (parts.includes('nude') || parts.includes('taupe')) return 'Nude';
+    if (parts.includes('nâu')) return 'Nâu';
+    if (parts.includes('be')) return 'Be';
+    return titleTone(parts[0]);
+  }
   if (parts.length > 2) {
     const last = parts[parts.length - 1];
     const kept = CANVAS_COLORS.includes(last) ? [parts[0], last] : parts.slice(0, 2);
@@ -52,7 +59,7 @@ export function canonicalizeToneOrder(value) {
 }
 
 export function buildToneCatalog(extra = []) {
-  const names = new Set();
+  const names = new Set(['Nude']);
   for (const core of CORE_COLORS) {
     names.add(titleTone(core));
     for (const suffix of SUFFIXES) {
