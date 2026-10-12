@@ -242,12 +242,12 @@ export async function classifyTone({ previewBuffer, evidence, groqApiKey, gemini
     if (!vision) return { state: 'needs_review', result: directNeedsReview(), attempts: [], errors, authority: 'manual_review' };
 
     await reportStep('naming_tone', 'groq_text');
-    const namer = (model) => groqText({ apiKey: groqApiKey, prompt: nameTonePrompt(vision.vision_read, catalog), model, validateResult: (value, provider, used) => validateNameToneResult(value, provider, used, catalog) });
+    const namer = (model) => groqText({ apiKey: groqApiKey, prompt: nameTonePrompt(vision.vision_read, catalog), model, validateResult: (value, provider, used) => validateNameToneResult(value, provider, used, catalog, vision.vision_read) });
     let named = await tryProvider(() => namer(GROQ_TEXT_PRIMARY), errors);
     if (!named) named = await tryProvider(() => namer(GROQ_TEXT_FALLBACK), errors);
     if (!named) {
       await reportStep('naming_tone', 'cloudflare_llama');
-      named = await tryProvider(() => llama({ prompt: nameTonePrompt(vision.vision_read, catalog), accountId: cloudflareAccount, apiToken: cloudflareToken, validateResult: (value, provider, used) => validateNameToneResult(value, provider, used, catalog) }), errors);
+      named = await tryProvider(() => llama({ prompt: nameTonePrompt(vision.vision_read, catalog), accountId: cloudflareAccount, apiToken: cloudflareToken, validateResult: (value, provider, used) => validateNameToneResult(value, provider, used, catalog, vision.vision_read) }), errors);
     }
     const temporaryName = errors.length && errors.every((error) => error.retryable || error.quota);
     if (!named && temporaryName) return { state: 'retry_wait', result: vision, attempts: [vision], errors, retry_code: errors.every((error) => error.quota) ? 'FREE_QUOTA_EXHAUSTED' : 'FREE_PROVIDER_UNAVAILABLE', authority: 'ai1_wait_ai2' };

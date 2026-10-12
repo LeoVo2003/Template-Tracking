@@ -1463,6 +1463,9 @@ class MAC_Tracker_Repository {
 				if ( in_array( $core_l, $canvas, true ) && in_array( $suffix, $chromatic, true ) ) {
 					continue;
 				}
+				if ( in_array( $core_l, array( 'đen', 'trắng' ), true ) && in_array( $suffix, array( 'be', 'kem' ), true ) ) {
+					continue;
+				}
 				$names[] = $core . ' ' . $suffix;
 			}
 		}
@@ -1474,11 +1477,12 @@ class MAC_Tracker_Repository {
 		$aliases = array( 'ivory' => 'kem', 'cream' => 'kem', 'champagne' => 'kem' );
 		$poetic = array( 'khói', 'khoi', 'plush', 'mist', 'sage', 'spa', 'sữa', 'sua' );
 		$warm = array( 'nâu', 'be', 'kem', 'nude', 'taupe' );
+		$known = array( 'đỏ', 'cam', 'vàng', 'xanh lá', 'xanh dương', 'tím', 'hồng', 'nâu', 'be', 'kem', 'xám', 'trắng', 'đen', 'nude', 'taupe' );
 		$canvas = array( 'be', 'kem', 'xám', 'trắng', 'đen' );
 		$clean = array();
 		foreach ( $this->visual_tone_tokens( $tone ) as $part ) {
 			$part = $aliases[ $part ] ?? $part;
-			if ( in_array( $part, $poetic, true ) || $part === end( $clean ) ) {
+			if ( in_array( $part, $poetic, true ) || ! in_array( $part, $known, true ) || $part === end( $clean ) ) {
 				continue;
 			}
 			$clean[] = $part;

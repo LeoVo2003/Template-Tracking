@@ -5,6 +5,7 @@ export const CHROMATIC_COLORS = ['đỏ', 'cam', 'vàng', 'xanh lá', 'xanh dư�
 export const CANVAS_COLORS = ['be', 'kem', 'xám', 'trắng', 'đen'];
 export const COLOR_ALIASES = { ivory: 'kem', cream: 'kem', champagne: 'kem' };
 export const WARM_NEUTRALS = ['nâu', 'be', 'kem', 'nude', 'taupe'];
+export const INK_COLORS = ['đen', 'trắng'];
 export const POETIC_WORDS = ['khói', 'khoi', 'plush', 'mist', 'sage', 'spa', 'sữa', 'sua'];
 export const REVIEW_TONE = 'Cần duyệt';
 
@@ -27,10 +28,12 @@ export function toneTokens(value) {
   return parts.filter(Boolean);
 }
 
+const KNOWN_COLORS = new Set([...CORE_COLORS, ...SUFFIXES.filter(Boolean), ...WARM_NEUTRALS, ...INK_COLORS, ...Object.keys(COLOR_ALIASES), ...Object.values(COLOR_ALIASES)]);
+
 /** One warm-neutral word is enough. Nude nếu suông nude/taupe; không thì Nâu. */
 export function simplifyToneName(value) {
   const parts = toneTokens(value).map((part) => COLOR_ALIASES[part] || part).filter((part, index, list) => {
-    if (POETIC_WORDS.includes(part)) return false;
+    if (POETIC_WORDS.includes(part) || !KNOWN_COLORS.has(part)) return false;
     return part !== list[index - 1];
   });
   if (parts.length && parts.every((part) => WARM_NEUTRALS.includes(part))) {
@@ -45,6 +48,29 @@ export function simplifyToneName(value) {
     return canonicalizeToneOrder(kept.join(' '));
   }
   return canonicalizeToneOrder(parts.join(' '));
+}
+
+export function isInkLedName(name) {
+  const lead = toneTokens(name)[0] || '';
+  return INK_COLORS.includes(lead);
+}
+
+/** AI 1 free name, without treating text ink as the page tone. */
+export function visionToneHint(visionRead) {
+  if (!visionRead || 'object' !== typeof visionRead) return '';
+  const fromName = simplifyToneName(visionRead.tone_name);
+  if (fromName && !isInkLedName(fromName)) return fromName;
+  const colorBits = (Array.isArray(visionRead.design_colors) ? visionRead.design_colors : []).map((entry) => entry?.name || '').join(' ');
+  const fromColors = simplifyToneName(`${visionRead.tone_name || ''} ${colorBits}`);
+  if (fromColors && !isInkLedName(fromColors)) return fromColors;
+  return fromName && !isInkLedName(fromName) ? fromName : '';
+}
+
+export function officialToneName(value, visionRead) {
+  const cleaned = simplifyToneName(value);
+  const hint = visionToneHint(visionRead);
+  if (isInkLedName(cleaned) && hint) return hint;
+  return cleaned;
 }
 
 /** Brand/accent first, canvas second. Đen vàng → Vàng đen. */
@@ -65,6 +91,7 @@ export function buildToneCatalog(extra = []) {
     for (const suffix of SUFFIXES) {
       if (!suffix || suffix === core) continue;
       if (CANVAS_COLORS.includes(core) && CHROMATIC_COLORS.includes(suffix)) continue;
+      if (INK_COLORS.includes(core) && (suffix === 'be' || suffix === 'kem')) continue;
       names.add(titleTone(`${core} ${suffix}`));
     }
   }
