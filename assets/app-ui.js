@@ -30,88 +30,6 @@
     });
   }
 
-  function hydrateLazyCards(scope) {
-    (scope || document).querySelectorAll('[data-mac-lazy-load]').forEach(function (button) {
-      if (button.dataset.macLazyBound) return;
-      button.dataset.macLazyBound = '1';
-      function appendChunk() {
-        var template = button.parentElement?.querySelector('template[data-mac-lazy-cards]');
-        if (!template?.content?.children?.length) { button.remove(); return; }
-        var fragment = document.createDocumentFragment();
-        Array.from(template.content.children).slice(0, 24).forEach(function (node) { fragment.appendChild(node); });
-        button.parentNode.insertBefore(fragment, button);
-        if (!template.content.children.length) button.remove();
-        else button.textContent = 'Load ' + Math.min(24, template.content.children.length) + ' more cards';
-      }
-      button.addEventListener('click', appendChunk);
-      if ('IntersectionObserver' in window) {
-        var observer = new IntersectionObserver(function (entries) {
-          if (!entries.some(function (entry) { return entry.isIntersecting; })) return;
-          observer.disconnect();
-          appendChunk();
-        }, { rootMargin: '340px 0px' });
-        observer.observe(button);
-      }
-    });
-  }
-
-  // "All" means all matching project records, but never all at once.  The
-  // table starts with one logical 100-row page and appends later pages only
-  // when the user asks or reaches the end of the current table.
-  function hydrateProjectRows(scope) {
-    (scope || document).querySelectorAll('[data-mac-project-lazy-load]').forEach(function (control) {
-      if (control.dataset.macProjectBound || !window.macTrackerApp?.projectRowsNonce) return;
-      control.dataset.macProjectBound = '1';
-      var button = control.querySelector('[data-mac-project-load-more]');
-      var notice = control.querySelector('p');
-      var loading = false;
-      var observer = null;
-
-      function loadNext() {
-        if (loading || !button) return;
-        var filters;
-        try { filters = JSON.parse(control.getAttribute('data-mac-project-filters') || '{}'); }
-        catch (_) { if (notice) notice.textContent = 'Could not read this project filter state. Refresh and try again.'; return; }
-        loading = true;
-        button.disabled = true;
-        button.textContent = 'Loading next 100…';
-        var nextPage = Number(control.getAttribute('data-mac-project-page') || '1') + 1;
-        fetch(macTrackerApp.ajaxUrl, {
-          method: 'POST', credentials: 'same-origin',
-          body: new URLSearchParams({ action: 'mac_tracker_load_project_rows', nonce: macTrackerApp.projectRowsNonce, filters: JSON.stringify(filters), paged: String(nextPage) })
-        })
-          .then(function (response) { return response.json(); })
-          .then(function (payload) {
-            if (!payload.success) throw new Error(payload.data?.message || 'Could not load more project records.');
-            var body = control.closest('.mac-tracker-table-shell')?.querySelector('.mac-tracker-project-table tbody');
-            if (body && payload.data.html) body.insertAdjacentHTML('beforeend', payload.data.html);
-            control.setAttribute('data-mac-project-page', String(payload.data.paged));
-            if (notice) notice.textContent = 'Showing ' + payload.data.shown + ' of ' + payload.data.total + ' records.';
-            if (!payload.data.has_more) { control.remove(); if (observer) observer.disconnect(); return; }
-            button.disabled = false;
-            button.textContent = 'Load next 100';
-            loading = false;
-          })
-          .catch(function (error) {
-            if (notice) notice.textContent = error.message || 'Could not load more project records.';
-            button.disabled = false;
-            button.textContent = 'Try loading next 100';
-            loading = false;
-          });
-      }
-
-      button?.addEventListener('click', loadNext);
-      if ('IntersectionObserver' in window && button) {
-        observer = new IntersectionObserver(function (entries) {
-          if (!entries.some(function (entry) { return entry.isIntersecting; })) return;
-          observer.disconnect();
-          loadNext();
-        }, { rootMargin: '260px 0px' });
-        observer.observe(button);
-      }
-    });
-  }
-
   function applyFragmentTabs(target, section) {
     document.querySelectorAll('[data-mac-fragment-tabs] [data-mac-fragment-target="' + target + '"]').forEach(function (tab) {
       var selected = tab.getAttribute('data-mac-fragment-section') === section;
@@ -144,7 +62,6 @@
       panel.innerHTML = html;
       panel.removeAttribute('aria-busy');
       applyFragmentTabs(target, section);
-      hydrateLazyCards(panel);
       document.dispatchEvent(new CustomEvent('mac:fragmentloaded', { detail: { target: target, section: section, panel: panel } }));
     }
     if (!force && fragmentCache.has(key)) { render(fragmentCache.get(key)); return; }
@@ -594,7 +511,8 @@
     function filtersFromForm() {
       var filters = {};
       new FormData(form).forEach(function (value, key) { filters[key] = value; });
-      filters.per_page = 'all';
+      var rows = document.querySelector('.mac-tracker-rows select[name="per_page"]');
+      if (rows && rows.value) filters.per_page = rows.value;
       return filters;
     }
 
@@ -611,24 +529,17 @@
       var plural = document.querySelector('[data-mac-project-plural]');
       if (totalNode) totalNode.textContent = total.toLocaleString();
       if (plural) plural.textContent = total === 1 ? '' : 's';
-      var summary = shell?.querySelector('.mac-tracker-table-footer > span');
-      if (summary) summary.textContent = total ? ('Showing 1–' + Math.min(Number(data.shown || total), total) + ' of ' + total) : 'Showing 0 of 0';
-      var pager = shell?.querySelector('.mac-tracker-pagination');
-      if (pager) pager.hidden = true;
-      var lazy = shell?.querySelector('[data-mac-project-lazy-load]');
-      if (lazy) {
-        lazy.hidden = !data.has_more;
-        lazy.setAttribute('data-mac-project-page', '1');
-        lazy.setAttribute('data-mac-project-total', String(total));
-        lazy.setAttribute('data-mac-project-filters', JSON.stringify(filters));
-        delete lazy.dataset.macProjectBound;
-        var note = lazy.querySelector('p');
-        if (note) note.textContent = 'Showing the first ' + (data.shown || 0) + ' of ' + total + ' records.';
-        hydrateProjectRows(shell);
+      if (data.footer) {
+        var currentFooter = shell?.querySelector('.mac-tracker-table-footer');
+        var box = document.createElement('div');
+        box.innerHTML = data.footer;
+        var nextFooter = box.querySelector('.mac-tracker-table-footer');
+        if (currentFooter && nextFooter) currentFooter.replaceWith(nextFooter);
+        else if (nextFooter && shell) shell.appendChild(nextFooter);
       }
       var params = new URLSearchParams();
       Object.keys(filters).forEach(function (key) {
-        if ('per_page' === key || '' === String(filters[key] || '')) return;
+        if ('' === String(filters[key] || '')) return;
         params.set(key, filters[key]);
       });
       var action = form.getAttribute('action') || window.location.pathname;
@@ -689,8 +600,6 @@
 
   if (window.macTrackerApp?.theme) setTheme(macTrackerApp.theme);
   setupLocalTabs();
-  hydrateLazyCards(document);
-  hydrateProjectRows(document);
   bindProjectSearch();
   bindPluginUpdate();
   bindAdvancedControls();

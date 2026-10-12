@@ -3776,22 +3776,6 @@ html[data-mac-theme] {
   margin-top: 8px;
 }
 
-.mac-tracker-color-variables summary {
-  color: var(--mac-text-muted);
-  font-size: 10px;
-  cursor: pointer;
-}
-
-.mac-tracker-color-variables p {
-  margin: 7px 0 0;
-}
-
-.mac-tracker-color-variables code {
-  display: inline-block;
-  margin: 2px;
-  font-size: 9px;
-}
-
 .mac-tracker-workflow-monitor__head {
   display: flex;
   align-items: flex-start;
@@ -5025,17 +5009,19 @@ html[data-mac-theme] {
   border-radius: 50%;
 }
 
+.mac-tracker-color-swatches em {
+  color: var(--mac-text-muted);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 650;
+  letter-spacing: .02em;
+}
+
 .mac-tracker-color-swatches code {
   padding: 0;
   color: var(--mac-text);
   background: transparent;
   font: 500 10px "JetBrains Mono",monospace;
-}
-
-.mac-tracker-color-variables {
-  margin: 0;
-  padding: 0;
-  background: transparent;
 }
 
 .mac-tracker-color-card__actions {

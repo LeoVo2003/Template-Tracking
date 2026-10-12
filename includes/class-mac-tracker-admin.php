@@ -313,9 +313,6 @@ class MAC_Tracker_Admin {
 				</tr></thead><tbody data-mac-project-rows>
 					<?php foreach ( $page['rows'] as $row ) : $this->render_project_row( $row ); endforeach; ?>
 				</tbody></table></div>
-				<?php if ( ! empty( $filters['all_mode'] ) && (int) $page['total_pages'] > 1 ) : ?>
-					<div class="mac-tracker-project-lazy-load" data-mac-project-lazy-load data-mac-project-page="1" data-mac-project-total="<?php echo esc_attr( $page['total'] ); ?>" data-mac-project-filters="<?php echo esc_attr( wp_json_encode( $this->project_fragment_filters( $filters ) ) ); ?>"><p>Showing the first <?php echo esc_html( number_format_i18n( count( $page['rows'] ) ) ); ?> of <?php echo esc_html( number_format_i18n( $page['total'] ) ); ?> records. More records load as you reach this point.</p><button type="button" class="button" data-mac-project-load-more>Load next 100</button></div>
-				<?php endif; ?>
 				<?php $this->pagination( $page, $filters ); ?>
 		</section>
 		<?php $this->page_end();
@@ -381,21 +378,21 @@ class MAC_Tracker_Admin {
 		<section class="mac-tracker-color-review" aria-label="Color review queue">
 			<?php if ( empty( $rows ) ) : ?>
 				<div class="mac-tracker-empty"><span class="dashicons dashicons-art"></span><strong>No websites available</strong><p>Color Review only lists current project rows that have a website URL.</p></div>
-			<?php else : $initial_rows = array_slice( $rows, 0, 24 ); $deferred_rows = array_slice( $rows, 24 ); foreach ( $initial_rows as $row ) : $this->render_color_card( $row ); endforeach; if ( $deferred_rows ) : ob_start(); foreach ( $deferred_rows as $row ) : $this->render_color_card( $row ); endforeach; $deferred_markup = ob_get_clean(); ?><template data-mac-lazy-cards><?php echo $deferred_markup; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></template><button type="button" class="button mac-tracker-lazy-load" data-mac-lazy-load>Load <?php echo esc_html( min( 24, count( $deferred_rows ) ) ); ?> more cards</button><?php endif; endif; ?>
+			<?php else : foreach ( $rows as $row ) : $this->render_color_card( $row ); endforeach; endif; ?>
 		</section>
 		<footer class="mac-tracker-analysis-footer"><?php $this->analysis_page_size_control( 'color', 'action', $per_page ); ?><?php $this->analysis_pagination( $page, array( 'section' => 'action', 'color_status' => $status, 'color_search' => $search, 'color_per_page' => $this->presentation_page_request( $_GET['color_per_page'] ?? 100 ) ), 'color_page' ); ?></footer>
 		<?php
 	}
 
-	/** One compact Color Review card, reused for deferred visual rendering. */
+	/** One Color Review card for the current page of results. */
 	private function render_color_card( array $row ) {
-		$colors = $this->row_colors( $row );
+		$slots = $this->row_color_slots( $row );
+		$colors = array_column( $slots, 'hex' );
 		$approved = ! empty( $row['color_locked'] );
 		?>
 		<article class="mac-tracker-color-card <?php echo $approved ? 'is-approved' : ''; ?>" data-color-card="<?php echo (int) $row['id']; ?>">
 			<div class="mac-tracker-color-card__head"><div><p class="mac-tracker-eyebrow"><?php echo esc_html( $approved ? 'Approved palette' : ( $colors ? 'Awaiting review' : 'Not extracted' ) ); ?></p><h2><?php $this->project_link( $row ); ?></h2><p><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></p></div><span class="mac-tracker-status mac-tracker-status--<?php echo esc_attr( $approved ? 'success' : ( $colors ? 'waiting' : 'muted' ) ); ?> mac-tracker-status--inline"><?php echo esc_html( $approved ? 'Approved' : ( $colors ? 'Review' : 'New' ) ); ?></span></div>
-			<?php if ( $colors ) : ?><div class="mac-tracker-color-swatches" aria-label="Extracted colors"><?php foreach ( $colors as $color ) : ?><span title="<?php echo esc_attr( $color ); ?>" style="--mac-tracker-swatch: <?php echo esc_attr( $color ); ?>"><i></i><code><?php echo esc_html( $color ); ?></code></span><?php endforeach; ?></div><?php endif; ?>
-			<?php $this->color_variables( $row ); ?>
+			<?php if ( $slots ) : ?><div class="mac-tracker-color-swatches" aria-label="Extracted colors"><?php foreach ( $slots as $slot ) : ?><span title="<?php echo esc_attr( trim( $slot['label'] . ' ' . $slot['hex'] ) ); ?>" style="--mac-tracker-swatch: <?php echo esc_attr( $slot['hex'] ); ?>"><i></i><?php if ( $slot['label'] ) : ?><em><?php echo esc_html( $slot['label'] ); ?></em><?php endif; ?><code><?php echo esc_html( $slot['hex'] ); ?></code></span><?php endforeach; ?></div><?php endif; ?>
 			<div class="mac-tracker-color-card__actions">
 				<?php if ( ! $approved ) : ?>
 					<form class="mac-tracker-color-extract" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_extract_elementor_colors' ); ?><input type="hidden" name="action" value="mac_tracker_extract_elementor_colors"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><button class="button" type="submit"><?php echo $colors ? 'Extract again' : 'Extract Elementor colors'; ?></button></form>
@@ -484,7 +481,7 @@ class MAC_Tracker_Admin {
 		<?php if ( 'processing' === $section ) : ?>
 		<section class="mac-tracker-visual-auto mac-tracker-visual-auto--v4"><div><p class="mac-tracker-eyebrow">Automation control room</p><h2><?php echo 'auto' === $mode ? 'Automation is active' : 'Manual review first'; ?></h2><div class="mac-tracker-automation-state"><strong><?php echo esc_html( strtoupper( $mode ) ); ?></strong><span><?php echo esc_html( 'smart' === $strategy ? 'Smart Auto' : strtoupper( $strategy ) ); ?></span><span><?php echo esc_html( 'direct_vision' === $classifier ? 'Direct Vision' : 'Legacy classifier' ); ?></span></div><dl class="mac-tracker-automation-observability" aria-label="Automation observations"><div><dt><span class="dashicons dashicons-calendar-alt" aria-hidden="true"></span>Last scheduled</dt><dd><?php echo esc_html( ! empty( $automation['last_scheduled_at'] ) ? MAC_Tracker_Time::bangkok_label( $automation['last_scheduled_at'] ) : 'Not recorded' ); ?></dd></div><div><dt><span class="dashicons dashicons-yes-alt" aria-hidden="true"></span>Last success</dt><dd><?php echo esc_html( ! empty( $automation['last_success_at'] ) ? MAC_Tracker_Time::bangkok_label( $automation['last_success_at'] ) : 'Not recorded' ); ?></dd></div><div><dt><span class="dashicons dashicons-chart-bar" aria-hidden="true"></span>Processed / 60m</dt><dd><?php echo esc_html( number_format_i18n( (int) ( $automation['processed_60m'] ?? 0 ) ) ); ?> projects</dd></div><div><dt><span class="dashicons dashicons-clock" aria-hidden="true"></span>Queue</dt><dd><?php echo esc_html( number_format_i18n( (int) ( $automation['queue_size'] ?? 0 ) ) ); ?> projects</dd></div></dl></div><div class="mac-tracker-visual-auto__actions"><?php if ( get_option( 'mac_tracker_github_dispatch_token', '' ) ) : ?><form class="mac-tracker-visual-run" method="post" action="<?php echo esc_url( admin_url( 'admin.php?page=mac-project-tracker-visuals' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_run_visual_workflow' ); ?><input type="hidden" name="action" value="mac_tracker_run_visual_workflow"><button class="button button-primary" type="submit"><span class="dashicons dashicons-controls-play" aria-hidden="true"></span>Run batch now</button></form><?php endif; ?><details class="mac-tracker-advanced-controls"><summary>Advanced controls</summary><form class="mac-tracker-visual-mode" data-visual-controls method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_save_visual_mode' ); ?><input type="hidden" name="action" value="mac_tracker_save_visual_mode"><fieldset><legend class="screen-reader-text">Visual Tone mode</legend><label><input type="radio" name="visual_mode" value="manual"<?php checked( 'manual', $mode ); ?>> <span>Manual</span></label><label><input type="radio" name="visual_mode" value="auto"<?php checked( 'auto', $mode ); ?>> <span>Auto</span></label></fieldset><label><span>AI strategy</span><select name="ai_strategy"><option value="off"<?php selected( 'off', $strategy ); ?>>AI off</option><option value="qwen"<?php selected( 'qwen', $strategy ); ?>>Qwen only</option><option value="gemini"<?php selected( 'gemini', $strategy ); ?>>Gemini only</option><option value="smart"<?php selected( 'smart', $strategy ); ?>>Smart auto</option></select></label><label><span>Classifier</span><select name="classifier_mode"><option value="direct_vision"<?php selected( 'direct_vision', $classifier ); ?>>Direct Vision</option><option value="legacy"<?php selected( 'legacy', $classifier ); ?>>Legacy evidence</option><option value="benchmark_only"<?php selected( 'benchmark_only', $classifier ); ?>>Benchmark only</option></select></label><label>Accept ≥ <input type="number" name="auto_accept" min="0.75" max="0.99" step="0.01" value="<?php echo esc_attr( max( 0.75, min( 0.99, (float) get_option( 'mac_tracker_visual_auto_accept', 0.85 ) ) ) ); ?>"></label><label>Retries <input type="number" name="max_capture_retries" min="0" max="3" step="1" value="<?php echo esc_attr( max( 0, min( 3, absint( get_option( 'mac_tracker_visual_max_capture_retries', 3 ) ) ) ) ); ?>"></label><span class="mac-tracker-auto-save-status" data-visual-controls-status aria-live="polite">Saved</span></form></details></div></section>
 		<?php endif; ?>
-		<form class="mac-tracker-visual-work" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_requeue_visuals' ); ?><input type="hidden" name="action" value="mac_tracker_requeue_visuals"><?php if ( 'locked' !== $section ) : ?><section class="mac-tracker-visual-tools" aria-label="Visual review actions"><span class="dashicons dashicons-palmtree mac-tracker-visual-tools__mark" aria-hidden="true"></span><div><p class="mac-tracker-eyebrow">Actions for this view</p><strong>Select cards, or leave empty to apply to this page</strong><span>Analyze reuses a stored capture. Capture + analyze only continues after a fresh capture succeeds.</span></div><div class="mac-tracker-visual-tools__actions"><label class="mac-tracker-select-all"><input type="checkbox" data-visual-select-all><span>Select page</span></label><?php if ( 'review' === $section ) : ?><button class="button button-primary" type="submit" name="visual_action" value="approve_selected" data-visual-bulk data-visual-label="Approve">Approve page</button><?php endif; ?><button class="button" type="submit" name="visual_action" value="reanalyze_selected" data-visual-bulk data-visual-label="Analyze">Analyze page</button><button class="button" type="submit" name="visual_action" value="recapture_selected" data-visual-bulk data-visual-label="Capture">Capture page</button><?php if ( 'processing' === $section ) : ?><button class="button" type="submit" name="visual_action" value="local_retry_selected" data-visual-bulk data-visual-label="Capture with local">Capture with local</button><?php endif; ?><button class="button button-primary" type="submit" name="visual_action" value="capture_analyze_selected" data-visual-bulk data-visual-label="Capture + analyze">Capture + analyze page</button><?php if ( 'processing' === $section ) : ?><button class="button" type="submit" name="visual_action" value="retry_failed">Retry failed</button><?php endif; ?></div></section><?php endif; ?><section class="mac-tracker-visual-gallery" aria-label="Visual tone gallery"><?php if ( empty( $page['rows'] ) ) : ?><div class="mac-tracker-empty"><strong>No cards in this view</strong><p>When a relevant capture or AI result is ready, it will appear here.</p></div><?php else : $initial_rows = array_slice( $page['rows'], 0, 24 ); $deferred_rows = array_slice( $page['rows'], 24 ); foreach ( $initial_rows as $row ) : $this->render_visual_card( $row ); endforeach; if ( $deferred_rows ) : ob_start(); foreach ( $deferred_rows as $row ) : $this->render_visual_card( $row ); endforeach; $deferred_markup = ob_get_clean(); ?><template data-mac-lazy-cards><?php echo $deferred_markup; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></template><button class="button mac-tracker-lazy-load" type="button" data-mac-lazy-load>Load <?php echo esc_html( min( 24, count( $deferred_rows ) ) ); ?> more cards</button><?php endif; endif; ?></section></form>
+		<form class="mac-tracker-visual-work" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_requeue_visuals' ); ?><input type="hidden" name="action" value="mac_tracker_requeue_visuals"><?php if ( 'locked' !== $section ) : ?><section class="mac-tracker-visual-tools" aria-label="Visual review actions"><span class="dashicons dashicons-palmtree mac-tracker-visual-tools__mark" aria-hidden="true"></span><div><p class="mac-tracker-eyebrow">Actions for this view</p><strong>Select cards, or leave empty to apply to this page</strong><span>Analyze reuses a stored capture. Capture + analyze only continues after a fresh capture succeeds.</span></div><div class="mac-tracker-visual-tools__actions"><label class="mac-tracker-select-all"><input type="checkbox" data-visual-select-all><span>Select page</span></label><?php if ( 'review' === $section ) : ?><button class="button button-primary" type="submit" name="visual_action" value="approve_selected" data-visual-bulk data-visual-label="Approve">Approve page</button><?php endif; ?><button class="button" type="submit" name="visual_action" value="reanalyze_selected" data-visual-bulk data-visual-label="Analyze">Analyze page</button><button class="button" type="submit" name="visual_action" value="recapture_selected" data-visual-bulk data-visual-label="Capture">Capture page</button><?php if ( 'processing' === $section ) : ?><button class="button" type="submit" name="visual_action" value="local_retry_selected" data-visual-bulk data-visual-label="Capture with local">Capture with local</button><?php endif; ?><button class="button button-primary" type="submit" name="visual_action" value="capture_analyze_selected" data-visual-bulk data-visual-label="Capture + analyze">Capture + analyze page</button><?php if ( 'processing' === $section ) : ?><button class="button" type="submit" name="visual_action" value="retry_failed">Retry failed</button><?php endif; ?></div></section><?php endif; ?><section class="mac-tracker-visual-gallery" aria-label="Visual tone gallery"><?php if ( empty( $page['rows'] ) ) : ?><div class="mac-tracker-empty"><strong>No cards in this view</strong><p>When a relevant capture or AI result is ready, it will appear here.</p></div><?php else : foreach ( $page['rows'] as $row ) : $this->render_visual_card( $row ); endforeach; endif; ?></section></form>
 		<footer class="mac-tracker-analysis-footer"><?php $this->analysis_page_size_control( 'visual', $section, $per_page ); ?><?php $this->analysis_pagination( $page, array( 'section' => $section, 'visual_per_page' => $this->presentation_page_request( $_GET['visual_per_page'] ?? 100 ) ), 'visual_page' ); ?></footer>
 		<?php
 	}
@@ -508,11 +505,9 @@ class MAC_Tracker_Admin {
 
 	private function analysis_page_size_control( $kind, $section, $per_page ) {
 		$kind = 'color' === $kind ? 'color' : 'visual';
-		$all_selected = 'all' === $this->presentation_page_request( $_GET[ $kind . '_per_page' ] ?? 100 );
 		?>
 		<label class="mac-tracker-analysis-page-size"><span>Rows</span><select aria-label="Rows per page" data-mac-fragment-page-size data-mac-fragment-target="ai-panel" data-mac-fragment-section="<?php echo esc_attr( $section ); ?>"<?php echo 'color' === $kind ? ' data-mac-color-status="' . esc_attr( isset( $_GET['color_status'] ) && 'approved' === $_GET['color_status'] ? 'approved' : 'pending' ) . '"' : ''; ?>>
 			<?php foreach ( array( 25, 50, 100, 200 ) as $size ) : ?><option value="<?php echo esc_attr( $size ); ?>" <?php selected( (int) $per_page, $size ); ?>><?php echo esc_html( $size ); ?></option><?php endforeach; ?>
-			<option value="all"<?php selected( $all_selected, true ); ?>>All</option>
 		</select></label>
 		<?php
 	}
@@ -735,8 +730,6 @@ class MAC_Tracker_Admin {
 			wp_send_json_error( array( 'message' => 'The project filter state is invalid.' ), 400 );
 		}
 		$filters = $this->project_filters_from_values( $raw_filters );
-		$filters['per_page'] = 100;
-		$filters['all_mode'] = true;
 		$filters['paged'] = max( 1, absint( wp_unslash( $_POST['paged'] ?? 1 ) ) );
 		$page = $this->repository->project_page( $filters );
 		ob_start();
@@ -744,12 +737,13 @@ class MAC_Tracker_Admin {
 			$this->render_project_row( $row );
 		}
 		$html = ob_get_clean();
+		ob_start();
+		$this->pagination( $page, $filters );
+		$footer = ob_get_clean();
 		wp_send_json_success( array(
 			'html' => $html,
+			'footer' => $footer,
 			'paged' => (int) $page['paged'],
-			'next_page' => (int) $page['paged'] + 1,
-			'has_more' => (int) $page['paged'] < (int) $page['total_pages'],
-			'shown' => min( (int) $page['total'], (int) $page['paged'] * (int) $page['per_page'] ),
 			'total' => (int) $page['total'],
 		) );
 	}
@@ -1488,7 +1482,6 @@ class MAC_Tracker_Admin {
 		$custom_from = isset( $get['custom_from'] ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', (string) $get['custom_from'] ) ? (string) $get['custom_from'] : '';
 		$custom_to = isset( $get['custom_to'] ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', (string) $get['custom_to'] ) ? (string) $get['custom_to'] : '';
 		$dates = $this->date_range_values( $range, $custom_from, $custom_to );
-		$all_mode = isset( $get['per_page'] ) && 'all' === sanitize_key( (string) $get['per_page'] );
 		$requested_per_page = isset( $get['per_page'] ) ? absint( $get['per_page'] ) : 100;
 		return array(
 			'search'   => isset( $get['search'] ) ? sanitize_text_field( $get['search'] ) : '',
@@ -1504,10 +1497,7 @@ class MAC_Tracker_Admin {
 			'custom_to'   => $custom_to,
 			'date_from'   => $dates['from'],
 			'date_to'     => $dates['to'],
-			// All mode still asks the database for a 100-row logical page. The
-			// browser appends more pages on demand, preventing a 600+ row table.
-			'per_page' => $all_mode ? 100 : ( in_array( $requested_per_page, array( 25, 50, 100, 200 ), true ) ? $requested_per_page : 100 ),
-			'all_mode' => $all_mode,
+			'per_page' => in_array( $requested_per_page, array( 25, 50, 100, 200 ), true ) ? $requested_per_page : 100,
 			'orderby'  => isset( $get['orderby'] ) ? sanitize_key( $get['orderby'] ) : 'date',
 			'order'    => isset( $get['order'] ) ? sanitize_key( $get['order'] ) : 'desc',
 			'paged'    => isset( $get['paged'] ) ? absint( $get['paged'] ) : 1,
@@ -1525,20 +1515,12 @@ class MAC_Tracker_Admin {
 
 	/** Shared display-size contract for operational pages. */
 	private function presentation_page_size( $value ) {
-		if ( 'all' === $this->presentation_page_request( $value ) ) {
-			// Keep browser work bounded. The fragment loader requests subsequent
-			// 100-item slices instead of appending an unbounded card grid.
-			return 100;
-		}
 		$value = absint( $value );
 		return in_array( $value, array( 25, 50, 100, 200 ), true ) ? $value : 100;
 	}
 
-	/** Keep the All selection visible while every rendered card request stays bounded. */
+	/** Page size is always a number; a legacy "all" request falls back to 100. */
 	private function presentation_page_request( $value ) {
-		if ( 'all' === sanitize_key( (string) $value ) ) {
-			return 'all';
-		}
 		$value = absint( $value );
 		return in_array( $value, array( 25, 50, 100, 200 ), true ) ? $value : 100;
 	}
@@ -1547,33 +1529,16 @@ class MAC_Tracker_Admin {
 		$current = $filters['orderby'] === $field;
 		$order   = $current && 'desc' === strtolower( $filters['order'] ) ? 'asc' : 'desc';
 		$args    = array_merge( $filters, array( 'orderby' => $field, 'order' => $order, 'paged' => 1 ) );
-		if ( ! empty( $filters['all_mode'] ) ) {
-			$args['per_page'] = 'all';
-			unset( $args['all_mode'] );
-		}
 		$url = $this->projects_url( $args );
 		$direction = $current && 'asc' === strtolower( $filters['order'] ) ? 'up' : 'down';
 		echo '<th scope="col" class="mac-tracker-sort ' . esc_attr( $class ) . ( $current ? ' is-active' : '' ) . '"><a href="' . esc_url( $url ) . '">' . esc_html( $label ) . '<svg aria-hidden="true" viewBox="0 0 12 12" class="is-' . esc_attr( $direction ) . '"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.4"/></svg></a></th>';
-	}
-
-	/** Only presentation filters cross the browser boundary for All-mode chunks. */
-	private function project_fragment_filters( array $filters ) {
-		$keys = array( 'search', 'assignee', 'kind', 'layout', 'tone', 'range', 'custom_from', 'custom_to', 'orderby', 'order', 'per_page' );
-		$payload = array();
-		foreach ( $keys as $key ) {
-			$payload[ $key ] = $filters[ $key ] ?? '';
-		}
-		$payload['per_page'] = 'all';
-		return $payload;
 	}
 
 	private function pagination( array $page, array $filters ) {
 		$start = $page['total'] ? ( ( (int) $page['paged'] - 1 ) * (int) $page['per_page'] ) + 1 : 0;
 		$end = min( (int) $page['total'], (int) $page['paged'] * (int) $page['per_page'] );
 		echo '<footer class="mac-tracker-table-footer"><span>Showing ' . esc_html( number_format_i18n( $start ) ) . '–' . esc_html( number_format_i18n( $end ) ) . ' of ' . esc_html( number_format_i18n( $page['total'] ) ) . '</span>';
-		if ( ! empty( $filters['all_mode'] ) ) {
-			echo '<span class="mac-tracker-table-footer__all-note">All matching records load in 100-row chunks.</span>';
-		} elseif ( (int) $page['total_pages'] > 1 ) {
+		if ( (int) $page['total_pages'] > 1 ) {
 			$base_args = array_merge( $filters, array( 'paged' => '%#%' ) );
 			$base = str_replace( '%25%23%25', '%#%', $this->projects_url( $base_args ) );
 			$links = paginate_links( array( 'base' => $base, 'format' => '', 'current' => (int) $page['paged'], 'total' => (int) $page['total_pages'], 'type' => 'list', 'mid_size' => 1, 'prev_text' => '‹', 'next_text' => '›' ) );
@@ -1581,9 +1546,8 @@ class MAC_Tracker_Admin {
 		}
 		echo '<form class="mac-tracker-rows" method="get" action="' . esc_url( $this->projects_url() ) . '"><label>Rows <select name="per_page" onchange="this.form.submit()">';
 		foreach ( array( 25, 50, 100, 200 ) as $size ) { echo '<option value="' . esc_attr( $size ) . '"' . selected( (int) $filters['per_page'], $size, false ) . '>' . esc_html( $size ) . '</option>'; }
-		echo '<option value="all"' . selected( ! empty( $filters['all_mode'] ), true, false ) . '>All</option>';
 		echo '</select></label>';
-		foreach ( $filters as $key => $value ) { if ( in_array( $key, array( 'per_page', 'all_mode', 'paged', 'date_from', 'date_to', 'month_from', 'month_to', 'website' ), true ) || '' === (string) $value ) { continue; } echo '<input type="hidden" name="' . esc_attr( $key ) . '" value="' . esc_attr( $value ) . '">'; }
+		foreach ( $filters as $key => $value ) { if ( in_array( $key, array( 'per_page', 'paged', 'date_from', 'date_to', 'month_from', 'month_to', 'website' ), true ) || '' === (string) $value ) { continue; } echo '<input type="hidden" name="' . esc_attr( $key ) . '" value="' . esc_attr( $value ) . '">'; }
 		echo '</form></footer>';
 	}
 
@@ -1805,24 +1769,37 @@ class MAC_Tracker_Admin {
 	}
 
 	private function row_colors( array $row ) {
-		$colors = json_decode( (string) ( $row['colors_json'] ?? '' ), true );
-		if ( ! is_array( $colors ) ) {
-			return array();
-		}
-		return array_slice( $this->sanitize_palette( $colors ), 0, 6 );
+		return array_column( $this->row_color_slots( $row ), 'hex' );
 	}
 
-	private function color_variables( array $row ) {
+	/** Keep each Elementor role even when two roles share one hex. */
+	private function row_color_slots( array $row ) {
+		$labels = array(
+			'--e-global-color-primary'   => 'Primary',
+			'--e-global-color-secondary' => 'Secondary',
+			'--e-global-color-text'      => 'Text',
+			'--e-global-color-accent'    => 'Accent',
+		);
 		$source = json_decode( (string) ( $row['color_source_raw'] ?? '' ), true );
 		$variables = is_array( $source ) && ! empty( $source['variables'] ) && is_array( $source['variables'] ) ? $source['variables'] : array();
-		if ( empty( $variables ) ) {
-			return;
+		$slots = array();
+		foreach ( $labels as $name => $label ) {
+			if ( empty( $variables[ $name ] ) ) {
+				continue;
+			}
+			$hexes = $this->sanitize_palette( array( $variables[ $name ] ) );
+			if ( $hexes ) {
+				$slots[] = array( 'hex' => $hexes[0], 'label' => $label );
+			}
 		}
-		echo '<details class="mac-tracker-color-variables"><summary>Global variables</summary><p>';
-		foreach ( $variables as $name => $value ) {
-			echo '<code>' . esc_html( $name ) . '</code>';
+		if ( $slots ) {
+			return $slots;
 		}
-		echo '</p></details>';
+		$colors = json_decode( (string) ( $row['colors_json'] ?? '' ), true );
+		foreach ( $this->sanitize_palette( is_array( $colors ) ? $colors : array() ) as $hex ) {
+			$slots[] = array( 'hex' => $hex, 'label' => '' );
+		}
+		return $slots;
 	}
 
 	private function sanitize_palette( $value ) {
@@ -1837,7 +1814,8 @@ class MAC_Tracker_Admin {
 				$colors[] = $color;
 			}
 		}
-		return array_slice( array_values( array_unique( $colors ) ), 0, 6 );
+		// Keep repeated values: primary and text may legitimately share one hex.
+		return array_slice( array_values( $colors ), 0, 6 );
 	}
 
 	private function project_label( array $row ) {
