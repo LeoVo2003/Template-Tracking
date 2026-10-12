@@ -1271,6 +1271,18 @@ class MAC_Tracker_Repository {
 		return $this->save_visual( absint( $snapshot_id ), array( 'manual_locked' => 0, 'human_locked' => 0, 'approved_by' => 0, 'approved_at' => null, 'approved_capture_revision' => 0, 'manual_tone' => '', 'manual_updated_at' => null ) );
 	}
 
+	/** Remove every visible human lock so AI can write those tones again. */
+	public function unlock_all_visual_tones() {
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
+		$now = MAC_Tracker_Time::now_utc();
+		$sql = "UPDATE {$this->visuals} v INNER JOIN {$this->projects} p ON p.id = v.project_id SET v.human_locked = 0, v.manual_locked = 0, v.approved_by = 0, v.approved_at = NULL, v.approved_capture_revision = 0, v.manual_tone = '', v.manual_updated_at = NULL, v.updated_at = %s WHERE v.human_locked = 1 AND {$visible} AND {$this->exclusion_sql('p')}";
+		$updated = $this->wpdb->query( $this->wpdb->prepare( $sql, $now ) );
+		if ( false === $updated ) {
+			return new WP_Error( 'mac_tracker_visual_unlock_all_failed', $this->wpdb->last_error ?: 'Unable to unlock approved tones.' );
+		}
+		return (int) $updated;
+	}
+
 	/** A visual-model prompt change can safely reuse the stored screenshots. */
 	public function requeue_visual_tones() {
 		return count( $this->requeue_visual_tones_with_ids() );

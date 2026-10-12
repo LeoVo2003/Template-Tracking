@@ -117,6 +117,44 @@
     }
     function startPolling() { if (!timer) timer = setTimeout(poll, 3500); }
 
+    function runVisualAction(action, ids, button) {
+      busy = true;
+      var original = button?.textContent || '';
+      if (button) { button.disabled = true; button.textContent = 'Working…'; }
+      var body = new URLSearchParams({ action: 'mac_tracker_visual_action', nonce: macTrackerVisual.actionNonce, visual_action: action });
+      ids.forEach(function (id) { body.append('snapshot_ids[]', id); });
+      form.querySelectorAll('select[name^="manual_tone"]').forEach(function (select) { if (select.value) body.append(select.name, select.value); });
+      fetch(macTrackerVisual.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body })
+        .then(function (response) { return response.json(); })
+        .then(function (payload) {
+          if (!payload.success) throw new Error(payload.data?.message || 'Visual action failed.');
+          ajaxNotice(form, payload.data.message || 'Action queued.', false, 'data-visual-ajax-notice');
+          document.dispatchEvent(new CustomEvent('mac:invalidatefragments'));
+          if (/^approve_(?:selected|one_)/.test(action) || /^save_tone_\d+$/.test(action)) {
+            var approved = Math.min(ids.length, Number(payload.data?.changed || ids.length));
+            removeApprovedCards(ids);
+            adjustTabCount('review', -approved);
+            adjustTabCount('locked', approved);
+            return;
+          }
+          if ('unlock_all' === action || /^unlock_tone_\d+$/.test(action)) {
+            var unlocked = Number(payload.data?.changed || ids.length);
+            if ('unlock_all' === action) {
+              cards.forEach(function (card) { card.remove(); });
+              cards = [];
+            } else {
+              removeApprovedCards(ids);
+            }
+            adjustTabCount('locked', -unlocked);
+            adjustTabCount('review', unlocked);
+            return;
+          }
+          return fetchStatuses(ids).then(startPolling);
+        })
+        .catch(function (error) { ajaxNotice(form, error.message || 'Visual action failed.', true, 'data-visual-ajax-notice'); })
+        .finally(function () { busy = false; if (button) { button.disabled = false; button.textContent = original; } });
+    }
+
     form.addEventListener('submit', function (event) {
       var button = event.submitter;
       var action = button?.value || '';
@@ -131,30 +169,16 @@
         ids = selectedIds();
       }
       if (bulk.includes(action) && !ids.length) { window.alert('Không có card nào trên trang này để chạy.'); return; }
-
-      busy = true;
-      var original = button?.textContent || '';
-      if (button) { button.disabled = true; button.textContent = 'Working…'; }
-      var body = new URLSearchParams({ action: 'mac_tracker_visual_action', nonce: macTrackerVisual.actionNonce, visual_action: action });
-      ids.forEach(function (id) { body.append('snapshot_ids[]', id); });
-      form.querySelectorAll('select[name^="manual_tone"]').forEach(function (select) { if (select.value) body.append(select.name, select.value); });
-      fetch(macTrackerVisual.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body })
-        .then(function (response) { return response.json(); })
-        .then(function (payload) {
-          if (!payload.success) throw new Error(payload.data?.message || 'Visual action failed.');
-          ajaxNotice(form, payload.data.message || 'Action queued.', false, 'data-visual-ajax-notice');
-          document.dispatchEvent(new CustomEvent('mac:invalidatefragments'));
-          if (/^approve_(?:selected|one_)/.test(action) || /^save_tone_\d+$/.test(action)) {
-            var changed = Math.min(ids.length, Number(payload.data?.changed || ids.length));
-            removeApprovedCards(ids);
-            adjustTabCount('review', -changed);
-            adjustTabCount('locked', changed);
-            return;
-          }
-          return fetchStatuses(ids).then(startPolling);
-        })
-        .catch(function (error) { ajaxNotice(form, error.message || 'Visual action failed.', true, 'data-visual-ajax-notice'); })
-        .finally(function () { busy = false; if (button) { button.disabled = false; button.textContent = original; } });
+      function start() { runVisualAction(action, ids, button); }
+      if ('unlock_all' === action) {
+        var locked = parseInt(button.dataset.locked || '0', 10);
+        var confirmed = window.macTrackerDialog
+          ? window.macTrackerDialog({ icon: 'unlock', title: 'Unlock AI all?', message: 'This removes the lock from ' + locked + ' approved tone' + (1 === locked ? '' : 's') + '. The next analysis can overwrite them.', confirm: 'Unlock AI all', cancel: 'Cancel' })
+          : Promise.resolve(window.confirm('Unlock all approved tones so AI can overwrite them?'));
+        confirmed.then(function (ok) { if (ok) start(); });
+        return;
+      }
+      start();
     });
 
     cards.filter(function (card) { return card.querySelector('[data-visual-active]'); }).forEach(function (card) { card.dataset.visualPoll = '1'; });
