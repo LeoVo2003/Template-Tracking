@@ -1192,6 +1192,7 @@ class MAC_Tracker_Repository {
 			return new WP_Error( 'PROJECT_EXCLUDED', 'This project is excluded from Visual Tone and Color Review.', array( 'status' => 409 ) );
 		}
 		$allowed = $this->visual_tones();
+		$tone = $this->canonicalize_visual_tone_order( sanitize_text_field( (string) $tone ) );
 		$tone = in_array( $tone, $allowed, true ) ? $tone : 'Cần duyệt';
 		$numeric_confidence = is_numeric( $confidence ) ? max( 0, min( 1, (float) $confidence ) ) : ( isset( $metadata['ai_confidence'] ) ? max( 0, min( 1, (float) $metadata['ai_confidence'] ) ) : 0 );
 		if ( $numeric_confidence >= 0.85 ) {
@@ -1449,6 +1450,8 @@ class MAC_Tracker_Repository {
 	public function visual_tone_catalog_seed() {
 		$cores = array( 'Đỏ', 'Cam', 'Vàng', 'Xanh lá', 'Xanh dương', 'Tím', 'Hồng', 'Nâu', 'Be', 'Xám', 'Trắng', 'Đen' );
 		$suffixes = array( '', 'trắng', 'đen', 'be', 'đỏ', 'xanh lá', 'xanh dương' );
+		$chromatic = array( 'đỏ', 'cam', 'vàng', 'xanh lá', 'xanh dương', 'tím', 'hồng', 'nâu' );
+		$canvas = array( 'be', 'kem', 'xám', 'trắng', 'đen' );
 		$names = array();
 		foreach ( $cores as $core ) {
 			$names[] = $core;
@@ -1457,19 +1460,72 @@ class MAC_Tracker_Repository {
 				if ( '' === $suffix || $suffix === $core_l ) {
 					continue;
 				}
+				if ( in_array( $core_l, $canvas, true ) && in_array( $suffix, $chromatic, true ) ) {
+					continue;
+				}
 				$names[] = $core . ' ' . $suffix;
 			}
 		}
 		return $names;
 	}
 
+	public function canonicalize_visual_tone_order( $tone ) {
+		$parts = $this->visual_tone_tokens( $tone );
+		if ( count( $parts ) < 2 ) {
+			return $this->title_visual_tone( $tone );
+		}
+		$chromatic = array( 'đỏ', 'cam', 'vàng', 'xanh lá', 'xanh dương', 'tím', 'hồng', 'nâu' );
+		$canvas = array( 'be', 'kem', 'xám', 'trắng', 'đen' );
+		if ( in_array( $parts[0], $canvas, true ) && in_array( $parts[1], $chromatic, true ) ) {
+			$flipped = $parts;
+			$flipped[0] = $parts[1];
+			$flipped[1] = $parts[0];
+			return $this->title_visual_tone( implode( ' ', $flipped ) );
+		}
+		return $this->title_visual_tone( $tone );
+	}
+
+	private function visual_tone_tokens( $tone ) {
+		$text = trim( preg_replace( '/\s+/u', ' ', (string) $tone ) );
+		$text = function_exists( 'mb_strtolower' ) ? mb_strtolower( $text, 'UTF-8' ) : strtolower( $text );
+		$parts = array();
+		$rest = $text;
+		while ( '' !== $rest ) {
+			if ( 0 === strpos( $rest, 'xanh lá' ) ) {
+				$parts[] = 'xanh lá';
+				$rest = trim( substr( $rest, strlen( 'xanh lá' ) ) );
+				continue;
+			}
+			if ( 0 === strpos( $rest, 'xanh dương' ) ) {
+				$parts[] = 'xanh dương';
+				$rest = trim( substr( $rest, strlen( 'xanh dương' ) ) );
+				continue;
+			}
+			$bits = preg_split( '/\s+/u', $rest, 2 );
+			$parts[] = $bits[0];
+			$rest = isset( $bits[1] ) ? trim( $bits[1] ) : '';
+		}
+		return array_values( array_filter( $parts ) );
+	}
+
+	private function title_visual_tone( $tone ) {
+		$text = trim( preg_replace( '/\s+/u', ' ', (string) $tone ) );
+		if ( '' === $text ) {
+			return '';
+		}
+		if ( function_exists( 'mb_strtoupper' ) && function_exists( 'mb_substr' ) ) {
+			return mb_strtoupper( mb_substr( $text, 0, 1, 'UTF-8' ), 'UTF-8' ) . mb_substr( $text, 1, null, 'UTF-8' );
+		}
+		return strtoupper( $text[0] ) . substr( $text, 1 );
+	}
+
 	public function visual_naming_catalog() {
-		$extras = array_values( array_unique( array_filter( array_map( 'sanitize_text_field', (array) get_option( 'mac_tracker_tone_catalog_extra', array() ) ) ) ) );
+		$extras = array_values( array_unique( array_filter( array_map( array( $this, 'canonicalize_visual_tone_order' ), array_map( 'sanitize_text_field', (array) get_option( 'mac_tracker_tone_catalog_extra', array() ) ) ) ) ) );
 		return array_values( array_unique( array_merge( $this->visual_tone_catalog_seed(), $extras ) ) );
 	}
 
 	public function ensure_visual_tone( $tone ) {
-		$tone = sanitize_text_field( (string) $tone );
+		$tone = $this->canonicalize_visual_tone_order( sanitize_text_field( (string) $tone ) );
 		if ( '' === $tone || 'Cần duyệt' === $tone ) {
 			return $tone;
 		}

@@ -1,6 +1,8 @@
 /** Seed catalog: child-level color + a short color suffix. Not light/dark, not poetic. */
 export const CORE_COLORS = ['đỏ', 'cam', 'vàng', 'xanh lá', 'xanh dương', 'tím', 'hồng', 'nâu', 'be', 'xám', 'trắng', 'đen'];
 export const SUFFIXES = ['', 'trắng', 'đen', 'be', 'đỏ', 'xanh lá', 'xanh dương'];
+export const CHROMATIC_COLORS = ['đỏ', 'cam', 'vàng', 'xanh lá', 'xanh dương', 'tím', 'hồng', 'nâu'];
+export const CANVAS_COLORS = ['be', 'kem', 'xám', 'trắng', 'đen'];
 export const REVIEW_TONE = 'Cần duyệt';
 
 export function titleTone(value) {
@@ -9,17 +11,42 @@ export function titleTone(value) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+export function toneTokens(value) {
+  let rest = String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const parts = [];
+  while (rest) {
+    if (rest.startsWith('xanh lá')) { parts.push('xanh lá'); rest = rest.slice(7).trim(); continue; }
+    if (rest.startsWith('xanh dương')) { parts.push('xanh dương'); rest = rest.slice(10).trim(); continue; }
+    const [head, ...tail] = rest.split(' ');
+    parts.push(head);
+    rest = tail.join(' ').trim();
+  }
+  return parts.filter(Boolean);
+}
+
+/** Brand/accent first, canvas second. Đen vàng → Vàng đen. */
+export function canonicalizeToneOrder(value) {
+  const parts = toneTokens(value);
+  if (parts.length < 2) return titleTone(value);
+  if (CANVAS_COLORS.includes(parts[0]) && CHROMATIC_COLORS.includes(parts[1])) {
+    const flipped = [parts[1], parts[0], ...parts.slice(2)];
+    return titleTone(flipped.join(' '));
+  }
+  return titleTone(value);
+}
+
 export function buildToneCatalog(extra = []) {
   const names = new Set();
   for (const core of CORE_COLORS) {
     names.add(titleTone(core));
     for (const suffix of SUFFIXES) {
       if (!suffix || suffix === core) continue;
+      if (CANVAS_COLORS.includes(core) && CHROMATIC_COLORS.includes(suffix)) continue;
       names.add(titleTone(`${core} ${suffix}`));
     }
   }
   for (const item of extra) {
-    const name = titleTone(item);
+    const name = canonicalizeToneOrder(item);
     if (name && REVIEW_TONE !== name) names.add(name);
   }
   return [...names];
