@@ -1471,8 +1471,8 @@ class MAC_Tracker_Repository {
 		}
 		$names[] = 'Nude';
 		// Curated names the taxonomy uses but the core×suffix generator cannot
-		// produce (bare "xanh" brand with an accompanying color). Brand leads.
-		foreach ( array( 'Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem' ) as $extra_tone ) {
+		// produce (bare "xanh" as brand or companion). Brand leads.
+		foreach ( array( 'Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem', 'Vàng xanh' ) as $extra_tone ) {
 			$names[] = $extra_tone;
 		}
 		return $names;

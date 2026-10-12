@@ -32,10 +32,10 @@ const KNOWN_COLORS = new Set([...CORE_COLORS, ...SUFFIXES.filter(Boolean), ...WA
 
 /**
  * Curated names the user's taxonomy uses but the core×suffix generator cannot
- * produce (bare "xanh" brand with an accompanying color, e.g. gold accent).
+ * produce (bare "xanh" as brand or companion, e.g. gold accent).
  * Kept out of the ink/canvas-led exclusions: the brand always leads.
  */
-export const CURATED_EXTRA_TONES = ['Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem'];
+export const CURATED_EXTRA_TONES = ['Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem', 'Vàng xanh'];
 
 /**
  * Normalize a free-form tone name: aliases, dedupe, brand-first order.
