@@ -25,6 +25,33 @@
     else anchor.parentNode.insertBefore(notice, anchor);
   }
 
+  // Keep the AI Analysis tab badges and overview stat cards in sync with the
+  // server after every visual action and every status poll, so the numbers move
+  // in real time without a page reload.
+  function syncVisualCounts(stats, counts) {
+    stats = stats || {};
+    counts = counts || {};
+    var tabs = { processing: counts.processing, review: counts.review, locked: counts.locked };
+    Object.keys(tabs).forEach(function (section) {
+      var value = tabs[section];
+      if (value === undefined || value === null || '' === value) return;
+      var tab = document.querySelector('[data-mac-fragment-tabs] [data-mac-fragment-target="ai-panel"][data-mac-fragment-section="' + section + '"]');
+      var badge = tab && tab.querySelector('span');
+      if (badge) badge.textContent = String(value);
+    });
+    var cards = { Captured: stats.captured, Review: counts.review, Locked: counts.locked };
+    document.querySelectorAll('.mac-tracker-stat-card').forEach(function (card) {
+      var inner = card.querySelector(':scope > div');
+      var value = inner && inner.querySelector('strong');
+      var label = inner && inner.querySelector('span');
+      var key = label && label.textContent.trim();
+      if (!value || !Object.prototype.hasOwnProperty.call(cards, key)) return;
+      var next = cards[key];
+      if (next === undefined || next === null || '' === next) return;
+      value.textContent = String(next);
+    });
+  }
+
   function bindVisualActions(scope) {
     var form = (scope || document).querySelector('.mac-tracker-visual-work');
     if (!form || 'undefined' === typeof macTrackerVisual) return;
@@ -40,12 +67,6 @@
     }
     function boxes() { return cards.map(function (card) { return card.querySelector('[data-visual-select]'); }).filter(Boolean); }
     function selectedIds() { return boxes().filter(function (box) { return box.checked; }).map(function (box) { return box.value; }); }
-    function adjustTabCount(section, amount) {
-      var tab = document.querySelector('[data-mac-fragment-tabs] [data-mac-fragment-target="ai-panel"][data-mac-fragment-section="' + section + '"]');
-      var count = tab?.querySelector('span');
-      if (!count) return;
-      count.textContent = String(Math.max(0, Number(count.textContent.replace(/[^0-9]/g, '')) + amount));
-    }
     function removeApprovedCards(ids) {
       ids.forEach(function (id) { cardFor(id)?.remove(); });
       cards = cards.filter(function (card) { return card.isConnected; });
@@ -118,7 +139,13 @@
       ids.forEach(function (id) { body.append('snapshot_ids[]', id); });
       return fetch(macTrackerVisual.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body })
         .then(function (response) { return response.json(); })
-        .then(function (payload) { if (payload.success) update(payload.data.statuses || []); return payload; });
+        .then(function (payload) {
+          if (payload.success) {
+            update(payload.data.statuses || []);
+            syncVisualCounts(payload.data.stats, payload.data.counts);
+          }
+          return payload;
+        });
     }
     function poll() {
       var ids = cards.filter(function (card) { return '1' === card.dataset.visualPoll; }).map(function (card) { return card.dataset.visualCard; });
@@ -140,23 +167,18 @@
           if (!payload.success) throw new Error(payload.data?.message || 'Visual action failed.');
           ajaxNotice(form, payload.data.message || 'Action queued.', false, 'data-visual-ajax-notice');
           document.dispatchEvent(new CustomEvent('mac:invalidatefragments'));
+          syncVisualCounts(payload.data.stats, payload.data.counts);
           if (/^approve_(?:selected|one_)/.test(action) || /^save_tone_\d+$/.test(action)) {
-            var approved = Math.min(ids.length, Number(payload.data?.changed || ids.length));
             removeApprovedCards(ids);
-            adjustTabCount('review', -approved);
-            adjustTabCount('locked', approved);
             return;
           }
           if ('unlock_all' === action || /^unlock_tone_\d+$/.test(action)) {
-            var unlocked = Number(payload.data?.changed || ids.length);
             if ('unlock_all' === action) {
               cards.forEach(function (card) { card.remove(); });
               cards = [];
             } else {
               removeApprovedCards(ids);
             }
-            adjustTabCount('locked', -unlocked);
-            adjustTabCount('review', unlocked);
             return;
           }
           return fetchStatuses(ids).then(startPolling);

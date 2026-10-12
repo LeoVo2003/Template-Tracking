@@ -30,7 +30,7 @@ if (read.tone || read.tone_group) throw new Error('AI 1 must not assign a catalo
 if ('nâu ấm studio' !== read.descriptor) throw new Error('AI 1 free name was lost');
 
 const picked = validateNameToneResult({ status: 'pick', tone: 'nâu be', proposed_tone: '', confidence: 0.91, reason: 'Nền be, accent nâu.' }, 'test', 'fixture', catalog);
-if ('Nâu' !== picked.tone || 'pick' !== picked.status) throw new Error('warm-neutral pairs must collapse to one color');
+if ('Nâu be' !== picked.tone || 'pick' !== picked.status) throw new Error('two-color warm names must keep both words');
 
 const invented = validateNameToneResult({ status: 'pick', tone: 'nâu khói plush', proposed_tone: '', confidence: 0.99, reason: 'ép gần nhất' }, 'test', 'fixture', catalog);
 if ('Nâu' !== invented.tone || 'pick' !== invented.status || 'Nâu be' === invented.tone) throw new Error('poetic words must be stripped without snapping to another pair');
@@ -39,8 +39,8 @@ const proposed = validateNameToneResult({ status: 'propose', tone: '', proposed_
 if ('Vàng đỏ' !== proposed.tone || 'pick' !== proposed.status) throw new Error('a catalog name sent as propose should still pick');
 
 const fashion = validateNameToneResult({ status: 'propose', tone: '', proposed_tone: 'nâu taupe kem', confidence: 0.9, reason: 'không có tên trong catalog' }, 'test', 'fixture', catalog);
-if ('Nude' !== fashion.tone || 'pick' !== fashion.status) throw new Error('nâu taupe kem must collapse to Nude');
-if ('Nude' !== simplifyToneName('nude kem') || 'Nâu' !== simplifyToneName('nâu kem')) throw new Error('plain nude/nâu pages must stay one word');
+if ('Nâu kem' !== fashion.tone || 'pick' !== fashion.status) throw new Error('nâu taupe kem must normalize to Nâu kem');
+if ('Nude' !== simplifyToneName('nude kem') || 'Nâu kem' !== simplifyToneName('nâu kem')) throw new Error('nude pairs collapse but nâu kem keeps both words');
 
 const flipped = validateNameToneResult({ status: 'pick', tone: 'đen vàng', proposed_tone: '', confidence: 0.9, reason: 'nền đen accent vàng' }, 'test', 'fixture', catalog);
 if ('Vàng đen' !== flipped.tone || 'pick' !== flipped.status) throw new Error('AI 2 must flip canvas-first names to brand-first');

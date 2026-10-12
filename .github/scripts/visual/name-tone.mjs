@@ -6,11 +6,13 @@ export const NAME_TONE_VERSION = 'tone-name-ai2-v5';
 export function nameTonePrompt(visionRead, catalog = TONE_CATALOG) {
   return [
     'Bạn là người đặt tên tone web từ bản đọc designer. Không nhìn ảnh. Không đếm pixel.',
-    'Một màu là đủ khi cả trang cùng một giọng. Trang nude/kem/be suông = Nude hoặc Be. Nâu ấm suông = Nâu.',
+    'Trang chỉ 1 giọng màu (suông) → 1 từ: Nâu / Be / Nude (nude/kem/be suông = Nude hoặc Be; nâu ấm suông = Nâu). Trang có 2 giọng rõ rệt (brand + nền/accent khác hẳn) → BẮT BUỘC 2 từ cụ thể, ví dụ Nâu kem, Nâu trắng, Be kem — không được gộp thành 1 từ.',
+    'Phân biệt Be và Nâu: trang kem/be sáng suông, KHÔNG có mảng nâu đất hay nâu socola rõ rệt → Be (hoặc Be kem), TUYỆT ĐỐI không gọi Nâu. Chỉ gọi Nâu khi có màu nâu thật (nâu đất, nâu socola, từ #8C5A3C trở đậm) làm brand hoặc mảng nền lớn.',
+    'Phân biệt Đỏ và Hồng: raspberry, hồng đậm, terracotta, hồng đất, dusty rose, hồng phấn, hồng nude, mauve → HỒNG, không phải Đỏ. Chỉ gọi Đỏ khi là đỏ tươi/thuần rực rỡ (pure red).',
     'Chữ, nút, menu đen trên nền sáng là MỰC, không phải brand. Không gọi Đen be, Đen kem, Đen trắng.',
     'Chỉ dùng 2 từ khi brand màu sắc và nền khác hẳn: Vàng đen, Hồng trắng, Đỏ đen.',
     'Không dùng từ kiểu khói, plush, mist, champagne, sage, spa.',
-    'Ánh xạ màu trong bản đọc → họ catalog: teal, xanh teal, lục lam, aqua, ngọc lam, cyan, xanh cổ vịt → xanh; gold, vàng gold, vàng kim, vàng đồng, đồng thau → vàng; hồng pastel, hồng phấn, hồng đất → hồng; kem, ivory, off-white, trắng ngà → kem/trắng (nền); nâu socola, nâu đất → nâu; nude, taupe → nâu (gọn thành Nâu/Nude).',
+    'Ánh xạ màu trong bản đọc → họ catalog: teal, xanh teal, lục lam, aqua, ngọc lam, cyan, xanh cổ vịt → xanh; gold, vàng gold, vàng kim, vàng đồng, đồng thau → vàng; hồng pastel, hồng phấn, hồng đất, hồng nude, terracotta hồng, dusty rose, mauve, raspberry → hồng; kem, ivory, off-white, trắng ngà → kem/trắng (nền); nâu socola, nâu đất → nâu; nude, taupe suông → Nude.',
     'Tên 2 từ = [màu brand] + [màu đi kèm]. Màu đi kèm là nền HOẶC accent mạnh lặp lại khắp trang (nút, tiêu đề, logo, viền). Ví dụ chuẩn phải thuộc: nền đen + brand vàng gold → Vàng đen; brand xanh teal + accent vàng gold → Xanh vàng; nền trắng + brand hồng → Hồng trắng; nền kem + brand nâu → Nâu kem.',
     'Catalog đã có sẵn Xanh vàng, Xanh trắng, Vàng đen — ưu tiên pick đúng tên này khi khớp định nghĩa, đừng propose tên mới.',
     'Ưu tiên pick một tên có trong catalog. Chỉ propose khi catalog thật sự thiếu màu đó.',

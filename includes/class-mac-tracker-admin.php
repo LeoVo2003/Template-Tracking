@@ -955,7 +955,7 @@ class MAC_Tracker_Admin {
 		$manual = isset( $_POST['manual_tone'] ) && is_array( $_POST['manual_tone'] ) ? wp_unslash( $_POST['manual_tone'] ) : array();
 		$processed = $this->process_visual_action( $action, $ids, $manual );
 		if ( is_wp_error( $processed['result'] ) || (int) $processed['result'] <= 0 || ! empty( $processed['dispatch_error'] ) ) { wp_send_json_error( array( 'message' => $processed['message'] ) ); }
-		wp_send_json_success( array( 'message' => $processed['message'], 'ids' => $ids, 'changed' => absint( $processed['result'] ), 'stats' => $this->repository->visual_stats() ) );
+		wp_send_json_success( array( 'message' => $processed['message'], 'ids' => $ids, 'changed' => absint( $processed['result'] ), 'stats' => $this->repository->visual_stats(), 'counts' => $this->repository->visual_review_counts() ) );
 	}
 
 	public function handle_visual_status_ajax() {
@@ -969,7 +969,7 @@ class MAC_Tracker_Admin {
 			$manual = $this->visual_is_manual( $row );
 			$statuses[] = array( 'id' => (int) $row['id'], 'pipeline_status' => (string) ( $row['pipeline_status'] ?? 'idle' ), 'capture_status' => (string) ( $row['capture_status'] ?? '' ), 'tone_status' => (string) ( $row['tone_status'] ?? '' ), 'tone' => (string) ( $row['tone'] ?? '' ), 'tone_group' => (string) ( $row['tone_group'] ?? '' ), 'precise_tone' => (string) ( $row['precise_tone'] ?? '' ), 'tone_reason' => $manual ? '' : (string) ( $row['tone_reason'] ?? '' ), 'manual' => $manual, 'manual_locked' => ! empty( $row['manual_locked'] ), 'human_locked' => ! empty( $row['human_locked'] ), 'provider' => (string) ( $row['ai_provider'] ?? '' ), 'model' => (string) ( $row['ai_model'] ?? '' ), 'last_error_code' => (string) ( $row['last_error_code'] ?? '' ), 'last_error_message' => (string) ( $row['last_error_message'] ?? '' ), 'next_retry_at' => (string) ( $row['next_retry_at'] ?? '' ), 'screenshot_url' => esc_url_raw( $row['screenshot_url'] ?? '' ), 'diagnostic_screenshot_url' => esc_url_raw( $row['diagnostic_screenshot_url'] ?? '' ), 'runner_type' => sanitize_key( $row['runner_type'] ?? '' ), 'claimed_at' => (string) ( $row['claimed_at'] ?? '' ), 'lease_until' => (string) ( $row['lease_until'] ?? '' ) );
 		}
-		wp_send_json_success( array( 'statuses' => $statuses, 'stats' => $this->repository->visual_stats() ) );
+		wp_send_json_success( array( 'statuses' => $statuses, 'stats' => $this->repository->visual_stats(), 'counts' => $this->repository->visual_review_counts() ) );
 	}
 
 	/** Async monitor fetch. Rendering Visual Tone never waits for GitHub. */

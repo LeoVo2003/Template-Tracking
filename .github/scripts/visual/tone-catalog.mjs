@@ -37,15 +37,20 @@ const KNOWN_COLORS = new Set([...CORE_COLORS, ...SUFFIXES.filter(Boolean), ...WA
  */
 export const CURATED_EXTRA_TONES = ['Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem'];
 
-/** One warm-neutral word is enough. Nude nếu suông nude/taupe; không thì Nâu. */
+/**
+ * Normalize a free-form tone name: aliases, dedupe, brand-first order.
+ * Warm neutrals collapse to one word only when there is no chromatic voice
+ * (be/nude/kem/taupe suông → Nude/Be). A chromatic warm like nâu paired with
+ * a canvas neutral is two real voices → keep both words (Nâu kem, Nâu trắng).
+ */
 export function simplifyToneName(value) {
   const parts = toneTokens(value).map((part) => COLOR_ALIASES[part] || part).filter((part, index, list) => {
     if (POETIC_WORDS.includes(part) || !KNOWN_COLORS.has(part)) return false;
     return part !== list[index - 1];
   });
-  if (parts.length && parts.every((part) => WARM_NEUTRALS.includes(part))) {
+  const hasChromatic = parts.some((part) => CHROMATIC_COLORS.includes(part));
+  if (!hasChromatic && parts.length && parts.every((part) => WARM_NEUTRALS.includes(part))) {
     if (parts.includes('nude') || parts.includes('taupe')) return 'Nude';
-    if (parts.includes('nâu')) return 'Nâu';
     if (parts.includes('be')) return 'Be';
     return titleTone(parts[0]);
   }

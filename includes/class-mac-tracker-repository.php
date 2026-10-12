@@ -1481,7 +1481,6 @@ class MAC_Tracker_Repository {
 	public function simplify_visual_tone_name( $tone ) {
 		$aliases = array( 'ivory' => 'kem', 'cream' => 'kem', 'champagne' => 'kem' );
 		$poetic = array( 'khói', 'khoi', 'plush', 'mist', 'sage', 'spa', 'sữa', 'sua' );
-		$warm = array( 'nâu', 'be', 'kem', 'nude', 'taupe' );
 		$known = array( 'đỏ', 'cam', 'vàng', 'xanh', 'xanh lá', 'xanh dương', 'tím', 'hồng', 'nâu', 'be', 'kem', 'xám', 'trắng', 'đen', 'nude', 'taupe' );
 		$canvas = array( 'be', 'kem', 'xám', 'trắng', 'đen' );
 		$clean = array();
@@ -1492,12 +1491,11 @@ class MAC_Tracker_Repository {
 			}
 			$clean[] = $part;
 		}
-		if ( $clean && ! array_diff( $clean, $warm ) ) {
+		$chromatic = array( 'đỏ', 'cam', 'vàng', 'xanh lá', 'xanh dương', 'tím', 'hồng', 'nâu' );
+		$has_chromatic = (bool) array_intersect( $clean, $chromatic );
+		if ( ! $has_chromatic && $clean && ! array_diff( $clean, array( 'be', 'kem', 'nude', 'taupe' ) ) ) {
 			if ( in_array( 'nude', $clean, true ) || in_array( 'taupe', $clean, true ) ) {
 				return 'Nude';
-			}
-			if ( in_array( 'nâu', $clean, true ) ) {
-				return 'Nâu';
 			}
 			if ( in_array( 'be', $clean, true ) ) {
 				return 'Be';
