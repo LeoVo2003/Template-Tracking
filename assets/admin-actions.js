@@ -2,15 +2,25 @@
   'use strict';
 
   function ajaxNotice(anchor, message, error, marker) {
-    // Colour review keeps its feedback inside the card / intro panel it belongs to.
-    var host = anchor.closest('[data-color-card]') || anchor.closest('.mac-tracker-color-intro');
-    var old = (host || document).querySelector('[' + marker + ']');
+    var colorHost = anchor.closest('[data-color-card]') || anchor.closest('.mac-tracker-color-intro');
+    var autoHost = !colorHost ? anchor.closest('.mac-tracker-visual-auto') : null;
+    var workHost = !colorHost && !autoHost ? anchor.closest('.mac-tracker-visual-work') : null;
+    var host = colorHost || autoHost || workHost;
+    var old = document.querySelector('[' + marker + ']');
     if (old) old.remove();
     var notice = document.createElement('div');
     notice.setAttribute(marker, '1');
     notice.className = 'mac-tracker-notice mac-tracker-notice--' + (error ? 'error' : 'success') + (host ? ' mac-tracker-notice--inline' : '');
     notice.setAttribute('role', 'status');
     notice.textContent = message;
+    if (autoHost) {
+      autoHost.insertAdjacentElement('afterend', notice);
+      return;
+    }
+    if (workHost) {
+      workHost.insertAdjacentElement('beforebegin', notice);
+      return;
+    }
     if (host) host.appendChild(notice);
     else anchor.parentNode.insertBefore(notice, anchor);
   }
@@ -205,7 +215,7 @@
         .then(function (payload) {
           if (!payload.success) throw new Error(payload.data?.message || 'GitHub dispatch failed.');
           ajaxNotice(runForm, payload.data.message, false, 'data-run-ajax-notice');
-          document.dispatchEvent(new CustomEvent('mac:invalidatefragments'));
+          window.setTimeout(function () { document.dispatchEvent(new CustomEvent('mac:invalidatefragments')); }, 2400);
         })
         .catch(function (error) { ajaxNotice(runForm, error.message || 'Could not start the workflow.', true, 'data-run-ajax-notice'); })
         .finally(function () { if (button) button.disabled = false; });
