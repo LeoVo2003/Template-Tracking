@@ -1,10 +1,10 @@
 import { evaluateDirectVisionConflict } from './classify.mjs';
-import { buildToneCatalog, canonicalizeToneOrder, catalogHas, REVIEW_TONE, TONE_CATALOG, titleTone } from './tone-catalog.mjs';
+import { buildToneCatalog, canonicalizeToneOrder, catalogHas, REVIEW_TONE, TONE_CATALOG, simplifyToneName, titleTone } from './tone-catalog.mjs';
 import { validateDirectVisionResult } from './direct-vision.mjs';
 import { validateNameToneResult } from './name-tone.mjs';
 
 const catalog = buildToneCatalog();
-if (!catalog.includes('Vàng be') || !catalog.includes('Hồng đen') || !catalog.includes('Xanh dương trắng') || !catalog.includes('Vàng đen')) throw new Error('seed catalog missing agreed names');
+if (!catalog.includes('Vàng be') || !catalog.includes('Hồng đen') || !catalog.includes('Xanh dương trắng') || !catalog.includes('Vàng đen') || !catalog.includes('Nâu kem')) throw new Error('seed catalog missing agreed names');
 if (catalog.includes('Đen vàng') || catalog.includes('Đen đỏ') || catalog.includes('Trắng hồng')) throw new Error('catalog must not lead with canvas when a brand color exists');
 if ('Vàng đen' !== canonicalizeToneOrder('đen vàng') || 'Hồng trắng' !== canonicalizeToneOrder('trắng hồng')) throw new Error('brand color must come before canvas');
 if (catalog.some((name) => /khói|plush/i.test(name))) throw new Error('catalog must not include poetic suffixes');
@@ -33,10 +33,14 @@ const picked = validateNameToneResult({ status: 'pick', tone: 'nâu be', propose
 if ('Nâu be' !== picked.tone || 'pick' !== picked.status) throw new Error('AI 2 pick should stay on the catalog name');
 
 const invented = validateNameToneResult({ status: 'pick', tone: 'nâu khói plush', proposed_tone: '', confidence: 0.99, reason: 'ép gần nhất' }, 'test', 'fixture', catalog);
-if (REVIEW_TONE !== invented.tone || 'Nâu be' === invented.tone) throw new Error('invalid pick must not snap to a nearby catalog name');
+if ('Nâu' !== invented.tone || 'pick' !== invented.status || 'Nâu be' === invented.tone) throw new Error('poetic words must be stripped without snapping to another pair');
 
 const proposed = validateNameToneResult({ status: 'propose', tone: '', proposed_tone: 'vàng đỏ', confidence: 0.8, reason: 'thiếu trong catalog' }, 'test', 'fixture', catalog);
-if (REVIEW_TONE !== proposed.tone || 'Vàng đỏ' !== proposed.proposed_tone) throw new Error('propose must keep Cần duyệt and the new name');
+if ('Vàng đỏ' !== proposed.tone || 'pick' !== proposed.status) throw new Error('a catalog name sent as propose should still pick');
+
+const fashion = validateNameToneResult({ status: 'propose', tone: '', proposed_tone: 'nâu taupe kem', confidence: 0.9, reason: 'không có tên trong catalog' }, 'test', 'fixture', catalog);
+if ('Nâu kem' !== fashion.tone || 'pick' !== fashion.status) throw new Error('nâu taupe kem must collapse to Nâu kem');
+if ('Nâu kem' !== simplifyToneName('nude kem') || catalog.some((name) => /taupe|nude/i.test(name))) throw new Error('nude/taupe must not stay in official names');
 
 const flipped = validateNameToneResult({ status: 'pick', tone: 'đen vàng', proposed_tone: '', confidence: 0.9, reason: 'nền đen accent vàng' }, 'test', 'fixture', catalog);
 if ('Vàng đen' !== flipped.tone || 'pick' !== flipped.status) throw new Error('AI 2 must flip canvas-first names to brand-first');

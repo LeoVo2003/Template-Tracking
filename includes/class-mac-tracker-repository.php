@@ -1192,7 +1192,7 @@ class MAC_Tracker_Repository {
 			return new WP_Error( 'PROJECT_EXCLUDED', 'This project is excluded from Visual Tone and Color Review.', array( 'status' => 409 ) );
 		}
 		$allowed = $this->visual_tones();
-		$tone = $this->canonicalize_visual_tone_order( sanitize_text_field( (string) $tone ) );
+		$tone = $this->simplify_visual_tone_name( sanitize_text_field( (string) $tone ) );
 		$tone = in_array( $tone, $allowed, true ) ? $tone : 'Cần duyệt';
 		$numeric_confidence = is_numeric( $confidence ) ? max( 0, min( 1, (float) $confidence ) ) : ( isset( $metadata['ai_confidence'] ) ? max( 0, min( 1, (float) $metadata['ai_confidence'] ) ) : 0 );
 		if ( $numeric_confidence >= 0.85 ) {
@@ -1449,7 +1449,7 @@ class MAC_Tracker_Repository {
 
 	public function visual_tone_catalog_seed() {
 		$cores = array( 'Đỏ', 'Cam', 'Vàng', 'Xanh lá', 'Xanh dương', 'Tím', 'Hồng', 'Nâu', 'Be', 'Xám', 'Trắng', 'Đen' );
-		$suffixes = array( '', 'trắng', 'đen', 'be', 'đỏ', 'xanh lá', 'xanh dương' );
+		$suffixes = array( '', 'trắng', 'đen', 'be', 'kem', 'đỏ', 'xanh lá', 'xanh dương' );
 		$chromatic = array( 'đỏ', 'cam', 'vàng', 'xanh lá', 'xanh dương', 'tím', 'hồng', 'nâu' );
 		$canvas = array( 'be', 'kem', 'xám', 'trắng', 'đen' );
 		$names = array();
@@ -1467,6 +1467,25 @@ class MAC_Tracker_Repository {
 			}
 		}
 		return $names;
+	}
+
+	public function simplify_visual_tone_name( $tone ) {
+		$aliases = array( 'taupe' => 'nâu', 'nude' => 'nâu', 'ivory' => 'kem', 'cream' => 'kem', 'champagne' => 'kem' );
+		$poetic = array( 'khói', 'khoi', 'plush', 'mist', 'sage', 'spa', 'sữa', 'sua' );
+		$canvas = array( 'be', 'kem', 'xám', 'trắng', 'đen' );
+		$clean = array();
+		foreach ( $this->visual_tone_tokens( $tone ) as $part ) {
+			$part = $aliases[ $part ] ?? $part;
+			if ( in_array( $part, $poetic, true ) || $part === end( $clean ) ) {
+				continue;
+			}
+			$clean[] = $part;
+		}
+		if ( count( $clean ) > 2 ) {
+			$last = $clean[ count( $clean ) - 1 ];
+			$clean = in_array( $last, $canvas, true ) ? array( $clean[0], $last ) : array_slice( $clean, 0, 2 );
+		}
+		return $this->canonicalize_visual_tone_order( implode( ' ', $clean ) );
 	}
 
 	public function canonicalize_visual_tone_order( $tone ) {
@@ -1520,12 +1539,12 @@ class MAC_Tracker_Repository {
 	}
 
 	public function visual_naming_catalog() {
-		$extras = array_values( array_unique( array_filter( array_map( array( $this, 'canonicalize_visual_tone_order' ), array_map( 'sanitize_text_field', (array) get_option( 'mac_tracker_tone_catalog_extra', array() ) ) ) ) ) );
+		$extras = array_values( array_unique( array_filter( array_map( array( $this, 'simplify_visual_tone_name' ), array_map( 'sanitize_text_field', (array) get_option( 'mac_tracker_tone_catalog_extra', array() ) ) ) ) ) );
 		return array_values( array_unique( array_merge( $this->visual_tone_catalog_seed(), $extras ) ) );
 	}
 
 	public function ensure_visual_tone( $tone ) {
-		$tone = $this->canonicalize_visual_tone_order( sanitize_text_field( (string) $tone ) );
+		$tone = $this->simplify_visual_tone_name( sanitize_text_field( (string) $tone ) );
 		if ( '' === $tone || 'Cần duyệt' === $tone ) {
 			return $tone;
 		}

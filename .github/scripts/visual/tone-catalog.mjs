@@ -1,8 +1,10 @@
 /** Seed catalog: child-level color + a short color suffix. Not light/dark, not poetic. */
 export const CORE_COLORS = ['đỏ', 'cam', 'vàng', 'xanh lá', 'xanh dương', 'tím', 'hồng', 'nâu', 'be', 'xám', 'trắng', 'đen'];
-export const SUFFIXES = ['', 'trắng', 'đen', 'be', 'đỏ', 'xanh lá', 'xanh dương'];
+export const SUFFIXES = ['', 'trắng', 'đen', 'be', 'kem', 'đỏ', 'xanh lá', 'xanh dương'];
 export const CHROMATIC_COLORS = ['đỏ', 'cam', 'vàng', 'xanh lá', 'xanh dương', 'tím', 'hồng', 'nâu'];
 export const CANVAS_COLORS = ['be', 'kem', 'xám', 'trắng', 'đen'];
+export const COLOR_ALIASES = { taupe: 'nâu', nude: 'nâu', ivory: 'kem', cream: 'kem', champagne: 'kem' };
+export const POETIC_WORDS = ['khói', 'khoi', 'plush', 'mist', 'sage', 'spa', 'sữa', 'sua'];
 export const REVIEW_TONE = 'Cần duyệt';
 
 export function titleTone(value) {
@@ -22,6 +24,20 @@ export function toneTokens(value) {
     rest = tail.join(' ').trim();
   }
   return parts.filter(Boolean);
+}
+
+/** Drop fashion words and keep at most brand + canvas. Nâu taupe kem → Nâu kem. */
+export function simplifyToneName(value) {
+  const parts = toneTokens(value).map((part) => COLOR_ALIASES[part] || part).filter((part, index, list) => {
+    if (POETIC_WORDS.includes(part)) return false;
+    return part !== list[index - 1];
+  });
+  if (parts.length > 2) {
+    const last = parts[parts.length - 1];
+    const kept = CANVAS_COLORS.includes(last) ? [parts[0], last] : parts.slice(0, 2);
+    return canonicalizeToneOrder(kept.join(' '));
+  }
+  return canonicalizeToneOrder(parts.join(' '));
 }
 
 /** Brand/accent first, canvas second. Đen vàng → Vàng đen. */
@@ -46,7 +62,7 @@ export function buildToneCatalog(extra = []) {
     }
   }
   for (const item of extra) {
-    const name = canonicalizeToneOrder(item);
+    const name = simplifyToneName(item);
     if (name && REVIEW_TONE !== name) names.add(name);
   }
   return [...names];
