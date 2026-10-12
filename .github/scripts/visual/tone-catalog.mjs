@@ -28,7 +28,14 @@ export function toneTokens(value) {
   return parts.filter(Boolean);
 }
 
-const KNOWN_COLORS = new Set([...CORE_COLORS, ...SUFFIXES.filter(Boolean), ...WARM_NEUTRALS, ...INK_COLORS, ...Object.keys(COLOR_ALIASES), ...Object.values(COLOR_ALIASES)]);
+const KNOWN_COLORS = new Set([...CORE_COLORS, ...SUFFIXES.filter(Boolean), ...WARM_NEUTRALS, ...INK_COLORS, ...Object.keys(COLOR_ALIASES), ...Object.values(COLOR_ALIASES), 'xanh']);
+
+/**
+ * Curated names the user's taxonomy uses but the core×suffix generator cannot
+ * produce (bare "xanh" brand with an accompanying color, e.g. gold accent).
+ * Kept out of the ink/canvas-led exclusions: the brand always leads.
+ */
+export const CURATED_EXTRA_TONES = ['Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem'];
 
 /** One warm-neutral word is enough. Nude nếu suông nude/taupe; không thì Nâu. */
 export function simplifyToneName(value) {
@@ -102,7 +109,7 @@ export function buildToneCatalog(extra = []) {
   return [...names];
 }
 
-export const TONE_CATALOG = buildToneCatalog();
+export const TONE_CATALOG = buildToneCatalog(CURATED_EXTRA_TONES);
 
 export function catalogHas(tone, catalog = TONE_CATALOG) {
   const name = titleTone(tone);

@@ -42,6 +42,9 @@ export async function collectUiSamples(page) {
     const roleFor = (element) => {
       const tag = element.tagName;
       if (socialFor(element)) return 'social';
+      // <html> background is the ultimate canvas fallback. Some themes paint
+      // the page background on <html> while <body> stays transparent.
+      if ('HTML' === tag) return 'canvas';
       if ('BODY' === tag) return 'canvas';
       if ('HEADER' === tag) return 'section';
       if ('NAV' === tag) return 'nav_link';
@@ -112,14 +115,14 @@ export async function collectUiSamples(page) {
         class_hint: String((sourceAnchor || element)?.className || '').replace(/\s+/g, ' ').slice(0, 160),
       });
     };
-    const nodes = [document.body, ...document.querySelectorAll('header,nav,main,section,article,footer,button,a,h1,h2,h3,h4,p,div,li,input,select,textarea,svg')];
+    const nodes = [document.documentElement, document.body, ...document.querySelectorAll('header,nav,main,section,article,footer,button,a,h1,h2,h3,h4,p,div,li,input,select,textarea,svg')];
     for (const element of nodes.slice(0, 7000)) {
       if (!element || excludedTags.has(element.tagName) || element.closest?.('picture,video,canvas,iframe,object,embed')) continue;
       const rect = element.getBoundingClientRect();
       const style = getComputedStyle(element);
       const role = roleFor(element);
       const localSurface = localSurfaceFor(element) || ['card', 'table', 'menu', 'gallery'].includes(role);
-      const structural = (structuralTags.has(element.tagName) || 'BODY' === element.tagName) && !localSurface;
+      const structural = (structuralTags.has(element.tagName) || 'BODY' === element.tagName || 'HTML' === element.tagName) && !localSurface;
       const opacity = Number(style.opacity || 1);
       if (style.display === 'none' || style.visibility === 'hidden' || opacity <= 0.03 || rect.width < 2 || rect.height < 2) continue;
       const left = Math.max(0, rect.left + scrollX);

@@ -95,6 +95,10 @@ export function canvasCompatible(vision, deterministic) {
   if (a && a === b) return true;
   const light = ['light_white', 'light_warm', 'light_gray'];
   if (light.includes(a) && light.includes(b)) return true;
+  // Dark is dark: brown vs charcoal vs navy vs black disagree on family but
+  // agree on canvas mode. A family-level mismatch must not be a HARD conflict.
+  const dark = ['dark', 'dark_blue', 'warm_dark'];
+  if (dark.includes(a) && dark.includes(b)) return true;
   return ('warm_accent' === a && ['light_white', 'light_warm'].includes(b)) || ('warm_accent' === b && ['light_white', 'light_warm'].includes(a));
 }
 export function brandCompatibility(vision, deterministic) {
@@ -196,7 +200,7 @@ export async function classifyTone({ previewBuffer, evidence, groqApiKey, gemini
   if (!freeOnly) throw new ProviderError('FREE_ONLY_REQUIRED', 'Visual-tone classification is locked to FREE_ONLY=true.');
   if (!['off', 'qwen', 'gemini', 'smart'].includes(aiStrategy)) aiStrategy = 'smart';
   const errors = [], directVision = 'direct_vision' === classifierMode, prompt = directVision ? directVisionPrompt() : tonePrompt(evidence), options = { previewBuffer, prompt };
-  const visionOptions = { responseSchema: DIRECT_VISION_SCHEMA, validateResult: validateDirectVisionResult, reasoningEffort: 'medium', maxCompletionTokens: 4096, responseFormat: { type: 'json_object' } };
+  const visionOptions = { responseSchema: DIRECT_VISION_SCHEMA, validateResult: validateDirectVisionResult, reasoningEffort: 'low', maxCompletionTokens: 1200, responseFormat: { type: 'json_object' } };
   const directOptions = directVision ? visionOptions : {};
   const groq = providers.groq || classifyWithGroq, cfQwen = providers.cloudflare || classifyWithCloudflareQwen, llama = providers.llama || classifyWithLlamaScout, gemini = providers.gemini || classifyWithGemini, groqText = providers.groqText || classifyWithGroqText;
   const reportStep = async (step, provider) => { try { if (onProviderStep) await onProviderStep({ step, provider }); } catch { /* Telemetry is non-critical. */ } };

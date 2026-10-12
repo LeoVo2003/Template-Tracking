@@ -64,6 +64,44 @@ function colorEntry(entry = {}) {
   };
 }
 
+const stripMarks = (value) => String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\u0111/g, 'd');
+
+/** AI 1 labels each color with a free-form Vietnamese role. Map it to intent. */
+function roleKind(role) {
+  const text = ` ${stripMarks(role)} `;
+  if (/nen chinh|nen goc|main background|primary background/.test(text)) return 'canvas-main';
+  if (/nen |nen$|background|canvas/.test(text)) return 'canvas';
+  if (/chu dao|brand|thuong hieu|accent|nhan|diem nhan|mau chu|mau nhan|primary/.test(text)) return 'brand';
+  if (/chu |chu$|text|tieu de|heading|title/.test(text)) return 'text';
+  if (/card|khoi|panel|section/.test(text)) return 'support';
+  return 'other';
+}
+
+/**
+ * The old code assumed colors[0] is the canvas and colors[1] is the brand.
+ * AI 1 returns roles in free order ("chủ đạo" first, "nền chính" third), so
+ * honor the role labels instead of the position. Text ink is never identity.
+ */
+function selectPalette(colors, accentEntry) {
+  const withKind = colors.map((entry) => ({ entry, kind: roleKind(entry && entry.role) }));
+  const firstKind = (kind) => { const hit = withKind.find((item) => item.kind === kind); return hit ? hit.entry : null; };
+  const firstKindIn = (kinds) => { const hit = withKind.find((item) => kinds.includes(item.kind)); return hit ? hit.entry : null; };
+  let canvas = firstKind('canvas-main') || firstKind('canvas') || null;
+  let brand = firstKind('brand') || null;
+  if (!canvas) canvas = firstKindIn(['support', 'other']) || colors[0] || null;
+  if (!brand) brand = (accentEntry && accentEntry.hex ? accentEntry : null) || firstKindIn(['support', 'other']) || colors[1] || colors[0] || null;
+  if (canvas && 'text' === roleKind(canvas.role)) {
+    const alt = firstKindIn(['canvas-main', 'canvas', 'brand', 'support', 'other']);
+    if (alt && alt !== canvas) canvas = alt;
+  }
+  if (brand && 'text' === roleKind(brand.role)) {
+    const alt = firstKindIn(['brand', 'support', 'other', 'canvas-main', 'canvas']);
+    if (alt && alt !== brand && alt !== canvas) brand = alt;
+  }
+  const support = withKind.map((item) => item.entry).find((entry) => entry && entry !== canvas && entry !== brand) || null;
+  return { canvas, brand, support };
+}
+
 export function validateDirectVisionResult(value, provider = 'direct_vision', model = '') {
   const fail = (message) => new ProviderError('DIRECT_VISION_INVALID_SCHEMA', message, { provider });
   if (!value || 'object' !== typeof value || Array.isArray(value)) throw fail('AI 1 returned an invalid JSON object.');
@@ -75,6 +113,7 @@ export function validateDirectVisionResult(value, provider = 'direct_vision', mo
   if (colors.length < 2) throw fail('AI 1 must return at least two design colors.');
   const accent = colorEntry(value.accent) || { name: cleanText(value.accent?.name, 40), hex: '', used_for: cleanText(value.accent?.used_for, 80) };
   if (accent) accent.used_for = cleanText(value.accent?.used_for, 80);
+  const palette = selectPalette(colors, accent);
   const contrastLevel = CONTRASTS.includes(value.contrast?.level) ? value.contrast.level : 'vừa';
   const cohesionScore = Math.max(1, Math.min(10, Number(value.cohesion?.score) || 5));
   const visionRead = {
@@ -96,11 +135,7 @@ export function validateDirectVisionResult(value, provider = 'direct_vision', mo
     temperature: visionRead.temperature,
     confidence: Number((cohesionScore / 10).toFixed(3)),
     reason: oneLiner,
-    palette: {
-      canvas: colors[0] || null,
-      brand: colors[1] || accent || null,
-      support: colors[2] || null,
-    },
+    palette,
     provider,
     model,
   };

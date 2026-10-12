@@ -1470,6 +1470,11 @@ class MAC_Tracker_Repository {
 			}
 		}
 		$names[] = 'Nude';
+		// Curated names the taxonomy uses but the core×suffix generator cannot
+		// produce (bare "xanh" brand with an accompanying color). Brand leads.
+		foreach ( array( 'Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem' ) as $extra_tone ) {
+			$names[] = $extra_tone;
+		}
 		return $names;
 	}
 
@@ -1477,7 +1482,7 @@ class MAC_Tracker_Repository {
 		$aliases = array( 'ivory' => 'kem', 'cream' => 'kem', 'champagne' => 'kem' );
 		$poetic = array( 'khói', 'khoi', 'plush', 'mist', 'sage', 'spa', 'sữa', 'sua' );
 		$warm = array( 'nâu', 'be', 'kem', 'nude', 'taupe' );
-		$known = array( 'đỏ', 'cam', 'vàng', 'xanh lá', 'xanh dương', 'tím', 'hồng', 'nâu', 'be', 'kem', 'xám', 'trắng', 'đen', 'nude', 'taupe' );
+		$known = array( 'đỏ', 'cam', 'vàng', 'xanh', 'xanh lá', 'xanh dương', 'tím', 'hồng', 'nâu', 'be', 'kem', 'xám', 'trắng', 'đen', 'nude', 'taupe' );
 		$canvas = array( 'be', 'kem', 'xám', 'trắng', 'đen' );
 		$clean = array();
 		foreach ( $this->visual_tone_tokens( $tone ) as $part ) {

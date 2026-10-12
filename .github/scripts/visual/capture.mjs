@@ -257,7 +257,7 @@ export async function captureRenderedPage(browser, requestedUrl, snapshotId, run
     await hideMediaForPreview(page);
     await page.waitForTimeout(140);
     const preview = await sharp(await page.screenshot({ fullPage: true, type: 'jpeg', quality: 64 })).resize({ width: 768, withoutEnlargement: true }).jpeg({ quality: 66 }).toBuffer();
-    const pixel = await analyzeUiColor(preview, samples);
+    const pixel = await analyzeUiColor(preview, samples, full);
     const metrics = { ...summarizeUiSamples(samples), semantic_model: pixel, metrics_version: 5, scope: 'brand_canvas_ui_only' };
     const capturedAt = new Date().toISOString();
     return {

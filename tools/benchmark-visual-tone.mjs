@@ -70,6 +70,7 @@ if (reviewed.length < baseReport.required_labels) {
           groqApiKey: process.env.GROQ_API_KEY || '', geminiApiKey: process.env.GEMINI_API_KEY || '',
           cloudflareAccount: process.env.CLOUDFLARE_ACCOUNT_ID || '', cloudflareToken: process.env.CLOUDFLARE_API_TOKEN || '',
           geminiApiKeys: [process.env.GEMINI_API_KEY_1 || process.env.GEMINI_API_KEY || '', process.env.GEMINI_API_KEY_2 || ''], freeOnly: true, autoAccept: Number(process.env.BENCHMARK_AUTO_ACCEPT || 0.85),
+          classifierMode: 'legacy',
         });
         row.first = { state: primary.state, tone: primary.result?.tone_group || primary.result?.tone || null, precise_tone: primary.result?.precise_tone || null, primary_family: primary.result?.primary_family || null, canvas_mode: primary.result?.canvas_mode || null, primary_surface: primary.result?.primary_surface || null, provider: primary.result?.provider || null, confidence: primary.result?.confidence ?? null };
         const prepared = await prepareVisionInput(first.full);

@@ -88,11 +88,36 @@ export function canvasFromFamilyCoverage(coverage = {}) {
   const normalizedBucket = normalized(bucket); return canvasFrom(normalizedBucket, normalizedBucket);
 }
 
-/** Structural DOM surfaces lead; media-heavy screenshot pixels are fallback evidence only. */
-export async function analyzeUiColor(previewBuffer, semanticSamples = []) {
-  const { default: sharp } = await import('sharp'); const image = sharp(previewBuffer).resize({ width: 256, withoutEnlargement: true }).removeAlpha(), { data, info } = await image.raw().toBuffer({ resolveWithObject: true }), pixels = stats();
+/** Raw pixel histogram of a screenshot buffer, downscaled for speed. */
+async function pixelHistogram(buffer, width = 256) {
+  const { default: sharp } = await import('sharp');
+  const image = sharp(buffer).resize({ width, withoutEnlargement: true }).removeAlpha();
+  const { data, info } = await image.raw().toBuffer({ resolveWithObject: true });
+  const pixels = stats();
   for (let index = 0; index < data.length; index += info.channels) add(pixels, { r: data[index], g: data[index + 1], b: data[index + 2] }, 1);
-  const coverageRows = normalized(pixels), structural = evidence(semanticSamples, true), canvas = canvasFrom(structural, coverageRows), palette = Object.entries(coverageRows).filter(([, entry]) => entry.coverage > 0).map(([family, entry]) => ({ family, hex: hex(entry.r / entry.weight, entry.g / entry.weight, entry.b / entry.weight), coverage: Number(entry.coverage.toFixed(4)), pixels: Math.round(entry.weight) })).sort((a, b) => b.coverage - a.coverage);
+  return normalized(pixels);
+}
+
+const strictCanvasMode = (canvas) => canvas && ('light' === canvas.mode || 'dark' === canvas.mode) ? canvas.mode : '';
+
+/** Structural DOM surfaces lead; media-heavy screenshot pixels are fallback evidence only. */
+export async function analyzeUiColor(previewBuffer, semanticSamples = [], fullBuffer = null) {
+  const coverageRows = await pixelHistogram(previewBuffer), structural = evidence(semanticSamples, true);
+  let canvas = canvasFrom(structural, coverageRows);
+  if (fullBuffer) {
+    // Rendered pixels are ground truth for light-vs-dark. When the DOM sample
+    // path disagrees with what the page actually renders (e.g. a dark gradient
+    // section read as its light fallback background-color), trust the pixels.
+    const fullRows = await pixelHistogram(fullBuffer);
+    if (Object.values(fullRows).some((entry) => entry.coverage > 0.01)) {
+      const fullCanvas = canvasFrom(fullRows, fullRows);
+      const structuralMode = strictCanvasMode(canvas), fullMode = strictCanvasMode(fullCanvas);
+      if (structuralMode && fullMode && structuralMode !== fullMode) {
+        canvas = { ...fullCanvas, pixel_override: 'full_screenshot_light_dark_disagree' };
+      }
+    }
+  }
+  const palette = Object.entries(coverageRows).filter(([, entry]) => entry.coverage > 0).map(([family, entry]) => ({ family, hex: hex(entry.r / entry.weight, entry.g / entry.weight, entry.b / entry.weight), coverage: Number(entry.coverage.toFixed(4)), pixels: Math.round(entry.weight) })).sort((a, b) => b.coverage - a.coverage);
   const neutralControlFamilies = new Set(['greige', 'gray', 'charcoal', 'beige', 'taupe']);
   const candidates = brandEvidence(semanticSamples).filter((entry) => {
     if (['white', 'ivory', 'cream', 'black', 'neutral'].includes(entry.family)) return false;
