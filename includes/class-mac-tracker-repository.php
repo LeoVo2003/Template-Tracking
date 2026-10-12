@@ -890,7 +890,7 @@ class MAC_Tracker_Repository {
 
 	private function visual_run_row( $run_id ) { return $this->wpdb->get_row( $this->wpdb->prepare( "SELECT * FROM {$this->visual_runs} WHERE github_run_id = %d", absint( $run_id ) ), ARRAY_A ); }
 	private function visual_source_action( $value ) { $value = sanitize_key( (string) $value ); return in_array( $value, array( 'analyze_selected', 'capture_selected_again', 'capture_and_analyze_selected', 'retry_failed_capture', 'retry_failed_analysis', 'analyze_all_stored', 'local_retry', 'run_batch_now', 'scheduled_auto' ), true ) ? $value : 'run_batch_now'; }
-	private function visual_run_step( $value ) { $value = sanitize_key( (string) $value ); return in_array( $value, array( 'starting', 'claiming_targets', 'capturing', 'capture_uploading', 'analysis_preparing', 'pixel_analyzing', 'qwen_analyzing', 'llama_judging', 'gemini_judging', 'resolving_tone', 'saving_result', 'waiting_provider', 'retry_wait', 'completed', 'failed', 'cancelled' ), true ) ? $value : ''; }
+	private function visual_run_step( $value ) { $value = sanitize_key( (string) $value ); return in_array( $value, array( 'starting', 'claiming_targets', 'capturing', 'capture_uploading', 'analysis_preparing', 'pixel_analyzing', 'qwen_analyzing', 'naming_tone', 'llama_judging', 'gemini_judging', 'resolving_tone', 'saving_result', 'waiting_provider', 'retry_wait', 'completed', 'failed', 'cancelled' ), true ) ? $value : ''; }
 	private function visual_run_time( $value ) { $time = strtotime( (string) $value ); return $time ? gmdate( 'Y-m-d H:i:s', $time ) : null; }
 	private function cleanup_visual_run_history() { $this->wpdb->query( "DELETE FROM {$this->visual_run_events} WHERE created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)" ); $this->wpdb->query( "DELETE FROM {$this->visual_runs} WHERE created_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 90 DAY)" ); }
 
@@ -944,7 +944,7 @@ class MAC_Tracker_Repository {
 				// retry_wait. Once its delay has elapsed, return it to the normal
 				// tone queue; no human click and no new capture are required.
 				$this->wpdb->query( "UPDATE {$this->visuals} v SET pipeline_status = 'analysis_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND tone_status = 'pending' AND screenshot_url <> '' AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')} AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
-				$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.diagnostic_screenshot_url, v.last_error_code, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.pipeline_status = 'analysis_queued' AND v.manual_locked = 0 AND v.human_locked = 0 AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()) AND v.screenshot_url <> '' AND v.capture_bundle_json <> '' AND v.diagnostic_screenshot_url = '' ORDER BY v.updated_at ASC LIMIT %d";
+				$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.diagnostic_screenshot_url, v.last_error_code, v.capture_bundle_json, v.metrics_json, v.ai_raw, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND v.pipeline_status = 'analysis_queued' AND v.manual_locked = 0 AND v.human_locked = 0 AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()) AND v.screenshot_url <> '' AND v.capture_bundle_json <> '' AND v.diagnostic_screenshot_url = '' ORDER BY v.updated_at ASC LIMIT %d";
 			} else {
 				$this->wpdb->query( "UPDATE {$this->visuals} v SET pipeline_status = 'capture_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND capture_status = 'pending' AND screenshot_url = '' AND manual_locked = 0 AND human_locked = 0 AND {$this->visual_exclusion_sql('v')} AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
 				$sql = "SELECT p.id, p.website_url, '' AS screenshot_url, v.run_id, c.source_raw AS color_source_raw FROM {$this->projects} p LEFT JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.website_url <> '' AND (v.id IS NULL OR (v.pipeline_status = 'capture_queued' AND v.human_locked = 0 AND v.manual_locked = 0 AND (v.next_retry_at IS NULL OR v.next_retry_at <= UTC_TIMESTAMP()))) ORDER BY CASE WHEN v.id IS NULL THEN 1 ELSE 0 END, v.updated_at ASC, p.task_completed_at DESC, p.id DESC LIMIT %d";
@@ -1049,7 +1049,7 @@ class MAC_Tracker_Repository {
 		try {
 			$this->reclaim_expired_visual_leases();
 			$placeholders = implode( ',', array_fill( 0, count( $target_ids ), '%d' ) );
-			$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.diagnostic_screenshot_url, v.last_error_code, v.capture_bundle_json, v.metrics_json, v.run_id, c.source_raw AS color_source_raw, v.pipeline_status FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.id IN ({$placeholders}) AND ((%s = 'tone' AND v.manual_locked = 0 AND v.human_locked = 0 AND v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '' AND v.capture_bundle_json <> '' AND v.diagnostic_screenshot_url = '') OR (%s = 'capture' AND v.pipeline_status = 'capture_queued') OR (%s = 'full' AND ((v.manual_locked = 0 AND v.human_locked = 0 AND v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '' AND v.capture_bundle_json <> '' AND v.diagnostic_screenshot_url = '') OR v.pipeline_status = 'capture_queued'))) ORDER BY FIELD(p.id, " . implode( ',', array_fill( 0, count( $target_ids ), '%d' ) ) . ')';
+			$sql = "SELECT p.id, p.website_url, v.screenshot_url, v.diagnostic_screenshot_url, v.last_error_code, v.capture_bundle_json, v.metrics_json, v.ai_raw, v.run_id, c.source_raw AS color_source_raw, v.pipeline_status FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND p.id IN ({$placeholders}) AND ((%s = 'tone' AND v.manual_locked = 0 AND v.human_locked = 0 AND v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '' AND v.capture_bundle_json <> '' AND v.diagnostic_screenshot_url = '') OR (%s = 'capture' AND v.pipeline_status = 'capture_queued') OR (%s = 'full' AND ((v.manual_locked = 0 AND v.human_locked = 0 AND v.pipeline_status = 'analysis_queued' AND v.screenshot_url <> '' AND v.capture_bundle_json <> '' AND v.diagnostic_screenshot_url = '') OR v.pipeline_status = 'capture_queued'))) ORDER BY FIELD(p.id, " . implode( ',', array_fill( 0, count( $target_ids ), '%d' ) ) . ')';
 			$args = array_merge( $target_ids, array( $stage, $stage, $stage ), $target_ids );
 			$candidates = (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $args ), ARRAY_A );
 			foreach ( array_slice( $candidates, 0, $limit ) as $item ) {
@@ -1211,6 +1211,7 @@ class MAC_Tracker_Repository {
 
 	public function save_manual_visual_tone( $snapshot_id, $tone ) {
 		$tone = sanitize_text_field( (string) $tone );
+		$tone = $this->ensure_visual_tone( $tone );
 		$allowed = array_diff( $this->visual_tones(), array( 'Cần duyệt' ) );
 		if ( ! in_array( $tone, $allowed, true ) ) {
 			return new WP_Error( 'mac_tracker_visual_manual_tone', 'Choose a valid visual tone first.' );
@@ -1433,18 +1434,64 @@ class MAC_Tracker_Repository {
 		return 1 === (int) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT (manual_locked OR human_locked) FROM {$this->visuals} WHERE project_id = %d", absint( $snapshot_id ) ) );
 	}
 
+	public function visual_tone_catalog_seed() {
+		$cores = array( 'Đỏ', 'Cam', 'Vàng', 'Xanh lá', 'Xanh dương', 'Tím', 'Hồng', 'Nâu', 'Be', 'Xám', 'Trắng', 'Đen' );
+		$suffixes = array( '', 'trắng', 'đen', 'be', 'đỏ', 'xanh lá', 'xanh dương' );
+		$names = array();
+		foreach ( $cores as $core ) {
+			$names[] = $core;
+			$core_l = function_exists( 'mb_strtolower' ) ? mb_strtolower( $core, 'UTF-8' ) : strtolower( $core );
+			foreach ( $suffixes as $suffix ) {
+				if ( '' === $suffix || $suffix === $core_l ) {
+					continue;
+				}
+				$names[] = $core . ' ' . $suffix;
+			}
+		}
+		return $names;
+	}
+
+	public function visual_naming_catalog() {
+		$extras = array_values( array_unique( array_filter( array_map( 'sanitize_text_field', (array) get_option( 'mac_tracker_tone_catalog_extra', array() ) ) ) ) );
+		return array_values( array_unique( array_merge( $this->visual_tone_catalog_seed(), $extras ) ) );
+	}
+
+	public function ensure_visual_tone( $tone ) {
+		$tone = sanitize_text_field( (string) $tone );
+		if ( '' === $tone || 'Cần duyệt' === $tone ) {
+			return $tone;
+		}
+		if ( in_array( $tone, $this->visual_tones(), true ) ) {
+			return $tone;
+		}
+		$extras = array_values( array_unique( array_filter( array_map( 'sanitize_text_field', (array) get_option( 'mac_tracker_tone_catalog_extra', array() ) ) ) ) );
+		$extras[] = $tone;
+		update_option( 'mac_tracker_tone_catalog_extra', array_values( array_unique( $extras ) ), false );
+		return $tone;
+	}
+
 	public function visual_tones() {
 		return array_keys( $this->visual_tone_palette() );
 	}
 
 	/** Canonical Projects-filter interpretation without changing stored tones. */
 	public function normalize_visual_tone_for_filter( $tone ) {
-		$parts = preg_split( '/\s+/u', trim( (string) $tone ) );
+		$tone = trim( (string) $tone );
 		$brand_map = array(
 			'Vàng' => 'yellow', 'Đỏ' => 'red', 'Hồng' => 'pink', 'Xanh' => 'blue',
+			'Xanh lá' => 'green', 'Xanh dương' => 'blue',
 			'Tím' => 'purple', 'Cam' => 'orange', 'Nâu' => 'brown', 'Đen' => 'black',
 			'Xám' => 'gray', 'Trắng' => 'white', 'Kem' => 'cream', 'Be' => 'beige',
 		);
+		if ( 0 === strpos( $tone, 'Xanh lá' ) ) {
+			$parts = preg_split( '/\s+/u', trim( substr( $tone, strlen( 'Xanh lá' ) ) ) );
+			array_unshift( $parts, 'Xanh lá' );
+		} elseif ( 0 === strpos( $tone, 'Xanh dương' ) ) {
+			$parts = preg_split( '/\s+/u', trim( substr( $tone, strlen( 'Xanh dương' ) ) ) );
+			array_unshift( $parts, 'Xanh dương' );
+		} else {
+			$parts = preg_split( '/\s+/u', $tone );
+		}
 		$surface_map = array( 'đen' => 'black', 'xám' => 'gray', 'kem' => 'cream', 'be' => 'cream', 'trắng' => 'white' );
 		$brand = $brand_map[ $parts[0] ?? '' ] ?? '';
 		if ( '' === $brand ) { return array( 'brand' => '', 'surface' => '' ); }
@@ -1458,8 +1505,8 @@ class MAC_Tracker_Repository {
 	/** Parent/child options generated from the canonical saved taxonomy only. */
 	public function visual_tone_filter_groups() {
 		$brands = array(
-			'yellow' => 'Vàng', 'red' => 'Đỏ', 'pink' => 'Hồng', 'blue' => 'Xanh',
-			'purple' => 'Tím', 'orange' => 'Cam', 'brown' => 'Nâu', 'black' => 'Đen',
+			'yellow' => 'Vàng', 'red' => 'Đỏ', 'pink' => 'Hồng', 'blue' => 'Xanh dương',
+			'green' => 'Xanh lá', 'purple' => 'Tím', 'orange' => 'Cam', 'brown' => 'Nâu', 'black' => 'Đen',
 			'gray' => 'Xám', 'white' => 'Trắng', 'cream' => 'Kem', 'beige' => 'Be',
 		);
 		$surfaces = array( 'black' => 'đen', 'gray' => 'xám', 'cream' => 'kem', 'white' => 'trắng' );
@@ -1507,6 +1554,8 @@ class MAC_Tracker_Repository {
 			'Đỏ' => array( '#C9343D', '#F7D5D7', '#FFF3F3', '#9E1F29', '#4B1015' ),
 			'Nâu' => array( '#8C5A3C', '#E6D0BF', '#F8EFE8', '#6A3D28', '#321C13' ),
 			'Xanh' => array( '#2F8F83', '#D7F0EC', '#F2FBFA', '#1D665D', '#123B37' ),
+			'Xanh lá' => array( '#3F8F4A', '#D7EFD9', '#F3FBF3', '#24632C', '#143318' ),
+			'Xanh dương' => array( '#2F6FBF', '#D6E4F7', '#F3F7FD', '#1C4A86', '#102844' ),
 			'Trắng' => array( '#FFFFFF', '#F3F3F0', '#FFFEFC', '#BDBDB5', '#343434' ),
 			'Kem' => array( '#F4D9AE', '#FFF0D4', '#FFF9EE', '#D3AA70', '#5A3E20' ),
 			'Be' => array( '#CBB39E', '#EEE1D4', '#FBF5EF', '#A38770', '#4B3A2C' ),
@@ -1514,12 +1563,16 @@ class MAC_Tracker_Repository {
 			'Tím' => array( '#8A5AA6', '#E8DDF0', '#FBF7FE', '#684080', '#33203F' ),
 			'Cam' => array( '#E47B35', '#FADCC7', '#FFF5ED', '#B8571D', '#51250E' ),
 		);
-		$tones = array( 'Vàng kem sáng', 'Vàng kem', 'Vàng be', 'Vàng nâu', 'Vàng đen', 'Vàng trắng', 'Đen vàng', 'Đen trắng', 'Đen xám', 'Hồng xanh trắng', 'Hồng trắng', 'Hồng kem', 'Hồng be', 'Hồng xám', 'Hồng nâu', 'Hồng đen', 'Đỏ trắng', 'Đỏ kem', 'Đỏ be', 'Đỏ hồng', 'Đỏ nâu', 'Đỏ đen', 'Nâu kem', 'Nâu trắng', 'Nâu be', 'Nâu vàng', 'Nâu xám', 'Nâu đen', 'Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem', 'Trắng kem', 'Trắng be', 'Trắng xám', 'Kem trắng', 'Kem be', 'Kem xám', 'Kem nâu', 'Be trắng', 'Be kem', 'Be xám', 'Be nâu', 'Xám trắng', 'Xám kem', 'Xám be', 'Xám nâu', 'Xám đen', 'Tím hồng', 'Tím trắng', 'Tím kem', 'Tím be', 'Tím xám', 'Tím đen', 'Cam trắng', 'Cam kem', 'Cam be', 'Cam nâu', 'Cam đen' );
+		$legacy = array( 'Vàng kem sáng', 'Vàng kem', 'Vàng be', 'Vàng nâu', 'Vàng đen', 'Vàng trắng', 'Đen vàng', 'Đen trắng', 'Đen xám', 'Hồng xanh trắng', 'Hồng trắng', 'Hồng kem', 'Hồng be', 'Hồng xám', 'Hồng nâu', 'Hồng đen', 'Đỏ trắng', 'Đỏ kem', 'Đỏ be', 'Đỏ hồng', 'Đỏ nâu', 'Đỏ đen', 'Nâu kem', 'Nâu trắng', 'Nâu be', 'Nâu vàng', 'Nâu xám', 'Nâu đen', 'Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem', 'Trắng kem', 'Trắng be', 'Trắng xám', 'Kem trắng', 'Kem be', 'Kem xám', 'Kem nâu', 'Be trắng', 'Be kem', 'Be xám', 'Be nâu', 'Xám trắng', 'Xám kem', 'Xám be', 'Xám nâu', 'Xám đen', 'Tím hồng', 'Tím trắng', 'Tím kem', 'Tím be', 'Tím xám', 'Tím đen', 'Cam trắng', 'Cam kem', 'Cam be', 'Cam nâu', 'Cam đen' );
+		$tones = array_values( array_unique( array_merge( $legacy, $this->visual_naming_catalog() ) ) );
 		$palette = array();
 		foreach ( $tones as $tone ) {
-			$parts = preg_split( '/\s+/', $tone );
-			$first = $families[ $parts[0] ] ?? $families['Xám'];
-			$second = $families[ $parts[1] ?? $parts[0] ] ?? $first;
+			$first_key = 0 === strpos( $tone, 'Xanh lá' ) ? 'Xanh lá' : ( 0 === strpos( $tone, 'Xanh dương' ) ? 'Xanh dương' : ( preg_split( '/\s+/', $tone )[0] ?? 'Xám' ) );
+			$rest = trim( 0 === strpos( $tone, $first_key ) ? substr( $tone, strlen( $first_key ) ) : $tone );
+			$second_lookup = array( 'trắng' => 'Trắng', 'đen' => 'Đen', 'be' => 'Be', 'đỏ' => 'Đỏ', 'xanh lá' => 'Xanh lá', 'xanh dương' => 'Xanh dương', 'vàng' => 'Vàng', 'hồng' => 'Hồng', 'nâu' => 'Nâu', 'xám' => 'Xám', 'kem' => 'Kem', 'cam' => 'Cam', 'tím' => 'Tím' );
+			$second_key = '' === $rest ? $first_key : ( $second_lookup[ $rest ] ?? $second_lookup[ preg_split( '/\s+/', $rest )[0] ] ?? $first_key );
+			$first = $families[ $first_key ] ?? $families['Xám'];
+			$second = $families[ $second_key ] ?? $first;
 			$palette[ $tone ] = array( 'tone_a' => $first[0], 'tone_b' => $second[0], 'tone_soft' => $second[2], 'tone_line' => $first[3], 'tone_ink' => $first[4] );
 		}
 		$palette['Cần duyệt'] = array( 'tone_a' => '#E8B84A', 'tone_b' => '#FFF3C4', 'tone_soft' => '#FFF9E8', 'tone_line' => '#C79021', 'tone_ink' => '#3B2A0A' );

@@ -75,6 +75,7 @@ class MAC_Tracker_Visual_Service {
 			'auto_accept_threshold' => (float) get_option( 'mac_tracker_visual_auto_accept', 0.85 ),
 			'max_capture_retries' => max( 0, min( 3, absint( get_option( 'mac_tracker_visual_max_capture_retries', 3 ) ) ) ),
 			'gemini_daily_budget_per_key' => max( 1, min( 20, absint( get_option( 'mac_tracker_visual_gemini_daily_budget', 8 ) ) ) ),
+			'tone_catalog' => $this->repository->visual_naming_catalog(),
 		) );
 	}
 

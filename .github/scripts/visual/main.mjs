@@ -3,7 +3,7 @@ import { appendFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { captureRenderedPage } from './capture.mjs';
 import { classifyTone } from './classify.mjs';
-import { directVisionEligible } from './direct-vision.mjs';
+import { DIRECT_VISION_VERSION, directVisionEligible } from './direct-vision.mjs';
 import { fullRunContinuationTargets, normalizeJobScope } from './job-scope.mjs';
 import { prepareVisionInput } from './vision-input.mjs';
 import { PageValidationError } from './validate-page.mjs';
@@ -187,7 +187,7 @@ async function downloadPreview(item, classifierMode = 'direct_vision') {
   return { bundle, preview: source, visionInput: { transformation: 'legacy_media_stripped_preview', source_bytes: source.length, input_bytes: source.length } };
 }
 
-async function processToneItems(items, aiStrategy, autoAccept, geminiDailyBudgetPerKey, classifierMode = 'direct_vision') {
+async function processToneItems(items, aiStrategy, autoAccept, geminiDailyBudgetPerKey, classifierMode = 'direct_vision', catalog) {
   if ('off' === aiStrategy) { console.log('AI strategy is OFF; no saved screenshots were submitted for analysis.'); return; }
   for (const item of items) {
     try {
@@ -200,8 +200,8 @@ async function processToneItems(items, aiStrategy, autoAccept, geminiDailyBudget
       const { bundle, preview, visionInput } = await downloadPreview(item, classifierMode);
       const evidence = bundle?.ui?.metrics || { text: 'Capture bundle has no deterministic UI metrics.' };
       await reportRunHeartbeat({ current_snapshot_id: item.id, current_step: 'qwen_analyzing', current_provider: 'qwen', message: `Qwen analyzing #${item.id}`, event_type: 'qwen_started' });
-      const outcome = await classifyTone({ previewBuffer: preview, evidence, groqApiKey, geminiApiKey, geminiApiKeys, geminiDailyBudgetPerKey, cloudflareAccount, cloudflareToken, freeOnly, autoAccept, classifierMode, aiStrategy, onProviderStep: ({ step, provider }) => reportRunHeartbeat({ current_snapshot_id: item.id, current_step: step, current_provider: provider, message: `${String(provider).replace(/_/g, ' ')} working on #${item.id}`, event_type: step }) });
-      const rawJson = JSON.stringify({ phase: 4, classifier_version: 'direct-vision-v2-conflict-judge', authority: outcome.authority || ('direct_vision' === classifierMode ? 'manual_review' : 'legacy'), classifier_mode: classifierMode, vision_input: visionInput, ...outcome, deterministic: evidence });
+      const outcome = await classifyTone({ previewBuffer: preview, evidence, groqApiKey, geminiApiKey, geminiApiKeys, geminiDailyBudgetPerKey, cloudflareAccount, cloudflareToken, freeOnly, autoAccept, classifierMode, aiStrategy, catalog, priorRaw: item.ai_raw || '', onProviderStep: ({ step, provider }) => reportRunHeartbeat({ current_snapshot_id: item.id, current_step: step, current_provider: provider, message: `${String(provider).replace(/_/g, ' ')} working on #${item.id}`, event_type: step }) });
+      const rawJson = JSON.stringify({ phase: 4, classifier_version: DIRECT_VISION_VERSION, authority: outcome.authority || ('direct_vision' === classifierMode ? 'manual_review' : 'legacy'), classifier_mode: classifierMode, vision_input: visionInput, ...outcome, deterministic: evidence });
       if ('benchmark_only' === classifierMode) {
         console.log(`Benchmark-only result #${item.id}: ${outcome.result?.tone_group || outcome.result?.tone || 'needs review'}; no database ingest.`);
         summary.processed += 1;
@@ -244,7 +244,7 @@ try {
     const jobs = await claimJobs(scope);
     const geminiDailyBudgetPerKey = Number(config.gemini_daily_budget_per_key || 8);
     const classifierMode = ['legacy', 'benchmark_only', 'direct_vision'].includes(config.classifier_mode) ? config.classifier_mode : 'direct_vision';
-    await processToneItems(jobs.filter((item) => item.stage === 'tone'), config.ai_strategy || 'smart', Number(config.auto_accept_threshold || 0.85), geminiDailyBudgetPerKey, classifierMode);
+    await processToneItems(jobs.filter((item) => item.stage === 'tone'), config.ai_strategy || 'smart', Number(config.auto_accept_threshold || 0.85), geminiDailyBudgetPerKey, classifierMode, config.tone_catalog);
     const capturedIds = await processCaptureItems(jobs.filter((item) => item.stage === 'capture'));
     // Full mode alone continues a successful capture into tone analysis. It is
     // explicitly scoped to the returned IDs, so it cannot drain another run's
@@ -254,7 +254,7 @@ try {
       const freshToneIds = fullRunContinuationTargets(scope.stage, capturedIds, promotedIds);
       if (freshToneIds.length) {
         const freshToneJobs = await claimJobs({ run_mode: 'targeted', stage: 'tone', target_ids: freshToneIds, limit: freshToneIds.length }, { continuation: true });
-        await processToneItems(freshToneJobs, config.ai_strategy || 'smart', Number(config.auto_accept_threshold || 0.85), geminiDailyBudgetPerKey, classifierMode);
+        await processToneItems(freshToneJobs, config.ai_strategy || 'smart', Number(config.auto_accept_threshold || 0.85), geminiDailyBudgetPerKey, classifierMode, config.tone_catalog);
       }
     }
   }

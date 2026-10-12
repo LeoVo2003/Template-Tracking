@@ -3,7 +3,7 @@ import { ProviderError, errorFromResponse, extractStructuredContent, validateTon
 const PROVIDER = 'groq';
 const MODEL = 'qwen/qwen3.8-27b';
 
-export async function classifyWithGroq({ apiKey, prompt, previewBuffer, fetchImpl = fetch, responseSchema = TONE_SCHEMA, validateResult = validateToneResult }) {
+export async function classifyWithGroq({ apiKey, prompt, previewBuffer, fetchImpl = fetch, responseSchema = TONE_SCHEMA, validateResult = validateToneResult, reasoningEffort = 'medium', maxCompletionTokens = 4096, responseFormat }) {
   if (!apiKey) throw new ProviderError('GROQ_UNCONFIGURED', 'Groq API key is not configured.', { provider: PROVIDER });
   let response;
   try {
@@ -12,14 +12,17 @@ export async function classifyWithGroq({ apiKey, prompt, previewBuffer, fetchImp
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: MODEL,
-        reasoning_effort: 'low',
-        temperature: 0,
-        max_completion_tokens: 260,
-        messages: [{ role: 'user', content: [
-          { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${previewBuffer.toString('base64')}` } },
-        ] }],
-        response_format: { type: 'json_schema', json_schema: { name: 'visual_tone', strict: true, schema: responseSchema } },
+        reasoning_effort: reasoningEffort,
+        temperature: 0.4,
+        max_completion_tokens: maxCompletionTokens,
+        messages: [
+          { role: 'system', content: 'Bạn là designer ngành làm đẹp. Nhìn screenshot homepage và gọi tên TONE CẢM NHẬN của cả trang, như nói với đồng nghiệp sau một cái nhìn. Không đếm pixel. Chỉ trả JSON. Câu chữ bằng tiếng Việt.' },
+          { role: 'user', content: [
+            { type: 'text', text: prompt },
+            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${previewBuffer.toString('base64')}` } },
+          ] },
+        ],
+        response_format: responseFormat || { type: 'json_schema', json_schema: { name: 'visual_tone', strict: false, schema: responseSchema } },
       }),
     });
   } catch (error) {

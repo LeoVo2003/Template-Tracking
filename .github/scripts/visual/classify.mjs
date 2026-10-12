@@ -2,9 +2,12 @@ import { classifyWithGroq } from './providers/groq-qwen.mjs';
 import { classifyWithCloudflareQwen } from './providers/cloudflare-qwen.mjs';
 import { classifyWithLlamaScout } from './providers/cloudflare-llama-scout.mjs';
 import { classifyWithGemini } from './providers/gemini.mjs';
+import { classifyWithGroqText, GROQ_TEXT_FALLBACK, GROQ_TEXT_PRIMARY } from './providers/groq-text.mjs';
 import { ProviderError, FAMILIES, CANVAS_FAMILIES } from './providers/common.mjs';
 import { resolveTone } from './tone-map.mjs';
-import { DIRECT_VISION_SCHEMA, directVisionJudgePrompt, directVisionPrompt, validateDirectVisionResult } from './direct-vision.mjs';
+import { DIRECT_VISION_SCHEMA, directVisionPrompt, extractPriorVisionRead, validateDirectVisionResult } from './direct-vision.mjs';
+import { nameTonePrompt, validateNameToneResult } from './name-tone.mjs';
+import { REVIEW_TONE, TONE_CATALOG } from './tone-catalog.mjs';
 
 export const AUTO_ACCEPT = 0.85;
 const JUDGE_ACCEPT = 0.8;
@@ -22,8 +25,26 @@ export function tonePrompt(evidence) {
 function llamaPrompt(evidence, qwen) { return `You are an independent UI color-system judge. Pixel/DOM evidence and a visual auditor disagree or are uncertain. Ignore media photography; decide canvas and repeated interface accents from raw evidence. Do not blindly trust either source. ${schemaPrompt}\nPixel/DOM: ${JSON.stringify(evidenceForAi(evidence))}\nSeparate auditor: ${JSON.stringify(qwen)}`; }
 function agrees(a, b) { if (!a || !b || a.primary_surface !== b.primary_surface || a.primary_family !== b.primary_family || a.canvas_mode !== b.canvas_mode) return false; const materialSecondary = Number(b.brand_secondary_score || 0) >= 0.12 || Number(b.brand?.brand_secondary_score || 0) >= 0.12; return !materialSecondary || (!b.secondary_family || a.secondary_family === b.secondary_family); }
 function resultFrom(semantic, reason) { const resolved = resolveTone(semantic); return { ...semantic, ...resolved, tone: resolved.tone_group, reason: reason || semantic.reason, needs_review: semantic.needs_review || 'Cần duyệt' === resolved.tone_group }; }
-function directResultFrom(semantic, reason) { const review = 'Cần duyệt' === semantic.tone; return { ...semantic, tone_group: semantic.tone, precise_tone: '', tone: semantic.tone, canvas_family: semantic.canvas, primary_surface: semantic.canvas, primary_family: semantic.brand, secondary_family: 'neutral', canvas_mode: ['black', 'charcoal', 'gray', 'navy', 'brown'].includes(semantic.canvas) ? 'dark' : 'light', needs_review: review, reason: reason || semantic.reason }; }
-function directNeedsReview(provider = '', model = '', reason = 'Direct Vision was not sufficiently consistent for automatic classification.') { return { tone: 'Cần duyệt', tone_group: 'Cần duyệt', precise_tone: '', confidence: 0, provider, model, reason, needs_review: true }; }
+function namedResult(vision, named, extra = {}) {
+  const review = extra.needs_review || 'propose' === named.status || REVIEW_TONE === named.tone || Number(named.confidence || 0) < Number(extra.threshold || 0.85);
+  const shown = named.proposed_tone || named.tone || '';
+  return {
+    ...vision,
+    ...named,
+    vision_read: vision.vision_read,
+    tone: review ? REVIEW_TONE : named.tone,
+    tone_group: review ? REVIEW_TONE : named.tone,
+    precise_tone: review ? shown : '',
+    needs_review: review,
+    reason: named.reason || vision.reason,
+    provider: named.provider || vision.provider,
+    model: named.model || vision.model,
+    candidates: { vision_name: vision.descriptor || vision.vision_read?.tone_name || '', catalog_name: named.tone, proposed_name: named.proposed_tone || '' },
+  };
+}
+function directNeedsReview(provider = '', model = '', reason = 'AI 1 did not return a usable designer read.', vision = null) {
+  return { ...(vision || {}), tone: REVIEW_TONE, tone_group: REVIEW_TONE, precise_tone: '', confidence: 0, provider, model, reason, needs_review: true };
+}
 
 const CANVAS_GROUPS = {
   light_white: ['white', 'ivory'],
@@ -47,6 +68,25 @@ const BRAND_GROUPS = {
   purple: ['purple', 'lavender'],
 };
 
+function familyFromLabel(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '';
+  if (Object.values(CANVAS_GROUPS).flat().includes(raw) || Object.values(BRAND_GROUPS).flat().includes(raw)) return raw;
+  if (/xanh\s*lá|green|sage|olive/.test(raw)) return 'green';
+  if (/xanh\s*dương|navy|teal|aqua|blue/.test(raw)) return 'blue';
+  if (/hồng|rose|pink/.test(raw)) return 'pink';
+  if (/đỏ|burgundy|red/.test(raw)) return 'red';
+  if (/cam|peach|orange/.test(raw)) return 'orange';
+  if (/tím|lavender|purple/.test(raw)) return 'purple';
+  if (/nâu|taupe|brown/.test(raw)) return 'brown';
+  if (/kem|cream/.test(raw)) return 'cream';
+  if (/vàng|gold|yellow|champagne/.test(raw)) return 'gold';
+  if (/be|beige|greige/.test(raw)) return 'beige';
+  if (/xám|gray|grey/.test(raw)) return 'gray';
+  if (/trắng|ivory|white/.test(raw)) return 'white';
+  if (/đen|charcoal|black/.test(raw)) return 'black';
+  return '';
+}
 function familyGroup(family, groups) { return Object.entries(groups).find(([, values]) => values.includes(String(family || '')))?.[0] || ''; }
 function canvasModeForFamily(family) { return ['black', 'charcoal', 'navy', 'brown'].includes(String(family || '')) ? 'dark' : 'light'; }
 export function canvasCompatible(vision, deterministic) {
@@ -117,8 +157,8 @@ export function evaluateDirectVisionConflict(result, deterministic = {}, evidenc
   };
   if (!result) return { has_conflict: false, severity: 'none', canvas_conflict: false, brand_conflict: false, reasons: [], deterministic_summary: deterministicSummary };
   const reasons = [];
-  const visionCanvas = result.canvas || result.primary_surface || result.canvas_family || '';
-  const visionBrand = result.brand || result.primary_family || '';
+  const visionCanvas = familyFromLabel(result.canvas || result.primary_surface || result.canvas_family || '');
+  const visionBrand = familyFromLabel(result.brand || result.primary_family || '');
   const canvasMismatch = Boolean(visionCanvas) && (!canvasCompatible(visionCanvas, canvasFamily) || (['light', 'dark'].includes(canvasMode) && canvasModeForFamily(visionCanvas) !== canvasMode));
   const hardCanvas = canvasMismatch && canvasConfidence >= 0.85;
   if (canvasMismatch) reasons.push(`Vision canvas ${visionCanvas} conflicts with deterministic ${canvasFamily}/${canvasMode} canvas at ${canvasConfidence.toFixed(2)} confidence.`);
@@ -152,11 +192,13 @@ function unresolvedConflict(conflict, evaluator = null) { return { ...conflict, 
 function serial(error) { return { provider: error.provider || 'unknown', code: error.code || 'PROVIDER_ERROR', status: error.status || 0, quota: !!error.quota, retryable: !!error.retryable, message: String(error.message || '').slice(0, 300) }; }
 async function tryProvider(fn, errors) { try { return await fn(); } catch (error) { errors.push(serial(error)); return null; } }
 
-export async function classifyTone({ previewBuffer, evidence, groqApiKey, geminiApiKey, geminiApiKeys = [], geminiDailyBudgetPerKey = GEMINI_DAILY_BUDGET, cloudflareAccount, cloudflareToken, freeOnly = true, autoAccept = AUTO_ACCEPT, classifierMode = 'direct_vision', aiStrategy = 'smart', providers = {}, onProviderStep = null }) {
+export async function classifyTone({ previewBuffer, evidence, groqApiKey, geminiApiKey, geminiApiKeys = [], geminiDailyBudgetPerKey = GEMINI_DAILY_BUDGET, cloudflareAccount, cloudflareToken, freeOnly = true, autoAccept = AUTO_ACCEPT, classifierMode = 'direct_vision', aiStrategy = 'smart', providers = {}, onProviderStep = null, catalog = TONE_CATALOG, priorRaw = '' }) {
   if (!freeOnly) throw new ProviderError('FREE_ONLY_REQUIRED', 'Visual-tone classification is locked to FREE_ONLY=true.');
   if (!['off', 'qwen', 'gemini', 'smart'].includes(aiStrategy)) aiStrategy = 'smart';
-  const errors = [], directVision = 'direct_vision' === classifierMode, prompt = directVision ? directVisionPrompt() : tonePrompt(evidence), options = { previewBuffer, prompt }, directOptions = directVision ? { responseSchema: DIRECT_VISION_SCHEMA, validateResult: validateDirectVisionResult } : {};
-  const groq = providers.groq || classifyWithGroq, cfQwen = providers.cloudflare || classifyWithCloudflareQwen, llama = providers.llama || classifyWithLlamaScout, gemini = providers.gemini || classifyWithGemini;
+  const errors = [], directVision = 'direct_vision' === classifierMode, prompt = directVision ? directVisionPrompt() : tonePrompt(evidence), options = { previewBuffer, prompt };
+  const visionOptions = { responseSchema: DIRECT_VISION_SCHEMA, validateResult: validateDirectVisionResult, reasoningEffort: 'medium', maxCompletionTokens: 4096, responseFormat: { type: 'json_object' } };
+  const directOptions = directVision ? visionOptions : {};
+  const groq = providers.groq || classifyWithGroq, cfQwen = providers.cloudflare || classifyWithCloudflareQwen, llama = providers.llama || classifyWithLlamaScout, gemini = providers.gemini || classifyWithGemini, groqText = providers.groqText || classifyWithGroqText;
   const reportStep = async (step, provider) => { try { if (onProviderStep) await onProviderStep({ step, provider }); } catch { /* Telemetry is non-critical. */ } };
   const pixel = evidence?.semantic_model || {};
   const deterministic = deterministicFromEvidence(pixel);
@@ -182,50 +224,44 @@ export async function classifyTone({ previewBuffer, evidence, groqApiKey, gemini
     return null;
   };
 
-  let qwen = null;
-  if ('qwen' === aiStrategy || 'smart' === aiStrategy) {
+  const priorVision = directVision ? extractPriorVisionRead(priorRaw) : null;
+  let qwen = priorVision ? { vision_read: priorVision, descriptor: priorVision.tone_name, temperature: priorVision.temperature, confidence: Number(((priorVision.cohesion?.score || 5) / 10).toFixed(3)), reason: priorVision.one_liner, provider: 'cached', model: 'ai1-replay' } : null;
+  if (!qwen && ('qwen' === aiStrategy || 'smart' === aiStrategy)) {
     await reportStep('qwen_analyzing', 'qwen');
     qwen = await tryProvider(() => groq({ ...options, ...directOptions, apiKey: groqApiKey }), errors);
     if (!qwen) { await reportStep('qwen_analyzing', 'cloudflare_qwen'); qwen = await tryProvider(() => cfQwen({ ...options, ...directOptions, accountId: cloudflareAccount, apiToken: cloudflareToken }), errors); }
-  } else if ('gemini' === aiStrategy) {
+  } else if (!qwen && 'gemini' === aiStrategy) {
     qwen = await runGemini(prompt, 'gemini_analyzing');
   }
-  const primaryConflict = directVision ? evaluateDirectVisionConflict(qwen, deterministic, evidence) : null;
-  const directThreshold = Math.max(0.90, autoAccept);
-  if (directVision && qwen && 'Cần duyệt' !== qwen.tone && !materialDirectConflict(primaryConflict) && qwen.confidence >= directThreshold) {
-    return { state: 'classified', result: directResultFrom(qwen, 'Direct Vision primary accepted; no material sanity conflict.'), attempts: [qwen], errors, authority: 'direct_vision', conflict: { ...primaryConflict, resolved: true, resolved_by: 'direct_vision' } };
+  if (directVision) {
+    let vision = qwen;
+    const prior = extractPriorVisionRead(priorRaw);
+    if (!vision && prior) vision = { vision_read: prior, descriptor: prior.tone_name, temperature: prior.temperature, confidence: Number(((prior.cohesion?.score || 5) / 10).toFixed(3)), reason: prior.one_liner, provider: 'cached', model: 'ai1-replay' };
+    const temporaryVision = errors.length && errors.every((error) => error.retryable || error.quota);
+    if (!vision && temporaryVision) return { state: 'retry_wait', result: null, attempts: [], errors, retry_code: errors.every((error) => error.quota) ? 'FREE_QUOTA_EXHAUSTED' : 'FREE_PROVIDER_UNAVAILABLE' };
+    if (!vision) return { state: 'needs_review', result: directNeedsReview(), attempts: [], errors, authority: 'manual_review' };
+
+    await reportStep('naming_tone', 'groq_text');
+    const namer = (model) => groqText({ apiKey: groqApiKey, prompt: nameTonePrompt(vision.vision_read, catalog), model, validateResult: (value, provider, used) => validateNameToneResult(value, provider, used, catalog) });
+    let named = await tryProvider(() => namer(GROQ_TEXT_PRIMARY), errors);
+    if (!named) named = await tryProvider(() => namer(GROQ_TEXT_FALLBACK), errors);
+    if (!named) {
+      await reportStep('naming_tone', 'cloudflare_llama');
+      named = await tryProvider(() => llama({ prompt: nameTonePrompt(vision.vision_read, catalog), accountId: cloudflareAccount, apiToken: cloudflareToken, validateResult: (value, provider, used) => validateNameToneResult(value, provider, used, catalog) }), errors);
+    }
+    const temporaryName = errors.length && errors.every((error) => error.retryable || error.quota);
+    if (!named && temporaryName) return { state: 'retry_wait', result: vision, attempts: [vision], errors, retry_code: errors.every((error) => error.quota) ? 'FREE_QUOTA_EXHAUSTED' : 'FREE_PROVIDER_UNAVAILABLE', authority: 'ai1_wait_ai2' };
+    if (!named) return { state: 'retry_wait', result: vision, attempts: [vision], errors, retry_code: 'FREE_PROVIDER_UNAVAILABLE', authority: 'ai1_wait_ai2' };
+
+    const warning = evaluateDirectVisionConflict({ brand: vision.palette?.brand?.name, canvas: vision.palette?.canvas?.name }, deterministic, evidence);
+    const result = namedResult(vision, named, { threshold: autoAccept, needs_review: 'hard' === warning.severity });
+    return { state: result.needs_review ? 'needs_review' : 'classified', result, attempts: [vision, named], errors, authority: result.needs_review ? 'manual_review' : 'ai2_catalog', conflict: { ...warning, resolved: !result.needs_review, warning_only: true } };
   }
+
   if ('qwen' === aiStrategy || 'gemini' === aiStrategy) {
     const temporary = errors.length && errors.every((error) => error.retryable || error.quota);
     if (!qwen && temporary) return { state: 'retry_wait', result: null, attempts: [], errors, retry_code: errors.every((error) => error.quota) ? 'FREE_QUOTA_EXHAUSTED' : 'FREE_PROVIDER_UNAVAILABLE' };
-    return { state: 'needs_review', result: directVision ? (qwen ? directResultFrom({ ...qwen, confidence: 0, tone: qwen.tone || 'Cần duyệt' }, materialDirectConflict(primaryConflict) ? 'Direct Vision remained contradictory and requires review.' : 'Selected provider did not reach the automatic confidence threshold.') : directNeedsReview()) : resultFrom(qwen || { ...deterministic, needs_review: true, confidence: 0, reason: 'Selected provider could not produce a confident result.' }), attempts: [qwen].filter(Boolean), errors, ...(directVision ? { authority: 'manual_review', conflict: unresolvedConflict(primaryConflict) } : {}) };
-  }
-
-  if (directVision) {
-    const suppliedConflict = judgeContext(primaryConflict, qwen, directThreshold);
-    await reportStep('llama_judging', 'cloudflare_llama');
-    const judgePrompt = directVisionJudgePrompt({ previousResult: qwen, deterministic: primaryConflict?.deterministic_summary || evaluateDirectVisionConflict(null, deterministic, evidence).deterministic_summary, conflict: suppliedConflict });
-    const scout = await tryProvider(() => llama({ previewBuffer, prompt: judgePrompt, ...directOptions, accountId: cloudflareAccount, apiToken: cloudflareToken }), errors);
-    const judgeConflict = evaluateDirectVisionConflict(scout, deterministic, evidence);
-    if (scout && 'Cần duyệt' !== scout.tone && scout.confidence >= JUDGE_ACCEPT && !materialDirectConflict(judgeConflict)) {
-      return { state: 'classified', result: directResultFrom(scout, resolutionReason(primaryConflict, 'judge')), attempts: [qwen, scout].filter(Boolean), errors, authority: 'direct_vision_judge', conflict: resolvedConflict(primaryConflict, judgeConflict, 'direct_vision_judge') };
-    }
-    const finalConflictContext = {
-      ...suppliedConflict,
-      severity: 'hard' === primaryConflict?.severity || 'hard' === judgeConflict.severity ? 'hard' : (primaryConflict?.has_conflict || judgeConflict.has_conflict ? 'soft' : 'none'),
-      reasons: [...(suppliedConflict.reasons || []), ...(judgeConflict.reasons || []).map((reason) => `Vision judge remained inconsistent: ${reason}`)],
-    };
-    const finalPrompt = directVisionJudgePrompt({ previousResult: qwen, judgeResult: scout, deterministic: primaryConflict?.deterministic_summary || judgeConflict.deterministic_summary, conflict: finalConflictContext, final: true });
-    const finalJudge = await runGemini(finalPrompt);
-    const finalConflict = evaluateDirectVisionConflict(finalJudge, deterministic, evidence);
-    if (finalJudge && 'Cần duyệt' !== finalJudge.tone && finalJudge.confidence >= JUDGE_ACCEPT && !materialDirectConflict(finalConflict)) {
-      return { state: 'classified', result: directResultFrom(finalJudge, resolutionReason(primaryConflict, 'final')), attempts: [qwen, scout, finalJudge].filter(Boolean), errors, authority: 'direct_vision_final_judge', conflict: resolvedConflict(primaryConflict, finalConflict, 'direct_vision_final_judge') };
-    }
-    const temporary = errors.length && errors.every((error) => error.retryable || error.quota);
-    if (temporary && !qwen && !scout) return { state: 'retry_wait', result: null, attempts: [], errors, retry_code: errors.every((error) => error.quota) ? 'FREE_QUOTA_EXHAUSTED' : 'FREE_PROVIDER_UNAVAILABLE', conflict: unresolvedConflict(primaryConflict, finalConflict) };
-    const unresolved = finalJudge || scout || qwen;
-    const reviewReason = materialDirectConflict(primaryConflict) || materialDirectConflict(judgeConflict) || materialDirectConflict(finalConflict) ? 'Direct Vision remained contradictory and requires review.' : 'Direct Vision did not reach a consistent high-confidence result and requires review.';
-    return { state: 'needs_review', result: unresolved ? directResultFrom({ ...unresolved, confidence: 0, tone: unresolved.tone || 'Cần duyệt' }, reviewReason) : directNeedsReview('', '', reviewReason), attempts: [qwen, scout, finalJudge].filter(Boolean), errors, authority: 'manual_review', conflict: unresolvedConflict(primaryConflict, finalConflict) };
+    return { state: 'needs_review', result: resultFrom(qwen || { ...deterministic, needs_review: true, confidence: 0, reason: 'Selected provider could not produce a confident result.' }), attempts: [qwen].filter(Boolean), errors };
   }
 
   const strongBrandConflict = qwen && deterministic.brand_primary_score >= 0.38 && qwen.primary_family !== deterministic.primary_family;
