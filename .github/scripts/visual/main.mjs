@@ -26,6 +26,13 @@ const apiBase = `${siteUrl}/wp-json/mac-tracker/v1/visual`;
 const workDir = join(process.cwd(), '.visual-capture');
 const summary = { claimed: 0, skipped: 0, captureSuccess: 0, captureBlocked: 0, captureFailed: 0, qwenAccepted: 0, geminiJudged: 0, needsReview: 0, providerDeferred: 0, processed: 0, success: 0, providerCounts: {} };
 
+// Free providers (Groq OTPM, Cloudflare) reset on a per-minute window. When a
+// quota wall is hit mid-batch, wait it out and retry inside the run instead of
+// deferring the item to a later retry cycle.
+const QUOTA_WAIT_MS = 65000;
+const QUOTA_MAX_WAITS = 2;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 if (!siteUrl || !secret) throw new Error('MAC_TRACKER_SITE_URL and MAC_TRACKER_AUTOMATION_SECRET are required.');
 if (!freeOnly) throw new Error('FREE_ONLY must be true. This workflow is prohibited from selecting a paid provider.');
 
@@ -200,7 +207,17 @@ async function processToneItems(items, aiStrategy, autoAccept, geminiDailyBudget
       const { bundle, preview, visionInput } = await downloadPreview(item, classifierMode);
       const evidence = bundle?.ui?.metrics || { text: 'Capture bundle has no deterministic UI metrics.' };
       await reportRunHeartbeat({ current_snapshot_id: item.id, current_step: 'qwen_analyzing', current_provider: 'qwen', message: `Qwen analyzing #${item.id}`, event_type: 'qwen_started' });
-      const outcome = await classifyTone({ previewBuffer: preview, evidence, groqApiKey, geminiApiKey, geminiApiKeys, geminiDailyBudgetPerKey, cloudflareAccount, cloudflareToken, freeOnly, autoAccept, classifierMode, aiStrategy, catalog, priorRaw: item.ai_raw || '', onProviderStep: ({ step, provider }) => reportRunHeartbeat({ current_snapshot_id: item.id, current_step: step, current_provider: provider, message: `${String(provider).replace(/_/g, ' ')} working on #${item.id}`, event_type: step }) });
+      const runClassifier = () => classifyTone({ previewBuffer: preview, evidence, groqApiKey, geminiApiKey, geminiApiKeys, geminiDailyBudgetPerKey, cloudflareAccount, cloudflareToken, freeOnly, autoAccept, classifierMode, aiStrategy, catalog, priorRaw: item.ai_raw || '', onProviderStep: ({ step, provider }) => reportRunHeartbeat({ current_snapshot_id: item.id, current_step: step, current_provider: provider, message: `${String(provider).replace(/_/g, ' ')} working on #${item.id}`, event_type: step }) });
+      let outcome = await runClassifier();
+      let quotaWaits = 0;
+      while ('retry_wait' === outcome?.state && 'FREE_QUOTA_EXHAUSTED' === outcome.retry_code && quotaWaits < QUOTA_MAX_WAITS) {
+        quotaWaits += 1;
+        const waitMessage = `Free provider quota exhausted for #${item.id} — waiting ${Math.round(QUOTA_WAIT_MS / 1000)}s for the per-minute window to reset (retry ${quotaWaits}/${QUOTA_MAX_WAITS}).`;
+        console.log(waitMessage);
+        await reportRunHeartbeat({ current_snapshot_id: item.id, current_step: 'waiting_provider', message: waitMessage, event_type: 'retry_wait' });
+        await sleep(QUOTA_WAIT_MS);
+        outcome = await runClassifier();
+      }
       const rawJson = JSON.stringify({ phase: 4, classifier_version: DIRECT_VISION_VERSION, authority: outcome.authority || ('direct_vision' === classifierMode ? 'manual_review' : 'legacy'), classifier_mode: classifierMode, vision_input: visionInput, ...outcome, deterministic: evidence });
       if ('benchmark_only' === classifierMode) {
         console.log(`Benchmark-only result #${item.id}: ${outcome.result?.tone_group || outcome.result?.tone || 'needs review'}; no database ingest.`);

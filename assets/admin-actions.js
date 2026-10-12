@@ -172,6 +172,10 @@
             removeApprovedCards(ids);
             return;
           }
+          if (/^skip_(?:selected|one_)/.test(action)) {
+            removeApprovedCards(ids);
+            return;
+          }
           if ('unlock_all' === action || /^unlock_tone_\d+$/.test(action)) {
             if ('unlock_all' === action) {
               cards.forEach(function (card) { card.remove(); });

@@ -1245,6 +1245,7 @@ class MAC_Tracker_Admin {
 						<div class="mac-tracker-topbar__context"><span>MAC Project Tracker</span><strong><?php echo esc_html( $title ); ?></strong></div>
 					<?php if ( ! $this->public_view ) : ?>
 						<form class="mac-tracker-global-search" method="get" action="<?php echo esc_url( $this->app_url( 'projects' ) ); ?>"><?php if ( ! $this->standalone ) : ?><input type="hidden" name="page" value="mac-project-tracker"><?php endif; ?><label><span class="screen-reader-text">Search projects</span><span class="dashicons dashicons-search" aria-hidden="true"></span><input type="search" name="search" placeholder="Search projects…"></label></form>
+						<div class="mac-tracker-topbar__update"><?php $this->plugin_update_buttons(); ?></div>
 						<div class="mac-tracker-topbar__user"><?php echo get_avatar( $user->ID, 32 ); ?><span><strong><?php echo esc_html( $user->display_name ); ?></strong><small>Administrator</small></span></div>
 					<?php endif; ?>
 					</header>
@@ -1303,6 +1304,23 @@ class MAC_Tracker_Admin {
 		return $fragment ? $url . '#' . sanitize_key( $fragment ) : $url;
 	}
 
+	/** Plugin update affordance. Lives in the topbar so it is reachable from every screen. */
+	private function plugin_update_buttons() {
+		if ( ! current_user_can( 'update_plugins' ) ) {
+			return;
+		}
+		$plugin_state = $this->github_updater->cached_update_state();
+		if ( ! empty( $plugin_state['available'] ) ) {
+			?>
+			<button type="button" class="button button-primary" data-mac-install-update><span class="dashicons dashicons-update"></span><?php echo esc_html( 'Update to v' . $plugin_state['version'] ); ?></button>
+			<?php
+		} else {
+			?>
+			<button type="button" class="button" data-mac-check-update><span class="dashicons dashicons-admin-plugins"></span>Check plugin updates</button>
+			<?php
+		}
+	}
+
 	private function sync_buttons() {
 		$compared = $this->repository->baseline_is_compared();
 		?>
@@ -1311,14 +1329,6 @@ class MAC_Tracker_Admin {
 				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_compare_wpm' ); ?><input type="hidden" name="action" value="mac_tracker_compare_wpm"><button class="button button-primary" type="submit" <?php disabled( $this->sync->is_running() || $this->sync->is_queued() ); ?>>Compare baseline</button></form>
 			<?php else : ?>
 				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_queue_sync' ); ?><input type="hidden" name="action" value="mac_tracker_queue_sync"><button class="button button-primary" type="submit" <?php disabled( $this->sync->is_running() || $this->sync->is_queued() ); ?>><span class="dashicons dashicons-update"></span><?php echo esc_html( $this->sync->is_running() ? 'Syncing…' : ( $this->sync->is_queued() ? 'Queued' : 'Sync new Action Design' ) ); ?></button></form>
-			<?php endif; ?>
-			<?php if ( current_user_can( 'update_plugins' ) ) : ?>
-				<?php $plugin_state = $this->github_updater->cached_update_state(); ?>
-				<?php if ( ! empty( $plugin_state['available'] ) ) : ?>
-					<button type="button" class="button button-primary" data-mac-install-update><span class="dashicons dashicons-update"></span><?php echo esc_html( 'Update to v' . $plugin_state['version'] ); ?></button>
-				<?php else : ?>
-					<button type="button" class="button" data-mac-check-update><span class="dashicons dashicons-admin-plugins"></span>Check plugin updates</button>
-				<?php endif; ?>
 			<?php endif; ?>
 		</div>
 		<?php

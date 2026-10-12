@@ -260,12 +260,16 @@ body.mac-tracker-app-page [hidden] { display: none !important; }
 /* Pagination */
 .mac-tracker-pagination { padding: 14px 16px; border-top-color: var(--mac-line); }.mac-tracker-pagination .page-numbers a,.mac-tracker-pagination .page-numbers span { color: var(--mac-ink-500); border-color: var(--mac-line); border-radius: 7px; }.mac-tracker-pagination .page-numbers .current { color: #fff; background: var(--mac-forest-800); border-color: var(--mac-forest-800); }
 
+.mac-tracker-topbar__update { display: flex; align-items: center; }
+.mac-tracker-topbar__update .button { white-space: nowrap; }
 @media (max-width: 1250px) {
   body.mac-tracker-app-page { --mac-sidebar: 218px; }
   .mac-tracker-main { padding-inline: 24px; }
   .mac-tracker-metric-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
   .mac-tracker-filters { grid-template-columns: repeat(3,minmax(150px,1fr)); }
   .mac-tracker-topbar__user small { display: none; }
+  .mac-tracker-topbar__update .button { font-size: 0; gap: 0; }
+  .mac-tracker-topbar__update .button .dashicons { font-size: 16px; }
 }
 
 @media (max-width: 960px) {
