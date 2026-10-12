@@ -2,14 +2,17 @@
   'use strict';
 
   function ajaxNotice(anchor, message, error, marker) {
-    var old = document.querySelector('[' + marker + ']');
+    // Colour review keeps its feedback inside the card / intro panel it belongs to.
+    var host = anchor.closest('[data-color-card]') || anchor.closest('.mac-tracker-color-intro');
+    var old = (host || document).querySelector('[' + marker + ']');
     if (old) old.remove();
     var notice = document.createElement('div');
     notice.setAttribute(marker, '1');
-    notice.className = 'mac-tracker-notice mac-tracker-notice--' + (error ? 'error' : 'success');
+    notice.className = 'mac-tracker-notice mac-tracker-notice--' + (error ? 'error' : 'success') + (host ? ' mac-tracker-notice--inline' : '');
     notice.setAttribute('role', 'status');
     notice.textContent = message;
-    anchor.parentNode.insertBefore(notice, anchor);
+    if (host) host.appendChild(notice);
+    else anchor.parentNode.insertBefore(notice, anchor);
   }
 
   function bindVisualActions(scope) {
@@ -220,6 +223,30 @@
       event.preventDefault(); var form = event.currentTarget; var button = form.querySelector('button'); button.disabled = true;
       send(form, 'mac_tracker_extract_all_colors', macTrackerColors.extractAllNonce).then(function (payload) { if (!payload.success) throw new Error(payload.data.message); ajaxNotice(form, payload.data.message, false, 'data-color-ajax-notice'); }).catch(function (error) { ajaxNotice(form, error.message, true, 'data-color-ajax-notice'); button.disabled = false; });
     }); }
+    var approveAll = root.querySelector('.mac-tracker-color-approve-all');
+    if (approveAll?.dataset.macColorBound) approveAll = null;
+    if (approveAll) {
+      approveAll.dataset.macColorBound = '1';
+      approveAll.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var form = event.currentTarget;
+        var button = form.querySelector('button');
+        var ready = parseInt(form.dataset.ready || '0', 10);
+        var confirmed = window.macTrackerDialog
+          ? window.macTrackerDialog({ icon: 'yes-alt', title: 'Approve all extracted palettes?', message: 'This locks ' + ready + ' extracted palette' + (1 === ready ? '' : 's') + ' as they are. A later extraction will not replace them.', confirm: 'Approve all', cancel: 'Cancel' })
+          : Promise.resolve(window.confirm('Approve and lock all extracted palettes?'));
+        confirmed.then(function (ok) {
+          if (!ok) return;
+          button.disabled = true;
+          send(form, 'mac_tracker_approve_all_colors', macTrackerColors.approveAllNonce).then(function (payload) {
+            if (!payload.success) throw new Error(payload.data.message);
+            ajaxNotice(form, payload.data.message, false, 'data-color-ajax-notice');
+            document.dispatchEvent(new CustomEvent('mac:invalidatefragments'));
+            window.setTimeout(function () { window.location.reload(); }, 1200);
+          }).catch(function (error) { ajaxNotice(form, error.message, true, 'data-color-ajax-notice'); button.disabled = false; });
+        });
+      });
+    }
     root.querySelectorAll('.mac-tracker-color-extract').forEach(function (form) {
       if (form.dataset.macColorBound) return; form.dataset.macColorBound = '1';
       form.addEventListener('submit', function (event) { event.preventDefault(); var button = form.querySelector('button'); button.disabled = true; send(form, 'mac_tracker_extract_colors', macTrackerColors.extractNonce).then(function (payload) { if (!payload.success) throw new Error(payload.data.message); ajaxNotice(form, payload.data.message, false, 'data-color-ajax-notice'); button.textContent = 'Extracted'; }).catch(function (error) { ajaxNotice(form, error.message, true, 'data-color-ajax-notice'); button.disabled = false; }); });

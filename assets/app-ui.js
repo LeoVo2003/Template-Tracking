@@ -494,6 +494,7 @@
     promise.close = function () { close(false); };
     return promise;
   }
+  window.macTrackerDialog = macDialog;
 
   function pluginAjax(action, nonce) {
     return fetch(macTrackerApp.ajaxUrl, {

@@ -1998,43 +1998,124 @@ code {
   border-radius: 11px;
   box-shadow: var(--mac-shadow-sm);
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: minmax(0,1fr) auto auto;
   align-items: center;
-  gap: 22px;
+  gap: 16px 24px;
   padding: 19px;
 }
 
-.mac-tracker-color-intro p:last-child {
-  max-width: 720px;
+.mac-tracker-color-intro__text>p:last-child {
+  max-width: 640px;
   margin: 5px 0 0;
   color: var(--mac-text-muted);
   font-size: 11px;
 }
 
-.mac-tracker-color-intro__count {
-  text-align: center;
+.mac-tracker-color-intro__stats {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
 }
 
-.mac-tracker-color-intro__count strong {
-  display: block;
+.mac-tracker-color-intro__stats>div {
+  display: grid;
+  min-width: 78px;
+  justify-items: center;
+  gap: 2px;
+  padding: 2px 16px;
+  text-align: center;
+  border-left: 1px solid var(--mac-line);
+}
+
+.mac-tracker-color-intro__stats>div:first-child {
+  border-left: 0;
+}
+
+.mac-tracker-color-intro__stats strong {
   color: var(--mac-ink);
   font-size: 22px;
+  line-height: 1.1;
 }
 
-.mac-tracker-color-intro__count span {
+.mac-tracker-color-intro__stats span {
   color: var(--mac-text-muted);
   font-size: 9px;
+  white-space: nowrap;
 }
 
-.mac-tracker-color-extract-all {
-  display: grid;
-  gap: 5px;
+.mac-tracker-color-intro__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.mac-tracker-color-extract-all small {
-  max-width: 190px;
+.mac-tracker-color-intro__actions form {
+  margin: 0;
+}
+
+.mac-tracker-color-intro__actions .button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.mac-tracker-color-intro__actions .button .dashicons {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+}
+
+.mac-tracker-color-intro__hint {
+  display: flex;
+  grid-column: 1/-1;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  padding-top: 13px;
+  border-top: 1px solid var(--mac-line);
   color: var(--mac-text-muted);
-  font-size: 8px;
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.mac-tracker-color-intro__hint .dashicons {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  color: var(--mac-olive-700);
+  font-size: 14px;
+}
+
+.mac-tracker-color-intro__hint strong {
+  color: var(--mac-ink);
+  font-weight: 650;
+}
+
+.mac-tracker-notice--inline {
+  display: flex;
+  grid-column: 1/-1;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 550;
+}
+
+.mac-tracker-notice--inline::before {
+  flex: none;
+  font: 400 17px/1 dashicons;
+  content: "\f147";
+}
+
+.mac-tracker-notice--error.mac-tracker-notice--inline::before {
+  content: "\f534";
+}
+
+.mac-tracker-color-card>.mac-tracker-notice--inline {
+  margin-top: 10px;
 }
 
 .mac-tracker-color-progress {
@@ -3531,7 +3612,7 @@ html[data-mac-theme] {
 
 .mac-tracker-automation-observability dt .dashicons {
   position: absolute;
-  top: 50%;
+  top: 9px;
   left: 10px;
   display: grid;
   width: 18px;
@@ -3539,7 +3620,7 @@ html[data-mac-theme] {
   place-items: center;
   color: var(--mac-olive-700);
   font-size: 16px;
-  transform: translateY(-50%);
+  transform: none;
 }
 
 .mac-tracker-automation-observability dd {
@@ -4821,6 +4902,13 @@ html[data-mac-theme] {
 @media(min-width:701px) {
   body.mac-tracker-standalone {
     zoom: 1.05;
+  }
+
+  /* The fixed sidebar is scaled by the body zoom too; divide so its footer stays inside the viewport. */
+  body.mac-tracker-standalone .mac-tracker-sidebar {
+    height: calc(100dvh / 1.05);
+    overflow-y: auto;
+    box-sizing: border-box;
   }
 }
 

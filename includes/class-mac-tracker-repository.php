@@ -660,8 +660,25 @@ class MAC_Tracker_Repository {
 	/** Full Color Review counts are independent from the current rendered page. */
 	public function color_review_counts() {
 		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
-		$row = (array) $this->wpdb->get_row( "SELECT COUNT(*) AS total, SUM(COALESCE(c.locked,0) = 0) AS pending, SUM(COALESCE(c.locked,0) = 1) AS approved FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND {$this->exclusion_sql('p')} AND p.website_url <> ''", ARRAY_A );
-		return array_map( 'intval', array_merge( array( 'total' => 0, 'pending' => 0, 'approved' => 0 ), $row ) );
+		$row = (array) $this->wpdb->get_row( "SELECT COUNT(*) AS total, SUM(COALESCE(c.locked,0) = 0) AS pending, SUM(COALESCE(c.locked,0) = 1) AS approved, SUM(COALESCE(c.locked,0) = 0 AND {$this->extracted_palette_sql('c')}) AS ready FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id WHERE {$visible} AND {$this->exclusion_sql('p')} AND p.website_url <> ''", ARRAY_A );
+		return array_map( 'intval', array_merge( array( 'total' => 0, 'pending' => 0, 'approved' => 0, 'ready' => 0 ), $row ) );
+	}
+
+	/** SQL predicate: the color record already holds an extracted palette. */
+	private function extracted_palette_sql( $alias ) {
+		return "({$alias}.id IS NOT NULL AND {$alias}.colors_json IS NOT NULL AND {$alias}.colors_json NOT IN ('', '[]', 'null'))";
+	}
+
+	/** Lock every extracted-but-unapproved palette as it stands; returns the number approved. */
+	public function approve_all_extracted_colors() {
+		$visible = "(p.record_kind = 'action_design' OR (p.record_kind = 'csv_pin' AND NOT EXISTS (SELECT 1 FROM {$this->projects} action_snapshot WHERE action_snapshot.wpm_project_id = p.wpm_project_id AND action_snapshot.record_kind = 'action_design')))";
+		$now = MAC_Tracker_Time::now_utc();
+		$sql = "UPDATE {$this->colors} c INNER JOIN {$this->projects} p ON p.id = c.project_id SET c.status = 'approved', c.locked = 1, c.approved_at = %s, c.updated_at = %s WHERE COALESCE(c.locked,0) = 0 AND {$this->extracted_palette_sql('c')} AND {$visible} AND {$this->exclusion_sql('p')} AND p.website_url <> ''";
+		$updated = $this->wpdb->query( $this->wpdb->prepare( $sql, $now, $now ) );
+		if ( false === $updated ) {
+			return new WP_Error( 'mac_tracker_color_approve_all_failed', $this->wpdb->last_error ?: 'Unable to approve the extracted palettes.' );
+		}
+		return (int) $updated;
 	}
 
 	/** Paginated Color Review rows; never render the full website roster at once. */
