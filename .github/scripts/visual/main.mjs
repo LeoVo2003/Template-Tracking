@@ -33,6 +33,21 @@ const QUOTA_WAIT_MS = 65000;
 const QUOTA_MAX_WAITS = 2;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Bootstrap retry: a transient WordPress hiccup (e.g. "Error establishing a
+// database connection" while MySQL restarts) kills the whole run before a
+// single item is claimed. Wait and retry the bootstrap (config + first claim)
+// inside the run instead of leaving queued items stranded. Never retries once
+// any item was claimed — re-claiming could double-process work.
+const BOOTSTRAP_MAX_ATTEMPTS = 3;
+const BOOTSTRAP_RETRY_WAIT_MS = 60000;
+
+function isTransientBootstrapError(error) {
+  const message = String(error?.message || '');
+  if (/HTTP\s+(5\d\d|429)\b/.test(message)) return true;
+  if (error instanceof TypeError && /fetch failed|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EPIPE/i.test(message)) return true;
+  return false;
+}
+
 if (!siteUrl || !secret) throw new Error('MAC_TRACKER_SITE_URL and MAC_TRACKER_AUTOMATION_SECRET are required.');
 if (!freeOnly) throw new Error('FREE_ONLY must be true. This workflow is prohibited from selecting a paid provider.');
 
@@ -252,13 +267,34 @@ async function writeSummary() {
 }
 
 let workerFailure = null;
+
+/** Fetch config and claim the first batch, retrying transient bootstrap failures. */
+async function bootstrapJobs() {
+  for (let attempt = 1; attempt <= BOOTSTRAP_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const config = await workerConfig();
+      if ('schedule' === workflowEvent && 'auto' !== config.mode) {
+        console.log('Visual Tone is in MANUAL mode; scheduled run exited without claiming work.');
+        return { config: null, jobs: [] };
+      }
+      const jobs = await claimJobs(scope);
+      return { config, jobs };
+    } catch (error) {
+      const retriable = isTransientBootstrapError(error) && 0 === summary.claimed;
+      if (!retriable || attempt === BOOTSTRAP_MAX_ATTEMPTS) throw error;
+      const waitMessage = `Bootstrap failed (attempt ${attempt}/${BOOTSTRAP_MAX_ATTEMPTS}): ${error.message} — waiting ${BOOTSTRAP_RETRY_WAIT_MS / 1000}s for the site to recover, then retrying.`;
+      console.warn(waitMessage);
+      await reportRunHeartbeat({ status: 'in_progress', current_step: 'bootstrap_retry', message: waitMessage, event_type: 'bootstrap_retry' });
+      await sleep(BOOTSTRAP_RETRY_WAIT_MS);
+    }
+  }
+  throw new Error('Bootstrap retry loop exited without a result.');
+}
+
 try {
   await reportRunHeartbeat({ status: 'in_progress', current_step: 'starting', message: `Visual Tone ${sourceAction} started`, event_type: 'run_started' });
-  const config = await workerConfig();
-  if ('schedule' === workflowEvent && 'auto' !== config.mode) {
-    console.log('Visual Tone is in MANUAL mode; scheduled run exited without claiming work.');
-  } else {
-    const jobs = await claimJobs(scope);
+  const { config, jobs } = await bootstrapJobs();
+  if (config) {
     const geminiDailyBudgetPerKey = Number(config.gemini_daily_budget_per_key || 8);
     const classifierMode = ['legacy', 'benchmark_only', 'direct_vision'].includes(config.classifier_mode) ? config.classifier_mode : 'direct_vision';
     await processToneItems(jobs.filter((item) => item.stage === 'tone'), config.ai_strategy || 'smart', Number(config.auto_accept_threshold || 0.85), geminiDailyBudgetPerKey, classifierMode, config.tone_catalog);
