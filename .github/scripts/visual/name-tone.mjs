@@ -26,15 +26,37 @@ function familyFromHex(hex) {
 
 function companionHint(visionRead) {
   const colors = Array.isArray(visionRead?.design_colors) ? visionRead.design_colors : [];
+  // 1) Section/block secondary (existing logic).
   const secondary = colors.find((c) => {
     const role = String(c?.role || '').toLowerCase();
     if (!/phụ|phu|section|block/.test(role)) return false;
     if (/chính|chinh|main/.test(role)) return false;
     return !!familyFromHex(c?.hex);
   });
-  if (!secondary) return '';
-  const family = familyFromHex(secondary.hex);
-  return `CHỈ ĐỊNH MÀU ĐI KÈM: ${family} (${secondary.hex}, vai trò "${secondary.role}") — màu đi kèm là ${family}, KHÔNG phải nền chính. Tên 2 từ phải có ${family} ở vị trí thứ hai.`;
+  if (secondary) {
+    const family = familyFromHex(secondary.hex);
+    return `CHỈ ĐỊNH MÀU ĐI KÈM: ${family} (${secondary.hex}, vai trò "${secondary.role}") — màu đi kèm là ${family}, KHÔNG phải nền chính. Tên 2 từ phải có ${family} ở vị trí thứ hai.`;
+  }
+  // 2) Accent colors: AI1 may mention red/pink in text (e.g. "điểm đỏ gạch")
+  // without a structured hex. If the vision text names a chromatic accent,
+  // tell AI2 directly so it weighs the accent instead of defaulting to white.
+  const text = JSON.stringify(visionRead || {}).toLowerCase();
+  const accentRed = /đỏ|red|#c2185b|#ff0101|crimson/.test(text);
+  const accentBlue = /xanh dương|#1ca0e0|#1e90ff|electric blue/.test(text);
+  if (accentRed && accentBlue) {
+    return `CHỈ ĐỊNH MÀU ĐI KÈM: ĐỎ — bản đọc AI1 ghi rõ có điểm nhấn đỏ (đỏ gạch/crimson) đi cùng xanh dương chính. Đỏ là màu đi kèm quan trọng, KHÔNG được bỏ qua. Tên 2 từ phải có ĐỎ ở vị trí thứ hai (ví dụ Xanh dương đỏ).`;
+  }
+  // 3) Check design_colors for accent-role reds.
+  const accent = colors.find((c) => {
+    const role = String(c?.role || '').toLowerCase();
+    const hex = String(c?.hex || '').toUpperCase();
+    if (!/accent|cta|button|tiêu đề|heading|điểm nhấn|nhấn/.test(role)) return false;
+    return /^#(C2185B|FF0101|D32F2F|E53935)/.test(hex) || /đỏ|red/.test(role);
+  });
+  if (accent) {
+    return `CHỈ ĐỊNH MÀU ĐI KÈM: ĐỎ (${accent.hex}, vai trò "${accent.role}") — đỏ là accent lặp lại (tiêu đề/nút), phải thể hiện trong tên. Tên 2 từ phải có ĐỎ ở vị trí thứ hai.`;
+  }
+  return '';
 }
 
 export function nameTonePrompt(visionRead, catalog = TONE_CATALOG) {
@@ -63,41 +85,6 @@ export function nameTonePrompt(visionRead, catalog = TONE_CATALOG) {
   ].join('\n');
 }
 
-/**
- * Deterministic override: if AI1 sees blue primary + red accents but AI2
- * picked a name without red (e.g. "Xanh trắng"), force "Xanh dương đỏ".
- * The user confirmed "Xanh dương đỏ" is correct for blue+red sites (Omaze).
- */
-function deterministicBlueRedOverride(visionRead, pickedTone) {
-  if (!visionRead || !pickedTone) return null;
-  const lower = String(pickedTone).toLowerCase();
-  if (/đỏ|do\b/.test(lower)) return null; // Already has red, no override needed.
-  
-  const colors = Array.isArray(visionRead?.design_colors) ? visionRead.design_colors : [];
-  let hasBlue = false, hasRed = false;
-  
-  for (const c of colors) {
-    const hex = String(c?.hex || '').toUpperCase();
-    const role = String(c?.role || '').toLowerCase();
-    // Blue primary: #1CA0E0, #1E90FF range (electric/bright blue)
-    if (/^#(1[CE][A0]0[0E]0|1E90FF)/.test(hex)) hasBlue = true;
-    // Red accent: #C2185B (crimson), #FF0101 (pure red)
-    if (/^#(C2185B|FF0101)/.test(hex)) hasRed = true;
-    // Also check role text for red mentions
-    if (/đỏ|do\b|red/.test(role)) hasRed = true;
-  }
-  
-  // Fallback: check the full vision read text
-  if (!hasBlue || !hasRed) {
-    const text = JSON.stringify(visionRead).toLowerCase();
-    if (/xanh dương|#1ca0e0|#1e90ff/.test(text)) hasBlue = true;
-    if (/đỏ gạch|#c2185b|#ff0101/.test(text)) hasRed = true;
-  }
-  
-  if (hasBlue && hasRed) return 'Xanh dương đỏ';
-  return null;
-}
-
 export function validateNameToneResult(value, provider = 'groq_text', model = '', catalog = TONE_CATALOG, visionRead = null) {
   const fail = (message) => new ProviderError('NAME_TONE_INVALID_SCHEMA', message, { provider });
   if (!value || 'object' !== typeof value || Array.isArray(value)) throw fail('AI 2 returned an invalid JSON object.');
@@ -105,11 +92,8 @@ export function validateNameToneResult(value, provider = 'groq_text', model = ''
   const reason = String(value.reason || '').trim().replace(/\s+/g, ' ').slice(0, 320);
   if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1 || !reason) throw fail('AI 2 response contains an invalid field.');
   const cleaned = officialToneName(value.tone || value.proposed_tone, visionRead);
-  // Deterministic override takes precedence over AI2's pick.
-  const override = deterministicBlueRedOverride(visionRead, cleaned);
-  const finalTone = override || cleaned;
-  if (catalogHas(finalTone, catalog)) {
-    return { status: 'pick', tone: finalTone, proposed_tone: '', confidence: Number(confidence.toFixed(3)), reason: override ? `Deterministic override: ${reason}` : reason, provider, model };
+  if (catalogHas(cleaned, catalog)) {
+    return { status: 'pick', tone: cleaned, proposed_tone: '', confidence: Number(confidence.toFixed(3)), reason, provider, model };
   }
   if (cleaned && REVIEW_TONE !== cleaned) {
     return { status: 'propose', tone: REVIEW_TONE, proposed_tone: cleaned, confidence: Number(confidence.toFixed(3)), reason, provider, model, needs_review: true };
