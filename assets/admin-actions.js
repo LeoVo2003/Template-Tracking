@@ -120,16 +120,53 @@
       var reason = card.querySelector('[data-visual-reason]');
       if (reason && 'analysis_queued' === state) reason.textContent = 'Queued for AI analysis.';
     }
+    function refreshCard(id) {
+      if (!macTrackerVisual.cardNonce || cardFor(id)?.dataset.visualRefreshing === '1') return;
+      var target = cardFor(id);
+      if (target) target.dataset.visualRefreshing = '1';
+      var body = new URLSearchParams({ action: 'mac_tracker_visual_card', nonce: macTrackerVisual.cardNonce, snapshot_id: String(id) });
+      fetch(macTrackerVisual.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body })
+        .then(function (response) { return response.json(); })
+        .then(function (payload) {
+          var html = payload.success && payload.data ? payload.data.html : '';
+          if (!html) return;
+          var template = document.createElement('template');
+          template.innerHTML = html.trim();
+          var fresh = template.content.querySelector('[data-visual-card]');
+          var old = cardFor(id);
+          if (!fresh || !old) return;
+          var index = cards.indexOf(old);
+          old.replaceWith(fresh);
+          if (index > -1) cards[index] = fresh;
+          else cards.push(fresh);
+          syncSelection();
+        })
+        .catch(function () {})
+        .finally(function () {
+          var current = cardFor(id);
+          if (current) current.removeAttribute('data-visual-refreshing');
+        });
+    }
     function update(items) {
       items.forEach(function (data) {
         var card = cardFor(data.id);
         if (!card) return;
+        var prevTone = card.dataset.visualTone || '';
+        var newTone = data.tone || '';
+        var finished = ['classified', 'needs_review'].includes(data.pipeline_status);
         setStatus(card, data);
         if (data.screenshot_url) {
           var link = card.querySelector('.mac-tracker-visual-card__image');
           var image = link?.querySelector('img');
           if (link) link.href = data.screenshot_url;
           if (image) image.src = data.screenshot_url;
+        }
+        if (newTone && newTone !== prevTone && finished) {
+          // AI result changed: swap in a freshly rendered card so the tone
+          // badge, reason, evidence trace and actions match without reload.
+          refreshCard(data.id);
+        } else {
+          card.dataset.visualTone = newTone;
         }
       });
     }
