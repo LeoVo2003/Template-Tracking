@@ -1688,6 +1688,43 @@ class MAC_Tracker_Repository {
 		return $palette;
 	}
 
+	/** Family color table shared by palette generation. */
+	private function visual_tone_families() {
+		return array(
+			'Vàng' => array( '#E8B84A', '#FFF3C4', '#FFF9E8', '#C79021', '#3B2A0A' ),
+			'Đen' => array( '#151515', '#F0F0F0', '#FAFAFA', '#555555', '#111111' ),
+			'Hồng' => array( '#E98BA9', '#FADCE6', '#FFF4F7', '#C45A7A', '#5A2034' ),
+			'Đỏ' => array( '#C9343D', '#F7D5D7', '#FFF3F3', '#9E1F29', '#4B1015' ),
+			'Nâu' => array( '#8C5A3C', '#E6D0BF', '#F8EFE8', '#6A3D28', '#321C13' ),
+			'Xanh' => array( '#2F8F83', '#D7F0EC', '#F2FBFA', '#1D665D', '#123B37' ),
+			'Xanh lá' => array( '#3F8F4A', '#D7EFD9', '#F3FBF3', '#24632C', '#143318' ),
+			'Xanh dương' => array( '#2F6FBF', '#D6E4F7', '#F3F7FD', '#1C4A86', '#102844' ),
+			'Trắng' => array( '#FFFFFF', '#F3F3F0', '#FFFEFC', '#BDBDB5', '#343434' ),
+			'Kem' => array( '#F4D9AE', '#FFF0D4', '#FFF9EE', '#D3AA70', '#5A3E20' ),
+			'Be' => array( '#CBB39E', '#EEE1D4', '#FBF5EF', '#A38770', '#4B3A2C' ),
+			'Nude' => array( '#C4B2A3', '#F3EBE3', '#FBF6F1', '#9A8574', '#4A3B32' ),
+			'Xám' => array( '#8D9297', '#DDE0E2', '#F5F6F7', '#686E73', '#282B2E' ),
+			'Tím' => array( '#8A5AA6', '#E8DDF0', '#FBF7FE', '#684080', '#33203F' ),
+			'Cam' => array( '#E47B35', '#FADCC7', '#FFF5ED', '#B8571D', '#51250E' ),
+		);
+	}
+
+	/** Palette for any tone name; generates family colors on the fly for new AI proposals not yet in the catalog. */
+	public function visual_palette_for_tone( $tone ) {
+		$tone = sanitize_text_field( (string) $tone );
+		if ( '' === $tone ) { return array(); }
+		$map = $this->visual_tone_palette();
+		if ( isset( $map[ $tone ] ) ) { return $map[ $tone ]; }
+		$families = $this->visual_tone_families();
+		$first_key = 0 === strpos( $tone, 'Xanh lá' ) ? 'Xanh lá' : ( 0 === strpos( $tone, 'Xanh dương' ) ? 'Xanh dương' : ( preg_split( '/\s+/', $tone )[0] ?? 'Xám' ) );
+		$rest = trim( 0 === strpos( $tone, $first_key ) ? substr( $tone, strlen( $first_key ) ) : $tone );
+		$second_lookup = array( 'trắng' => 'Trắng', 'đen' => 'Đen', 'be' => 'Be', 'đỏ' => 'Đỏ', 'xanh lá' => 'Xanh lá', 'xanh dương' => 'Xanh dương', 'vàng' => 'Vàng', 'hồng' => 'Hồng', 'nâu' => 'Nâu', 'xám' => 'Xám', 'kem' => 'Kem', 'cam' => 'Cam', 'tím' => 'Tím' );
+		$second_key = '' === $rest ? $first_key : ( $second_lookup[ $rest ] ?? $second_lookup[ preg_split( '/\s+/', $rest )[0] ] ?? $first_key );
+		$first = $families[ $first_key ] ?? $families['Xám'];
+		$second = $families[ $second_key ] ?? $first;
+		return array( 'tone_a' => $first[0], 'tone_b' => $second[0], 'tone_soft' => $second[2], 'tone_line' => $first[3], 'tone_ink' => $first[4] );
+	}
+
 	/** Reject late callbacks from a superseded Analyze/Capture request. */
 	private function visual_claim_matches( $snapshot_id, $stage, $token ) {
 		$snapshot_id = absint( $snapshot_id );

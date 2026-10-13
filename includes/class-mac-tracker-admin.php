@@ -1658,12 +1658,13 @@ class MAC_Tracker_Admin {
 			return;
 		}
 		$classes = 'mac-tracker-tone mac-tracker-tone--' . sanitize_title( $tone );
-		$palette = $this->repository->visual_tone_palette()[ $tone ] ?? array();
+		$precise_name = trim( (string) ( $row['precise_tone'] ?? '' ) );
+		$display_name = '' !== $precise_name && $precise_name !== $tone ? $precise_name : $tone;
+		$palette = $this->repository->visual_palette_for_tone( $display_name );
 		$style = '';
 		foreach ( array( 'tone_a', 'tone_b', 'tone_soft', 'tone_line', 'tone_ink' ) as $key ) { if ( ! empty( $palette[ $key ] ) ) { $style .= '--' . str_replace( '_', '-', $key ) . ':' . esc_attr( $palette[ $key ] ) . ';'; } }
 		$title = trim( (string) ( $row['tone_reason'] ?? '' ) );
-		$precise = trim( (string) ( $row['precise_tone'] ?? '' ) );
-		$display_tone = '' !== $precise && $precise !== $tone ? $precise : $tone;
+		$display_tone = $display_name;
 		$content = '<i aria-hidden="true"></i><span>' . esc_html( $display_tone ) . '</span>';
 		if ( $link ) {
 			$section = ! empty( $row['human_locked'] ) ? 'locked' : ( 'classified' === $status ? 'review' : 'processing' );
@@ -1674,7 +1675,7 @@ class MAC_Tracker_Admin {
 		echo '<span class="' . esc_attr( $classes ) . '" style="' . esc_attr( $style ) . '" title="' . esc_attr( $title ) . '">' . $content . '</span>';
 		if ( $manual ) { echo '<span class="mac-tracker-tone-manual">Đã sửa tay</span>'; }
 		if ( ! empty( $row['human_locked'] ) ) { return; }
-		if ( '' !== $precise && $precise !== $tone ) { echo '<span class="mac-tracker-tone-precise" title="Precise: ' . esc_attr( $precise ) . '">Group: ' . esc_html( $tone ) . '</span>'; }
+		if ( '' !== $precise_name && $precise_name !== $tone ) { echo '<span class="mac-tracker-tone-precise" title="Precise: ' . esc_attr( $precise_name ) . '">Group: ' . esc_html( $tone ) . '</span>'; }
 		$snapshot_id = (int) $row['id'];
 		$open = 'Cần duyệt' === $tone ? ' open' : '';
 		$summary = 'Cần duyệt' === $tone ? 'Chọn tone đúng' : 'Sửa tone';
@@ -1683,7 +1684,13 @@ class MAC_Tracker_Admin {
 		$proposed = '';
 		$raw_preview = json_decode( (string) ( $row['ai_raw'] ?? '' ), true );
 		if ( is_array( $raw_preview ) ) {
-			$proposed = sanitize_text_field( (string) ( $raw_preview['result']['proposed_tone'] ?? $raw_preview['result']['precise_tone'] ?? $row['precise_tone'] ?? '' ) );
+			$proposed = sanitize_text_field( (string) ( $raw_preview['result']['proposed_tone'] ?? '' ) );
+			if ( '' === $proposed ) {
+				$proposed = sanitize_text_field( (string) ( $raw_preview['result']['precise_tone'] ?? '' ) );
+			}
+		}
+		if ( '' === $proposed ) {
+			$proposed = sanitize_text_field( (string) ( $row['precise_tone'] ?? '' ) );
 		}
 		if ( $proposed && ! in_array( $proposed, $options, true ) && 'Cần duyệt' !== $proposed ) {
 			array_unshift( $options, $proposed );
