@@ -3,7 +3,42 @@ import { ProviderError } from './providers/common.mjs';
 
 export const NAME_TONE_VERSION = 'tone-name-ai2-v5';
 
+/**
+ * Deterministic companion hint: find a chromatic secondary canvas in
+ * design_colors (role hints at phụ/section/block, not the main background)
+ * and tell AI2 directly which family it is. Small models fail at the
+ * multi-step "compare hex → find secondary → combine" reasoning, so the
+ * code does it and the prompt just states the result.
+ */
+function familyFromHex(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+  if (!m) return '';
+  const r = parseInt(m[1].slice(0, 2), 16);
+  const g = parseInt(m[1].slice(2, 4), 16);
+  const b = parseInt(m[1].slice(4, 6), 16);
+  if (Math.max(r, g, b) - Math.min(r, g, b) < 20) return '';
+  if (b >= r && b >= g && b - r > 10) return 'XANH';
+  if (g >= r && g >= b && g - r > 10) return 'XANH LÁ';
+  if (r >= g && r >= b && r - b > 30) return 'HỒNG';
+  if (r > b && r - b > 10) return 'KEM';
+  return '';
+}
+
+function companionHint(visionRead) {
+  const colors = Array.isArray(visionRead?.design_colors) ? visionRead.design_colors : [];
+  const secondary = colors.find((c) => {
+    const role = String(c?.role || '').toLowerCase();
+    if (!/phụ|phu|section|block/.test(role)) return false;
+    if (/chính|chinh|main/.test(role)) return false;
+    return !!familyFromHex(c?.hex);
+  });
+  if (!secondary) return '';
+  const family = familyFromHex(secondary.hex);
+  return `CHỈ ĐỊNH MÀU ĐI KÈM: ${family} (${secondary.hex}, vai trò "${secondary.role}") — màu đi kèm là ${family}, KHÔNG phải nền chính. Tên 2 từ phải có ${family} ở vị trí thứ hai.`;
+}
+
 export function nameTonePrompt(visionRead, catalog = TONE_CATALOG) {
+  const hint = companionHint(visionRead);
   return [
     'Bạn là người đặt tên tone web từ bản đọc designer. Không nhìn ảnh. Không đếm pixel.',
     'Trang chỉ 1 giọng màu (suông) → 1 từ: Nâu / Be / Nude (nude/kem/be suông = Nude hoặc Be; nâu ấm suông = Nâu). Trang có 2 giọng rõ rệt (brand + nền/accent khác hẳn) → BẮT BUỘC 2 từ cụ thể, ví dụ Nâu kem, Nâu trắng, Be kem — không được gộp thành 1 từ.',
@@ -13,6 +48,7 @@ export function nameTonePrompt(visionRead, catalog = TONE_CATALOG) {
     'Đen của chữ/nút nhỏ/menu/icon trên nền sáng cũng KHÔNG phải màu đi kèm → tên 1 từ (Be, Kem, Trắng, Xanh lá…). Đen chỉ là màu đi kèm khi là mảng/khối nền đen lớn. Không gọi Be đen cho trường hợp mực.',
     'Hex nền sáng hơn #EFE7DB (ví dụ #F4F1EA, #FFFFFF) → TRẮNG, kể cả khi bản đọc ghi "kem". Chỉ gọi kem/be khi nền sẫm hơn #EFE7DB.',
     'Trắng là nền mặc định: nếu design_colors có nền phụ chromatic (xanh/kem/hồng/be) → màu đi kèm là nền phụ đó, KHÔNG phải trắng. Ví dụ: nền chính trắng + nền section xanh baby → đi kèm là XANH.',
+    ...(hint ? [hint] : []),
     'Chỉ dùng 2 từ khi brand màu sắc và nền khác hẳn: Vàng đen, Hồng trắng, Đỏ đen.',
     'Không dùng từ kiểu khói, plush, mist, champagne, sage, spa.',
     'Ánh xạ màu trong bản đọc → họ catalog: teal, xanh teal, lục lam, aqua, ngọc lam, cyan, xanh cổ vịt → xanh; xanh rêu, xanh moss, sage, xanh ôliu, xanh lá mạ → xanh lá; gold, vàng gold, vàng kim, vàng đồng, đồng thau → vàng; hồng pastel, hồng phấn, hồng đất, hồng nude, terracotta hồng, dusty rose, mauve, raspberry → hồng; kem, ivory, off-white, trắng ngà → kem/trắng (nền); nâu socola, nâu đất → nâu; nude, taupe suông → Nude.',
