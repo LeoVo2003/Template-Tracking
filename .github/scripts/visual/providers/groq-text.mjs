@@ -1,8 +1,8 @@
 import { ProviderError, errorFromResponse, extractStructuredContent } from './common.mjs';
 
 const PROVIDER = 'groq_text';
-export const GROQ_TEXT_PRIMARY = 'openai/gpt-oss-20b';
-export const GROQ_TEXT_FALLBACK = 'openai/gpt-oss-120b';
+export const GROQ_TEXT_PRIMARY = 'llama-3.3-70b-versatile';
+export const GROQ_TEXT_FALLBACK = 'openai/gpt-oss-20b';
 
 export async function classifyWithGroqText({ apiKey, prompt, model = GROQ_TEXT_PRIMARY, fetchImpl = fetch, validateResult }) {
   if (!apiKey) throw new ProviderError('GROQ_UNCONFIGURED', 'Groq API key is not configured.', { provider: PROVIDER });
