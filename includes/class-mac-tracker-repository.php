@@ -1678,7 +1678,7 @@ class MAC_Tracker_Repository {
 		foreach ( $tones as $tone ) {
 			$first_key = 0 === strpos( $tone, 'Xanh lá' ) ? 'Xanh lá' : ( 0 === strpos( $tone, 'Xanh dương' ) ? 'Xanh dương' : ( preg_split( '/\s+/', $tone )[0] ?? 'Xám' ) );
 			$rest = trim( 0 === strpos( $tone, $first_key ) ? substr( $tone, strlen( $first_key ) ) : $tone );
-			$second_lookup = array( 'trắng' => 'Trắng', 'đen' => 'Đen', 'be' => 'Be', 'đỏ' => 'Đỏ', 'xanh lá' => 'Xanh lá', 'xanh dương' => 'Xanh dương', 'vàng' => 'Vàng', 'hồng' => 'Hồng', 'nâu' => 'Nâu', 'xám' => 'Xám', 'kem' => 'Kem', 'cam' => 'Cam', 'tím' => 'Tím' );
+			$second_lookup = array( 'trắng' => 'Trắng', 'đen' => 'Đen', 'be' => 'Be', 'đỏ' => 'Đỏ', 'xanh' => 'Xanh', 'xanh lá' => 'Xanh lá', 'xanh dương' => 'Xanh dương', 'vàng' => 'Vàng', 'hồng' => 'Hồng', 'nâu' => 'Nâu', 'xám' => 'Xám', 'kem' => 'Kem', 'cam' => 'Cam', 'tím' => 'Tím' );
 			$second_key = '' === $rest ? $first_key : ( $second_lookup[ $rest ] ?? $second_lookup[ preg_split( '/\s+/', $rest )[0] ] ?? $first_key );
 			$first = $families[ $first_key ] ?? $families['Xám'];
 			$second = $families[ $second_key ] ?? $first;

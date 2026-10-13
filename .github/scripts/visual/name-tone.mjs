@@ -29,12 +29,15 @@ function companionHint(visionRead) {
   // 1) Section/block secondary (existing logic).
   const secondary = colors.find((c) => {
     const role = String(c?.role || '').toLowerCase();
-    if (!/phụ|phu|section|block/.test(role)) return false;
+    if (!/phụ|phu|section|block|hỗ trợ|ho tro|support/.test(role)) return false;
     if (/chính|chinh|main/.test(role)) return false;
     return !!familyFromHex(c?.hex);
   });
   if (secondary) {
-    const family = familyFromHex(secondary.hex);
+    let family = familyFromHex(secondary.hex);
+    // Teal/dark cyan (#1F7A6B range) → XANH (covers "Vàng xanh"), not XANH LÁ.
+    const hexUp = String(secondary.hex || '').toUpperCase();
+    if (/^#(1F7A6B|2F8F83|1D665D)/.test(hexUp)) family = 'XANH';
     return `CHỈ ĐỊNH MÀU ĐI KÈM: ${family} (${secondary.hex}, vai trò "${secondary.role}") — màu đi kèm là ${family}, KHÔNG phải nền chính. Tên 2 từ phải có ${family} ở vị trí thứ hai.`;
   }
   // 2) Accent colors: AI1 may mention red/pink in text (e.g. "điểm đỏ gạch")
@@ -67,6 +70,7 @@ export function nameTonePrompt(visionRead, catalog = TONE_CATALOG) {
     'Phân biệt Be và Nâu: trang kem/be sáng suông, KHÔNG có mảng nâu đất hay nâu socola rõ rệt → Be (hoặc Be kem), TUYỆT ĐỐI không gọi Nâu. Chỉ gọi Nâu khi có màu nâu thật (nâu đất, nâu socola, từ #8C5A3C trở đậm) làm brand hoặc mảng nền lớn.',
     'Phân biệt Đỏ và Hồng: raspberry, hồng đậm, terracotta, hồng đất, dusty rose, hồng phấn, hồng nude, mauve → HỒNG, không phải Đỏ. Chỉ gọi Đỏ khi là đỏ tươi/thuần rực rỡ (pure red).',
     'Chữ, nút, menu đen trên nền sáng là MỰC, không phải brand. Không gọi Đen be, Đen kem, Đen trắng.',
+    'Xanh navy, navy đậm (#1F2A44) là XANH, không phải Đen. Chỉ gọi Đen khi là đen thuần (#000000-#1A1A1A) làm mảng nền lớn.',
     'Đen của chữ/nút nhỏ/menu/icon trên nền sáng cũng KHÔNG phải màu đi kèm → tên 1 từ (Be, Kem, Trắng, Xanh lá…). Đen chỉ là màu đi kèm khi là mảng/khối nền đen lớn. Không gọi Be đen cho trường hợp mực.',
     'Hex nền sáng hơn #EFE7DB (ví dụ #F4F1EA, #FFFFFF) → TRẮNG, kể cả khi bản đọc ghi "kem". Chỉ gọi kem/be khi nền sẫm hơn #EFE7DB.',
     'Trắng là nền mặc định: nếu design_colors có nền phụ chromatic (xanh/kem/hồng/be) → màu đi kèm là nền phụ đó, KHÔNG phải trắng. Ví dụ: nền chính trắng + nền section xanh baby → đi kèm là XANH.',
