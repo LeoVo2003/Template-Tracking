@@ -1,7 +1,9 @@
 import { ProviderError, errorFromResponse, extractStructuredContent } from './common.mjs';
 
 const PROVIDER = 'groq_text';
-export const GROQ_TEXT_PRIMARY = 'llama-3.3-70b-versatile';
+// llama-3.3-70b-versatile was decommissioned by Groq on 2026-08-16 (404 model_not_found).
+// Kept as a named export for compatibility; the classify chain no longer uses it as primary.
+export const GROQ_TEXT_PRIMARY = 'openai/gpt-oss-20b';
 export const GROQ_TEXT_FALLBACK = 'openai/gpt-oss-20b';
 
 export async function classifyWithGroqText({ apiKey, prompt, model = GROQ_TEXT_PRIMARY, fetchImpl = fetch, validateResult }) {
