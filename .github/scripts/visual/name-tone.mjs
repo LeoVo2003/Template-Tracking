@@ -19,6 +19,8 @@ function familyFromHex(hex) {
   if (Math.max(r, g, b) - Math.min(r, g, b) < 20) return '';
   if (b >= r && b >= g && b - r > 10) return 'XANH';
   if (g >= r && g >= b && g - r > 10) return 'XANH LÁ';
+  // Strong red (r dominant, saturated): #FF0101, #C2185B, #E23A55, #B01E2E → ĐỎ
+  if (r > 170 && r - g > 60 && r - b > 40) return 'ĐỎ';
   if (r >= g && r >= b && r - b > 30) return 'HỒNG';
   if (r > b && r - b > 10) return 'KEM';
   return '';
@@ -29,7 +31,7 @@ function companionHint(visionRead) {
   // 1) Section/block secondary (existing logic).
   const secondary = colors.find((c) => {
     const role = String(c?.role || '').toLowerCase();
-    if (!/phụ|phu|section|block|hỗ trợ|ho tro|support/.test(role)) return false;
+    if (!/phụ|phu|section|block|hỗ trợ|ho tro|support|điểm nhấn|diem nhan|accent/.test(role)) return false;
     if (/chính|chinh|main/.test(role)) return false;
     return !!familyFromHex(c?.hex);
   });
@@ -44,7 +46,17 @@ function companionHint(visionRead) {
   // without a structured hex. If the vision text names a chromatic accent,
   // tell AI2 directly so it weighs the accent instead of defaulting to white.
   const text = JSON.stringify(visionRead || {}).toLowerCase();
-  const accentRed = /đỏ|red|#c2185b|#ff0101|crimson/.test(text);
+  // General red: text mentions đỏ/red, or any design_color hex is red-family
+  // (r dominant > 180). Covers #C2185B, #FF0101, #E23A55, crimson, etc.
+  let accentRed = /đỏ|red|crimson/.test(text);
+  if (!accentRed) {
+    for (const c of colors) {
+      const m = /^#?([0-9a-f]{6})$/i.exec(String(c?.hex || '').trim());
+      if (!m) continue;
+      const r = parseInt(m[1].slice(0, 2), 16), g = parseInt(m[1].slice(2, 4), 16), b = parseInt(m[1].slice(4, 6), 16);
+      if (r > 180 && r - g > 30 && r - b > 30) { accentRed = true; break; }
+    }
+  }
   const accentBlue = /xanh dương|#1ca0e0|#1e90ff|electric blue/.test(text);
   if (accentRed && accentBlue) {
     return `CHỈ ĐỊNH MÀU ĐI KÈM: ĐỎ — bản đọc AI1 ghi rõ có điểm nhấn đỏ (đỏ gạch/crimson) đi cùng xanh dương chính. Đỏ là màu đi kèm quan trọng, KHÔNG được bỏ qua. Tên 2 từ phải có ĐỎ ở vị trí thứ hai (ví dụ Xanh dương đỏ).`;
