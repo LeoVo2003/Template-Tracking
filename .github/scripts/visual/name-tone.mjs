@@ -90,6 +90,7 @@ export function nameTonePrompt(visionRead, catalog = TONE_CATALOG) {
     ...(hint ? [hint] : []),
     'Chỉ dùng 2 từ khi brand màu sắc và nền khác hẳn: Vàng đen, Hồng trắng, Đỏ đen.',
     'Không dùng từ kiểu khói, plush, mist, champagne, sage, spa.',
+    'Trong tên 2 từ, KHÔNG dùng "xanh" đơn độc (chung chung). Phải ghi rõ: xanh dương, xanh lá, xanh navy. Ví dụ: hồng + navy → Hồng xanh dương (không phải Hồng xanh).',
     'Ánh xạ màu trong bản đọc → họ catalog: teal, xanh teal, lục lam, aqua, ngọc lam, cyan, xanh cổ vịt → xanh; xanh rêu, xanh moss, sage, xanh ôliu, xanh lá mạ → xanh lá; gold, vàng gold, vàng kim, vàng đồng, đồng thau → vàng; hồng pastel, hồng phấn, hồng đất, hồng nude, terracotta hồng, dusty rose, mauve, raspberry → hồng; kem, ivory, off-white, trắng ngà → kem/trắng (nền); nâu socola, nâu đất → nâu; nude, taupe suông → Nude.',
     'Tên 2 từ = [màu brand] + [màu đi kèm]. Màu đi kèm là nền HOẶC accent mạnh lặp lại khắp trang (nút, tiêu đề, logo, viền). Ví dụ chuẩn phải thuộc: nền đen + brand vàng gold → Vàng đen; brand xanh teal + accent vàng gold → Xanh vàng; nền trắng + brand hồng → Hồng trắng; nền kem + brand nâu → Nâu kem; nền đen + xanh lặp lại khắp UI → Xanh đen; section xanh nhạt + accent gold → Vàng xanh.',
     'Brand là màu chromatic LẶP LẠI mạnh nhất khắp trang (nút CTA, tiêu đề, card, icon, viền section). Màu chỉ xuất hiện ở logo mà KHÔNG lặp lại trên UI → không phải brand, chỉ là điểm nhấn logo. Ví dụ: trang toàn xanh dương, chỉ logo vàng gold → brand là XANH → Xanh đen, TUYỆT ĐỐI không gọi Vàng đen.',
