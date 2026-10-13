@@ -213,6 +213,12 @@
             removeApprovedCards(ids);
             return;
           }
+          if (/^(?:reanalyze|recapture|capture_analyze)_selected$/.test(action) && /[?&]section=review(?:&|$)/.test(window.location.search)) {
+            // Re-queued from Review: the cards no longer need review (they are
+            // back in Processing), so drop them from this view without reload.
+            removeApprovedCards(ids);
+            return;
+          }
           if ('unlock_all' === action || /^unlock_tone_\d+$/.test(action)) {
             if ('unlock_all' === action) {
               cards.forEach(function (card) { card.remove(); });
