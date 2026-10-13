@@ -35,7 +35,7 @@ const KNOWN_COLORS = new Set([...CORE_COLORS, ...SUFFIXES.filter(Boolean), ...WA
  * produce (bare "xanh" as brand or companion, e.g. gold accent).
  * Kept out of the ink/canvas-led exclusions: the brand always leads.
  */
-export const CURATED_EXTRA_TONES = ['Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem', 'Vàng xanh'];
+export const CURATED_EXTRA_TONES = ['Xanh vàng', 'Xanh trắng', 'Xanh đen', 'Xanh kem', 'Vàng xanh', 'Xanh dương đỏ'];
 
 /**
  * Normalize a free-form tone name: aliases, dedupe, brand-first order.
