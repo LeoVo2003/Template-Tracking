@@ -729,6 +729,15 @@ class MAC_Tracker_Repository {
 		return (int) $this->wpdb->query( "DELETE FROM {$this->colors} WHERE locked = 0" );
 	}
 
+	/** Promote retry_wait items whose delay has elapsed back to the queue.
+	 * Called on admin page load so retries don't depend solely on the GitHub workflow schedule.
+	 * Idempotent: only touches rows where next_retry_at <= now, and clears next_retry_at.
+	 */
+	public function promote_due_visual_retries() {
+		$this->wpdb->query( "UPDATE {$this->visuals} v SET pipeline_status = 'analysis_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND tone_status = 'pending' AND screenshot_url <> '' AND manual_locked = 0 AND human_locked = 0 AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
+		$this->wpdb->query( "UPDATE {$this->visuals} v SET pipeline_status = 'capture_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND capture_status = 'pending' AND screenshot_url = '' AND manual_locked = 0 AND human_locked = 0 AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
+	}
+
 	public function visual_stats() {
 		return (array) $this->wpdb->get_row( "SELECT COUNT(*) AS total, SUM(pipeline_status IN ('captured', 'analysis_queued', 'analyzing', 'classified', 'needs_review')) AS captured, SUM(pipeline_status = 'classified') AS classified, SUM(pipeline_status = 'failed') AS failed, SUM(pipeline_status IN ('idle', 'capture_queued', 'capturing', 'retry_wait', 'blocked')) AS capture_pending, SUM(pipeline_status IN ('captured', 'analysis_queued', 'analyzing', 'needs_review')) AS tone_pending FROM {$this->visuals}", ARRAY_A );
 	}

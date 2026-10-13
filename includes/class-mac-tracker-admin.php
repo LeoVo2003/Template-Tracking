@@ -427,6 +427,9 @@ class MAC_Tracker_Admin {
 
 	public function render_visuals() {
 		$this->require_capability();
+		// Promote any retry_wait items whose delay has elapsed, so they don't
+		// stay stuck if the GitHub workflow schedule missed them.
+		$this->repository->promote_due_visual_retries();
 		$section = sanitize_key( wp_unslash( $_GET['section'] ?? '' ) );
 		$section = in_array( $section, array( 'action', 'processing', 'review', 'locked', 'workflow' ), true ) ? $section : 'processing';
 		$visual_counts = $this->repository->visual_review_counts();
@@ -499,7 +502,7 @@ class MAC_Tracker_Admin {
 		<article class="mac-tracker-visual-card<?php echo $this->visual_is_manual( $row ) ? ' is-manual-tone' : ''; ?><?php echo $blocked_capture ? ' is-blocked-capture' : ''; ?>" id="visual-<?php echo (int) $row['id']; ?>" data-visual-card="<?php echo (int) $row['id']; ?>" data-visual-tone="<?php echo esc_attr( (string) ( $row['tone'] ?? '' ) ); ?>" data-visual-local-retry="<?php echo $local_retry ? '1' : '0'; ?>" data-visual-error-code="<?php echo esc_attr( (string) ( $row['last_error_code'] ?? '' ) ); ?>">
 			<?php if ( ! $is_locked ) : ?><label class="mac-tracker-visual-card__select"><input type="checkbox" name="snapshot_ids[]" value="<?php echo (int) $row['id']; ?>" data-visual-select><span>Select</span></label><?php endif; ?>
 			<?php if ( $image_url ) : ?><a class="mac-tracker-visual-card__image<?php echo $diagnostic_url && empty( $row['screenshot_url'] ) ? ' is-diagnostic' : ''; ?>" href="<?php echo esc_url( $image_url ); ?>" target="_blank" rel="noopener"><img src="<?php echo esc_url( $image_url ); ?>" alt="<?php echo esc_attr( $row['name'] . ( $diagnostic_url && empty( $row['screenshot_url'] ) ? ' diagnostic screenshot' : ' homepage screenshot' ) ); ?>" loading="lazy"><span><?php echo $diagnostic_url && empty( $row['screenshot_url'] ) ? 'Open diagnostic capture' : 'Open full capture'; ?></span></a><?php elseif ( $blocked_capture ) : ?><div class="mac-tracker-visual-card__placeholder mac-tracker-visual-card__placeholder--blocked"><strong>Capture blocked</strong><span><?php echo esc_html( $row['last_error_code'] ?: 'Capture failed' ); ?></span><small><?php echo $local_retry ? 'Local retry advised' : 'Retry is available when the site responds.'; ?></small></div><?php else : ?><div class="mac-tracker-visual-card__placeholder"><span class="dashicons dashicons-format-image"></span><span>Capture not available</span></div><?php endif; ?>
-			<div class="mac-tracker-visual-card__body"><p class="mac-tracker-eyebrow">#<?php echo esc_html( $row['wpm_project_id'] ); ?> · <?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></p><?php $this->project_link( $row ); ?><div class="mac-tracker-visual-domain"><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></div><?php if ( $diagnostic_url && empty( $row['screenshot_url'] ) ) : ?><p class="mac-tracker-visual-diagnostic-label">Blocked · <?php echo esc_html( $row['last_error_code'] ); ?><?php echo ! empty( $row['runner_type'] ) ? ' · ' . esc_html( $row['runner_type'] ) : ''; ?></p><?php endif; ?><div class="mac-tracker-visual-card__tone"><?php $this->tone_cell( $row, false ); ?></div><?php $this->visual_status_cell( $row ); ?><?php if ( ! $this->visual_is_manual( $row ) ) : ?><p class="mac-tracker-visual-reason" data-visual-reason><?php echo esc_html( $row['tone_reason'] ?: ( 'analysis_queued' === $row['pipeline_status'] ? 'Queued for AI analysis.' : ( 'classified' === $row['tone_status'] ? 'AI classified the rendered UI.' : 'Awaiting a manual analysis action.' ) ) ); ?></p><?php endif; ?><?php $this->visual_debug_panel( $row ); ?></div>
+			<div class="mac-tracker-visual-card__body"><p class="mac-tracker-eyebrow">#<?php echo esc_html( $row['wpm_project_id'] ); ?> · <?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></p><?php $this->project_link( $row ); ?><div class="mac-tracker-visual-domain"><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></div><?php if ( $diagnostic_url && empty( $row['screenshot_url'] ) ) : ?><p class="mac-tracker-visual-diagnostic-label">Blocked · <?php echo esc_html( $row['last_error_code'] ); ?><?php echo ! empty( $row['runner_type'] ) ? ' · ' . esc_html( $row['runner_type'] ) : ''; ?></p><?php endif; ?><div class="mac-tracker-visual-card__tone"><?php $this->tone_cell( $row, false ); ?></div><?php $this->visual_status_cell( $row ); ?><?php if ( ! $this->visual_is_manual( $row ) ) : ?><p class="mac-tracker-visual-reason" data-visual-reason><?php echo esc_html( $this->visual_reason_text( $row ) ); ?></p><?php endif; ?><?php $this->visual_debug_panel( $row ); ?></div>
 			<div class="mac-tracker-visual-card__quick-actions"><?php if ( $is_locked ) : ?><button type="submit" class="button button-small" name="visual_action" value="unlock_tone_<?php echo (int) $row['id']; ?>">Unlock AI</button><?php else : ?><?php if ( ! $is_locked && $valid_tone ) : ?><button type="submit" class="button button-primary button-small" name="visual_action" value="approve_one_<?php echo (int) $row['id']; ?>">Approve</button><?php endif; ?><button type="submit" class="button button-small" name="visual_action" value="reanalyze_one_<?php echo (int) $row['id']; ?>" title="Analyze again">Analyze</button><button type="submit" class="button button-small" name="visual_action" value="<?php echo $local_retry ? 'local_retry_one_' : 'recapture_one_'; ?><?php echo (int) $row['id']; ?>"><?php echo $local_retry ? 'Local capture' : 'Capture'; ?></button><button type="submit" class="button button-small mac-tracker-button--skip" name="visual_action" value="skip_one_<?php echo (int) $row['id']; ?>" title="Skip project">Skip</button><?php endif; ?></div>
 		</article>
 		<?php
@@ -1762,6 +1765,26 @@ class MAC_Tracker_Admin {
 		echo '<dt>Provider decisions</dt><dd>' . esc_html( wp_json_encode( array_map( static function( $attempt ) { return array( 'provider' => $attempt['provider'] ?? '', 'model' => $attempt['model'] ?? '', 'brand' => $attempt['brand'] ?? $attempt['primary_family'] ?? '', 'canvas' => $attempt['canvas'] ?? $attempt['primary_surface'] ?? '', 'tone' => $attempt['tone'] ?? $attempt['tone_group'] ?? '', 'confidence' => $attempt['confidence'] ?? '', 'reason' => $attempt['reason'] ?? '', 'mode' => $attempt['canvas_mode'] ?? '' ); }, (array) ( $raw['attempts'] ?? array() ) ) ) ) . '</dd>';
 		echo '<dt>Final reason</dt><dd>' . esc_html( (string) ( $outcome['reason'] ?? $row['tone_reason'] ?? 'Pending' ) ) . '</dd>';
 		echo '<dt>Provider errors</dt><dd>' . esc_html( wp_json_encode( (array) ( $raw['errors'] ?? array() ) ) ) . '</dd></dl></details>';
+	}
+
+	/** Reason line under a visual card. retry_wait is an auto retry, not a manual action. */
+	private function visual_reason_text( array $row ) {
+		$reason = trim( (string) ( $row['tone_reason'] ?? '' ) );
+		if ( '' !== $reason ) {
+			return $reason;
+		}
+		$pipeline = (string) ( $row['pipeline_status'] ?? '' );
+		if ( 'retry_wait' === $pipeline ) {
+			$when = ! empty( $row['next_retry_at'] ) ? MAC_Tracker_Time::bangkok_label( $row['next_retry_at'] ) : '';
+			return 'Retry scheduled' . ( '' !== $when ? ' · ' . $when : '' ) . ' — tự chạy lại, không cần bấm tay.';
+		}
+		if ( 'analysis_queued' === $pipeline ) {
+			return 'Queued for AI analysis.';
+		}
+		if ( 'classified' === (string) ( $row['tone_status'] ?? '' ) ) {
+			return 'AI classified the rendered UI.';
+		}
+		return 'Awaiting a manual analysis action.';
 	}
 
 	private function visual_status_cell( array $row ) {
