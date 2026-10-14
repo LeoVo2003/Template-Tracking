@@ -28,6 +28,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 # Manual clicks and the twice-hourly schedule may overlap. Keep every run, but
 # process them in order so two browsers never work the same queue concurrently.
@@ -79,3 +80,21 @@ jobs:
           echo "=== MAC_VISUAL_WORKER_START ==="
           node .github/scripts/capture-visual-tone.mjs
           echo "=== MAC_VISUAL_WORKER_END ==="
+
+      - name: Chain next run if queue remains
+        if: ${{ inputs.run_mode != 'targeted' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAC_TRACKER_SITE_URL: ${{ secrets.MAC_TRACKER_SITE_URL }}
+          MAC_TRACKER_AUTOMATION_SECRET: <redacted>
+        run: |
+          # Check queue via API - only chain if items remain
+          RESP=$(curl -s -H "x-mac-tracker-automation: $MAC_TRACKER_AUTOMATION_SECRET" "$MAC_TRACKER_SITE_URL/wp-json/mac-tracker/v1/visual/queue-count" || echo '{"pending":0}')
+          QUEUE=$(echo "$RESP" | grep -o '"pending":[0-9]*' | grep -o '[0-9]*' || echo "0")
+          echo "Queue pending: $QUEUE"
+          if [ "$QUEUE" -gt 0 ] 2>/dev/null; then
+            echo "Chaining next batch run ($QUEUE items remain)..."
+            gh workflow run "Capture visual tone" --ref main -f run_mode=batch -f stage=full -f limit=11 || echo "Chain dispatch failed"
+          else
+            echo "Queue empty - not chaining"
+          fi

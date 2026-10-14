@@ -44,6 +44,11 @@ class MAC_Tracker_Visual_Service {
 			'permission_callback' => '__return_true',
 			'args'                => array( 'stage' => array( 'default' => 'capture' ), 'limit' => array( 'default' => 11 ) ),
 		) );
+		register_rest_route( self::NAMESPACE, '/visual/queue-count', array(
+			'methods'             => WP_REST_Server::READABLE,
+			'callback'            => array( $this, 'queue_count' ),
+			'permission_callback' => array( $this, 'automation_permission' ),
+		) );
 		register_rest_route( self::NAMESPACE, '/visual/ingest', array(
 			'methods'             => WP_REST_Server::CREATABLE,
 			'callback'            => array( $this, 'ingest' ),
@@ -77,6 +82,21 @@ class MAC_Tracker_Visual_Service {
 			'gemini_daily_budget_per_key' => max( 1, min( 20, absint( get_option( 'mac_tracker_visual_gemini_daily_budget', 8 ) ) ) ),
 			'tone_catalog' => $this->repository->visual_naming_catalog(),
 		) );
+	}
+
+	public function queue_count() {
+		if ( ! $this->automation_permission() ) {
+			return new WP_Error( 'forbidden', 'Invalid automation secret', array( 'status' => 403 ) );
+		}
+		$stats = $this->repository->visual_stats();
+		$pending = (int) ( $stats['capture_pending'] ?? 0 ) + (int) ( $stats['tone_pending'] ?? 0 );
+		return rest_ensure_response( array( 'pending' => $pending ) );
+	}
+
+	private function automation_permission() {
+		$secret = get_option( 'mac_tracker_automation_secret', '' );
+		$header = isset( $_SERVER['HTTP_X_MAC_TRACKER_AUTOMATION'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_MAC_TRACKER_AUTOMATION'] ) ) : '';
+		return '' !== $secret && hash_equals( $secret, $header );
 	}
 
 	public function queue( WP_REST_Request $request ) {
