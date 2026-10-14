@@ -1698,10 +1698,11 @@ class MAC_Tracker_Admin {
 		if ( $proposed && ! in_array( $proposed, $options, true ) && 'Cần duyệt' !== $proposed ) {
 			array_unshift( $options, $proposed );
 		}
+		$selected_value = ( 'Cần duyệt' === $tone && '' !== $proposed ) ? $proposed : $tone;
 		foreach ( $options as $option ) {
-			echo '<option value="' . esc_attr( $option ) . '"' . selected( $tone, $option, false ) . '>' . esc_html( $option ) . '</option>';
+			echo '<option value="' . esc_attr( $option ) . '"' . selected( $selected_value, $option, false ) . '>' . esc_html( $option ) . '</option>';
 		}
-		echo '</select><button type="submit" class="button button-small" name="visual_action" value="save_tone_' . $snapshot_id . '">Save &amp; approve</button></div></details>';
+		echo '</select><button type="submit" class="button" style="white-space:nowrap;" name="visual_action" value="save_tone_' . $snapshot_id . '">Save &amp; approve</button></div></details>';
 	}
 
 	/** Collapsible, sanitized evidence for diagnosing an AI result without exposing secrets. */
