@@ -80,15 +80,13 @@ jobs:
           echo "=== MAC_VISUAL_WORKER_START ==="
           node .github/scripts/capture-visual-tone.mjs
           echo "=== MAC_VISUAL_WORKER_END ==="
-
       - name: Chain next run if queue remains
-        if: ${{ inputs.run_mode != 'targeted' }}
+        if: "${{ inputs.run_mode != 'targeted' }}"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_WORKFLOW }}
           MAC_TRACKER_SITE_URL: ${{ secrets.MAC_TRACKER_SITE_URL }}
-          MAC_TRACKER_AUTOMATION_SECRET: <redacted>
+          MAC_TRACKER_AUTOMATION_SECRET: ${{ secrets.MAC_TRACKER_AUTOMATION_SECRET }}
         run: |
-          # Check queue via API - only chain if items remain
           RESP=$(curl -s -H "x-mac-tracker-automation: $MAC_TRACKER_AUTOMATION_SECRET" "$MAC_TRACKER_SITE_URL/wp-json/mac-tracker/v1/visual/queue-count" || echo '{"pending":0}')
           QUEUE=$(echo "$RESP" | grep -o '"pending":[0-9]*' | grep -o '[0-9]*' || echo "0")
           echo "Queue pending: $QUEUE"
