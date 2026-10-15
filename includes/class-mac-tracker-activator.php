@@ -169,6 +169,7 @@ class MAC_Tracker_Activator {
 				tone_reason text NULL,
 				tone_status varchar(32) NOT NULL DEFAULT 'pending',
 				tone_token varchar(64) NOT NULL DEFAULT '',
+				note text NULL,
 				ai_raw longtext NULL,
 				captured_at datetime NULL,
 				created_at datetime NOT NULL,

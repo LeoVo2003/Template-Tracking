@@ -738,6 +738,42 @@ class MAC_Tracker_Repository {
 		$this->wpdb->query( "UPDATE {$this->visuals} v SET pipeline_status = 'capture_queued', next_retry_at = NULL, updated_at = UTC_TIMESTAMP() WHERE pipeline_status = 'retry_wait' AND capture_status = 'pending' AND screenshot_url = '' AND manual_locked = 0 AND human_locked = 0 AND next_retry_at IS NOT NULL AND next_retry_at <= UTC_TIMESTAMP()" );
 	}
 
+	/** Save a manual note on a visual record (e.g. redesign round 2 note). */
+	public function save_visual_note( $project_id, $note ) {
+		$project_id = absint( $project_id );
+		if ( $project_id <= 0 ) return false;
+		$note = sanitize_textarea_field( (string) $note );
+		return false !== $this->wpdb->update(
+			$this->visuals,
+			array( 'note' => $note, 'updated_at' => MAC_Tracker_Time::now_utc() ),
+			array( 'project_id' => $project_id ),
+			array( '%s', '%s' ),
+			array( '%d' )
+		);
+	}
+
+	/** Delete the screenshot image but keep the tone data.
+	 * Used when a redesign (round 2) makes the old capture confusing.
+	 * Clears screenshot_url and attachments, keeps tone/precise_tone.
+	 */
+	public function delete_visual_image( $project_id ) {
+		$project_id = absint( $project_id );
+		if ( $project_id <= 0 ) return false;
+		return false !== $this->wpdb->update(
+			$this->visuals,
+			array(
+				'screenshot_url' => '',
+				'attachment_id' => 0,
+				'preview_attachment_id' => 0,
+				'capture_status' => 'pending',
+				'updated_at' => MAC_Tracker_Time::now_utc(),
+			),
+			array( 'project_id' => $project_id ),
+			array( '%s', '%d', '%d', '%s', '%s' ),
+			array( '%d' )
+		);
+	}
+
 	public function visual_stats() {
 		return (array) $this->wpdb->get_row( "SELECT COUNT(*) AS total, SUM(pipeline_status IN ('captured', 'analysis_queued', 'analyzing', 'classified', 'needs_review')) AS captured, SUM(pipeline_status = 'classified') AS classified, SUM(pipeline_status = 'failed') AS failed, SUM(pipeline_status IN ('idle', 'capture_queued', 'capturing', 'retry_wait', 'blocked')) AS capture_pending, SUM(pipeline_status IN ('captured', 'analysis_queued', 'analyzing', 'needs_review')) AS tone_pending FROM {$this->visuals}", ARRAY_A );
 	}
@@ -924,7 +960,7 @@ class MAC_Tracker_Repository {
 		$per_page = in_array( absint( $per_page ), array( 25, 50, 100, 200 ), true ) ? absint( $per_page ) : 100;
 		$where = $this->visual_review_where( $bucket );
 		$total = (int) $this->wpdb->get_var( "SELECT COUNT(*) FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where}" );
-		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.capture_bundle_json, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where} ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d OFFSET %d";
+		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.capture_bundle_json, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.note, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where} ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d OFFSET %d";
 		$rows = (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $per_page, ( $page - 1 ) * $per_page ), ARRAY_A );
 		return array( 'rows' => $rows, 'total' => $total, 'per_page' => $per_page, 'paged' => $page, 'total_pages' => max( 1, (int) ceil( $total / $per_page ) ) );
 	}
@@ -933,7 +969,7 @@ class MAC_Tracker_Repository {
 	public function visual_review_rows( $limit = 120 ) {
 		$limit = max( 1, min( 300, absint( $limit ) ) );
 		$where = $this->visual_review_where( 'all' );
-		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.capture_bundle_json, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where} ORDER BY v.updated_at DESC LIMIT %d";
+		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.capture_bundle_json, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.note, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where} ORDER BY v.updated_at DESC LIMIT %d";
 		return (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
 	}
 

@@ -502,7 +502,7 @@ class MAC_Tracker_Admin {
 		<article class="mac-tracker-visual-card<?php echo $this->visual_is_manual( $row ) ? ' is-manual-tone' : ''; ?><?php echo $blocked_capture ? ' is-blocked-capture' : ''; ?>" id="visual-<?php echo (int) $row['id']; ?>" data-visual-card="<?php echo (int) $row['id']; ?>" data-visual-tone="<?php echo esc_attr( (string) ( $row['tone'] ?? '' ) ); ?>" data-visual-local-retry="<?php echo $local_retry ? '1' : '0'; ?>" data-visual-error-code="<?php echo esc_attr( (string) ( $row['last_error_code'] ?? '' ) ); ?>">
 			<?php if ( ! $is_locked ) : ?><label class="mac-tracker-visual-card__select"><input type="checkbox" name="snapshot_ids[]" value="<?php echo (int) $row['id']; ?>" data-visual-select><span>Select</span></label><?php endif; ?>
 			<?php if ( $image_url ) : ?><a class="mac-tracker-visual-card__image<?php echo $diagnostic_url && empty( $row['screenshot_url'] ) ? ' is-diagnostic' : ''; ?>" href="<?php echo esc_url( $image_url ); ?>" target="_blank" rel="noopener"><img src="<?php echo esc_url( $image_url ); ?>" alt="<?php echo esc_attr( $row['name'] . ( $diagnostic_url && empty( $row['screenshot_url'] ) ? ' diagnostic screenshot' : ' homepage screenshot' ) ); ?>" loading="lazy"><span><?php echo $diagnostic_url && empty( $row['screenshot_url'] ) ? 'Open diagnostic capture' : 'Open full capture'; ?></span></a><?php elseif ( $blocked_capture ) : ?><div class="mac-tracker-visual-card__placeholder mac-tracker-visual-card__placeholder--blocked"><strong>Capture blocked</strong><span><?php echo esc_html( $row['last_error_code'] ?: 'Capture failed' ); ?></span><small><?php echo $local_retry ? 'Local retry advised' : 'Retry is available when the site responds.'; ?></small></div><?php else : ?><div class="mac-tracker-visual-card__placeholder"><span class="dashicons dashicons-format-image"></span><span>Capture not available</span></div><?php endif; ?>
-			<div class="mac-tracker-visual-card__body"><p class="mac-tracker-eyebrow">#<?php echo esc_html( $row['wpm_project_id'] ); ?> · <?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></p><?php $this->project_link( $row ); ?><div class="mac-tracker-visual-domain"><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></div><?php if ( $diagnostic_url && empty( $row['screenshot_url'] ) ) : ?><p class="mac-tracker-visual-diagnostic-label">Blocked · <?php echo esc_html( $row['last_error_code'] ); ?><?php echo ! empty( $row['runner_type'] ) ? ' · ' . esc_html( $row['runner_type'] ) : ''; ?></p><?php endif; ?><div class="mac-tracker-visual-card__tone"><?php $this->tone_cell( $row, false ); ?></div><?php $this->visual_status_cell( $row ); ?><?php if ( ! $this->visual_is_manual( $row ) ) : ?><p class="mac-tracker-visual-reason" data-visual-reason><?php echo esc_html( $this->visual_reason_text( $row ) ); ?></p><?php endif; ?><?php $this->visual_debug_panel( $row ); ?></div>
+			<div class="mac-tracker-visual-card__body"><p class="mac-tracker-eyebrow">#<?php echo esc_html( $row['wpm_project_id'] ); ?> · <?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></p><?php $this->project_link( $row ); ?><div class="mac-tracker-visual-domain"><?php $this->url_link( $row['website_url'], $this->website_label( $row['website_url'] ) ); ?></div><?php if ( $diagnostic_url && empty( $row['screenshot_url'] ) ) : ?><p class="mac-tracker-visual-diagnostic-label">Blocked · <?php echo esc_html( $row['last_error_code'] ); ?><?php echo ! empty( $row['runner_type'] ) ? ' · ' . esc_html( $row['runner_type'] ) : ''; ?></p><?php endif; ?><div class="mac-tracker-visual-card__tone"><?php $this->tone_cell( $row, false ); ?></div><?php $this->visual_status_cell( $row ); ?><?php if ( ! $this->visual_is_manual( $row ) ) : ?><p class="mac-tracker-visual-reason" data-visual-reason><?php echo esc_html( $this->visual_reason_text( $row ) ); ?></p><?php endif; ?><?php $this->visual_debug_panel( $row ); ?><?php $card_note = trim( (string) ( $row['note'] ?? '' ) ); ?><details class="mac-tracker-visual-note"><summary>Ghi chú<?php echo '' !== $card_note ? ' · đã có' : ''; ?></summary><div><textarea name="visual_note[<?php echo (int) $row['id']; ?>]" rows="2" style="width:100%;" placeholder="VD: Redesign lần 2 — hình hiện tại là lần 2, lần 1 đã xóa."><?php echo esc_textarea( $card_note ); ?></textarea><div style="margin-top:6px;display:flex;gap:8px;"><button type="submit" class="button button-small" name="visual_action" value="save_note_<?php echo (int) $row['id']; ?>">Lưu note</button><?php if ( ! empty( $row['screenshot_url'] ) ) : ?><button type="submit" class="button button-small button-link-delete" name="visual_action" value="delete_image_<?php echo (int) $row['id']; ?>" onclick="return confirm('Xóa hình chụp nhưng GIỮ tone?');">Xóa hình</button><?php endif; ?></div></div></details></div>
 			<div class="mac-tracker-visual-card__quick-actions"><?php if ( $is_locked ) : ?><button type="submit" class="button button-small" name="visual_action" value="unlock_tone_<?php echo (int) $row['id']; ?>">Unlock AI</button><?php else : ?><?php if ( ! $is_locked && $valid_tone ) : ?><button type="submit" class="button button-primary button-small" name="visual_action" value="approve_one_<?php echo (int) $row['id']; ?>">Approve</button><?php endif; ?><button type="submit" class="button button-small" name="visual_action" value="reanalyze_one_<?php echo (int) $row['id']; ?>" title="Analyze again">Analyze</button><button type="submit" class="button button-small" name="visual_action" value="<?php echo $local_retry ? 'local_retry_one_' : 'recapture_one_'; ?><?php echo (int) $row['id']; ?>"><?php echo $local_retry ? 'Local capture' : 'Capture'; ?></button><button type="submit" class="button button-small mac-tracker-button--skip" name="visual_action" value="skip_one_<?php echo (int) $row['id']; ?>" title="Skip project">Skip</button><?php endif; ?></div>
 		</article>
 		<?php
@@ -851,6 +851,16 @@ class MAC_Tracker_Admin {
 		if ( preg_match( '/^save_tone_(\d+)$/', $action, $tone_match ) ) {
 			$result = $this->repository->save_manual_visual_tone( absint( $tone_match[1] ), $manual_tones[ absint( $tone_match[1] ) ] ?? '' );
 			return array( 'result' => $result, 'message' => 'Visual tone reviewed and saved.', 'dispatch' => false );
+		}
+		if ( preg_match( '/^save_note_(\d+)$/', $action, $note_match ) ) {
+			$pid = absint( $note_match[1] );
+			$note = isset( $_POST['visual_note'][ $pid ] ) ? wp_unslash( $_POST['visual_note'][ $pid ] ) : '';
+			$result = $this->repository->save_visual_note( $pid, $note );
+			return array( 'result' => $result, 'message' => 'Note saved.', 'dispatch' => false );
+		}
+		if ( preg_match( '/^delete_image_(\d+)$/', $action, $del_match ) ) {
+			$result = $this->repository->delete_visual_image( absint( $del_match[1] ) );
+			return array( 'result' => $result, 'message' => 'Screenshot deleted. Tone data kept.', 'dispatch' => false );
 		}
 		if ( 'unlock_all' === $action ) {
 			$result = $this->repository->unlock_all_visual_tones();
@@ -1931,6 +1941,14 @@ class MAC_Tracker_Admin {
 	}
 
 	private function layout_label( $url ) {
+		$identity = MAC_Tracker_Repository::template_identity( $url );
+		if ( $identity ) {
+			$label = 'demo-' . $identity['code'] . ' - home';
+			if ( '' !== $identity['home'] && '01' !== $identity['home'] ) {
+				$label .= ' ' . $identity['home'];
+			}
+			return $label;
+		}
 		$parts = $this->layout_parts( $url );
 		if ( $parts ) {
 			return $parts['demo'] . ' - home' . ( '' === $parts['home_number'] ? '' : ' ' . $parts['home_number'] );
