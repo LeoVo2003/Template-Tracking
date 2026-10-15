@@ -493,7 +493,7 @@ class MAC_Tracker_Repository {
 
 		$count_sql = "SELECT COUNT(*) FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id LEFT JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where_sql}";
 		$total     = empty( $args ) ? (int) $this->wpdb->get_var( $count_sql ) : (int) $this->wpdb->get_var( $this->wpdb->prepare( $count_sql, $args ) );
-		$query     = "SELECT p.*, c.status AS color_status, c.colors_json, c.source_type AS color_source_type, c.source_raw AS color_source_raw, c.approved_at, c.locked AS color_locked, v.screenshot_url, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.capture_status, v.captured_at FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id LEFT JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where_sql} ORDER BY {$order_sql}";
+		$query     = "SELECT p.*, c.status AS color_status, c.colors_json, c.source_type AS color_source_type, c.source_raw AS color_source_raw, c.approved_at, c.locked AS color_locked, v.screenshot_url, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.note, v.capture_status, v.captured_at FROM {$this->projects} p LEFT JOIN {$this->colors} c ON c.project_id = p.id LEFT JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where_sql} ORDER BY {$order_sql}";
 		$query_args = $args;
 		if ( $per_page > 0 ) {
 			$query       .= ' LIMIT %d OFFSET %d';

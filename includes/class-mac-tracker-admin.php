@@ -311,7 +311,7 @@ class MAC_Tracker_Admin {
 		<section class="mac-tracker-table-shell" data-mac-project-shell>
 			<div class="mac-tracker-empty" data-mac-project-empty <?php echo empty( $page['rows'] ) ? '' : 'hidden'; ?>><span class="dashicons dashicons-archive"></span><strong>No matching projects</strong><p>Nothing in the current snapshot matches this search.</p></div>
 			<div class="mac-tracker-table-scroll" data-mac-project-table <?php echo empty( $page['rows'] ) ? 'hidden' : ''; ?>><table class="widefat mac-tracker-project-table"><thead><tr>
-					<th scope="col" class="mac-tracker-col--thumbnail">Thumbnail</th><?php $this->sort_header( 'project', 'Project', $filters ); ?><?php $this->sort_header( 'layout', 'Template', $filters ); ?><?php $this->sort_header( 'palette', 'Color', $filters ); ?><?php $this->sort_header( 'tone', 'Tone', $filters ); ?><th scope="col">Status</th><?php $this->sort_header( 'assignee', 'User', $filters ); ?><?php $this->sort_header( 'date', 'Time', $filters, 'mac-tracker-col--date' ); ?><?php if ( ! $this->public_view ) : ?><th scope="col" class="mac-tracker-col--options"><span class="screen-reader-text">Options</span></th><?php endif; ?>
+					<th scope="col" class="mac-tracker-col--thumbnail">Thumbnail</th><?php $this->sort_header( 'project', 'Project', $filters ); ?><?php $this->sort_header( 'layout', 'Template', $filters ); ?><?php $this->sort_header( 'palette', 'Color', $filters ); ?><?php $this->sort_header( 'tone', 'Tone', $filters ); ?><th scope="col">Note</th><th scope="col">Status</th><?php $this->sort_header( 'assignee', 'User', $filters ); ?><?php $this->sort_header( 'date', 'Time', $filters, 'mac-tracker-col--date' ); ?><?php if ( ! $this->public_view ) : ?><th scope="col" class="mac-tracker-col--options"><span class="screen-reader-text">Options</span></th><?php endif; ?>
 				</tr></thead><tbody data-mac-project-rows>
 					<?php foreach ( $page['rows'] as $row ) : $this->render_project_row( $row ); endforeach; ?>
 				</tbody></table></div>
@@ -329,6 +329,7 @@ class MAC_Tracker_Admin {
 			<td><?php $this->url_link( $this->layout_url( $row['layout_url'] ), $this->layout_label( $row['layout_url'] ) ); ?></td>
 			<td><?php $this->palette_cell( $row ); ?></td>
 			<td><?php $this->tone_cell( $row ); ?></td>
+			<td><?php $row_note = trim( (string) ( $row['note'] ?? '' ) ); ?><?php if ( '' !== $row_note ) : ?><span class="mac-tracker-note-badge" title="<?php echo esc_attr( $row_note ); ?>">📝</span><?php else : ?><span style="color:#ccc;">—</span><?php endif; ?></td>
 			<td><?php $this->project_status_badge( $row ); ?></td>
 			<td><?php echo esc_html( $this->person_name( $row['assignee_json'] ) ?: '—' ); ?></td>
 			<td class="mac-tracker-date mac-tracker-date--day"><?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></td>
@@ -337,7 +338,7 @@ class MAC_Tracker_Admin {
 			<?php else : ?>
 			<td class="mac-tracker-row-options"><button type="button" class="mac-tracker-options-trigger" aria-haspopup="true" aria-expanded="false" aria-label="Project options" data-mac-menu-trigger>⋮</button><div class="mac-tracker-options-menu" data-mac-menu hidden><?php if ( $this->first_url( $row['website_url'] ) ) : ?><a href="<?php echo esc_url( $this->first_url( $row['website_url'] ) ); ?>" target="_blank" rel="noopener">Open website</a><?php endif; ?><button type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Edit project</button><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return window.confirm('Skip this project from Visual Tone and Color Review?');"><?php wp_nonce_field( 'mac_tracker_skip_project' ); ?><input type="hidden" name="action" value="mac_tracker_skip_project"><input type="hidden" name="return_screen" value="projects"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><button type="submit" class="is-danger">Skip project</button></form></div></td>
 		</tr>
-		<tr id="edit-<?php echo (int) $row['id']; ?>" class="mac-tracker-edit-row" hidden><td colspan="9"><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_edit_project' ); ?><input type="hidden" name="action" value="mac_tracker_edit_project"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><label>Project ID<input type="number" min="1" name="project_id" value="<?php echo (int) $row['wpm_project_id']; ?>" required></label><label>Project name<input type="text" name="project_name" value="<?php echo esc_attr( $row['name'] ); ?>" required></label><label>Date &amp; time<input type="datetime-local" name="date_time" value="<?php echo esc_attr( MAC_Tracker_Time::bangkok_input( $row['task_completed_at'] ) ); ?>"></label><button class="button button-primary" type="submit">Save project</button><button class="button" type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Cancel</button></form></td></tr>
+		<tr id="edit-<?php echo (int) $row['id']; ?>" class="mac-tracker-edit-row" hidden><td colspan="10"><form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"><?php wp_nonce_field( 'mac_tracker_edit_project' ); ?><input type="hidden" name="action" value="mac_tracker_edit_project"><input type="hidden" name="snapshot_id" value="<?php echo (int) $row['id']; ?>"><label>Project ID<input type="number" min="1" name="project_id" value="<?php echo (int) $row['wpm_project_id']; ?>" required></label><label>Project name<input type="text" name="project_name" value="<?php echo esc_attr( $row['name'] ); ?>" required></label><label>Date &amp; time<input type="datetime-local" name="date_time" value="<?php echo esc_attr( MAC_Tracker_Time::bangkok_input( $row['task_completed_at'] ) ); ?>"></label><label>Tone màu<select name="visual_tone"><option value="">— Giữ nguyên —</option><?php foreach ( array_diff( $this->tone_options(), array( 'Cần duyệt' ) ) as $tone_opt ) : ?><option value="<?php echo esc_attr( $tone_opt ); ?>" <?php selected( (string) ( $row['tone'] ?? '' ), $tone_opt ); ?>><?php echo esc_html( $tone_opt ); ?></option><?php endforeach; ?></select></label><label style="grid-column:1/-1;">Ghi chú<textarea name="visual_note" rows="2" style="width:100%;" placeholder="VD: Redesign lần 2 — hình cũ là lần 1 đã xóa."><?php echo esc_textarea( (string) ( $row['note'] ?? '' ) ); ?></textarea></label><div style="display:flex;gap:8px;align-items:center;"><button class="button button-primary" type="submit">Save project</button><button class="button" type="button" data-edit-target="edit-<?php echo (int) $row['id']; ?>">Cancel</button><?php if ( ! empty( $row['screenshot_url'] ) ) : ?><button class="button button-link-delete" type="submit" name="delete_visual_image" value="1" onclick="return confirm('Xóa hình chụp nhưng GIỮ tone?');">Xóa hình</button><?php endif; ?></div></form></td></tr>
 			<?php endif; ?>
 		<?php
 	}
@@ -1138,8 +1139,23 @@ class MAC_Tracker_Admin {
 
 	public function handle_edit_project() {
 		$this->require_request( 'mac_tracker_edit_project' );
-		$result = $this->repository->edit_project_identity( $_POST['snapshot_id'] ?? 0, $_POST['project_id'] ?? 0, wp_unslash( $_POST['project_name'] ?? '' ), wp_unslash( $_POST['date_time'] ?? '' ) );
+		$snapshot_id = absint( $_POST['snapshot_id'] ?? 0 );
+		$result = $this->repository->edit_project_identity( $snapshot_id, $_POST['project_id'] ?? 0, wp_unslash( $_POST['project_name'] ?? '' ), wp_unslash( $_POST['date_time'] ?? '' ) );
 		if ( is_wp_error( $result ) ) { $this->redirect( 'mac-project-tracker', $result->get_error_message(), 'error' ); }
+		// Save note if provided.
+		if ( isset( $_POST['visual_note'] ) ) {
+			$this->repository->save_visual_note( $snapshot_id, wp_unslash( $_POST['visual_note'] ) );
+		}
+		// Save tone if selected.
+		$manual_tone = sanitize_text_field( wp_unslash( $_POST['visual_tone'] ?? '' ) );
+		if ( '' !== $manual_tone ) {
+			$this->repository->save_manual_visual_tone( $snapshot_id, $manual_tone );
+		}
+		// Delete image if requested (keeps tone).
+		if ( ! empty( $_POST['delete_visual_image'] ) ) {
+			$this->repository->delete_visual_image( $snapshot_id );
+			$this->redirect( 'mac-project-tracker', 'Project updated. Screenshot deleted, tone kept.', 'success' );
+		}
 		$this->redirect( 'mac-project-tracker', 'Project ID and name updated.', 'success' );
 	}
 
