@@ -395,8 +395,8 @@ class MAC_Tracker_Repository {
 				$args[]  = (int) $search;
 			} else {
 				$like    = '%' . $this->wpdb->esc_like( $search ) . '%';
-				$where[] = '(p.name LIKE %s OR p.zip_code LIKE %s OR p.website_url LIKE %s OR p.domain LIKE %s OR p.layout_url LIKE %s OR LOWER(p.layout_url) LIKE %s)';
-				$args    = array_merge( $args, array( $like, $like, $like, $like, $like, '%' . $this->wpdb->esc_like( $this->template_search_token( $search ) ) . '%' ) );
+				$where[] = '(p.name LIKE %s OR p.zip_code LIKE %s OR p.website_url LIKE %s OR p.domain LIKE %s OR p.layout_url LIKE %s OR LOWER(p.layout_url) LIKE %s OR v.note LIKE %s)';
+				$args    = array_merge( $args, array( $like, $like, $like, $like, $like, '%' . $this->wpdb->esc_like( $this->template_search_token( $search ) ) . '%', $like ) );
 			}
 		}
 
