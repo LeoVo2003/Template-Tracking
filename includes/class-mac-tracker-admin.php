@@ -329,7 +329,7 @@ class MAC_Tracker_Admin {
 			<td><?php $this->url_link( $this->layout_url( $row['layout_url'] ), $this->layout_label( $row['layout_url'] ) ); ?></td>
 			<td><?php $this->palette_cell( $row ); ?></td>
 			<td><?php $this->tone_cell( $row ); ?></td>
-			<td style="max-width:200px;"><?php $row_note = trim( (string) ( $row['note'] ?? '' ) ); ?><?php if ( '' !== $row_note ) : ?><span class="mac-tracker-note-text" style="display:block;white-space:normal;word-wrap:break-word;font-size:12px;line-height:1.4;"><?php echo esc_html( $row_note ); ?></span><?php else : ?><span style="color:#ccc;">—</span><?php endif; ?></td>
+			<td><?php $row_note = trim( (string) ( $row['note'] ?? '' ) ); ?><?php if ( '' !== $row_note ) : ?><details class="mac-tracker-note-details" style="font-size:12px;"><summary style="cursor:pointer;color:#1877F2;white-space:nowrap;">📝 Xem note</summary><div style="margin-top:4px;padding:8px;background:#f9f9f9;border-radius:4px;white-space:normal;word-wrap:break-word;max-width:250px;"><?php echo esc_html( $row_note ); ?></div></details><?php else : ?><span style="color:#ccc;">—</span><?php endif; ?></td>
 			<td><?php $this->project_status_badge( $row ); ?></td>
 			<td><?php echo esc_html( $this->person_name( $row['assignee_json'] ) ?: '—' ); ?></td>
 			<td class="mac-tracker-date mac-tracker-date--day"><?php echo esc_html( MAC_Tracker_Time::bangkok_date( $row['task_completed_at'] ) ); ?></td>
