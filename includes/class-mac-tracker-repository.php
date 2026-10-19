@@ -960,7 +960,7 @@ class MAC_Tracker_Repository {
 		$per_page = in_array( absint( $per_page ), array( 25, 50, 100, 200 ), true ) ? absint( $per_page ) : 100;
 		$where = $this->visual_review_where( $bucket );
 		$total = (int) $this->wpdb->get_var( "SELECT COUNT(*) FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where}" );
-		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.capture_bundle_json, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.note, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where} ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d OFFSET %d";
+		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.capture_bundle_json, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.note, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.reviewer_tag, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where} ORDER BY CASE WHEN v.pipeline_status IN ('capturing', 'analyzing') THEN 0 WHEN v.pipeline_status IN ('capture_queued', 'analysis_queued') THEN 1 WHEN v.pipeline_status = 'needs_review' THEN 2 ELSE 3 END, v.updated_at DESC LIMIT %d OFFSET %d";
 		$rows = (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $per_page, ( $page - 1 ) * $per_page ), ARRAY_A );
 		return array( 'rows' => $rows, 'total' => $total, 'per_page' => $per_page, 'paged' => $page, 'total_pages' => max( 1, (int) ceil( $total / $per_page ) ) );
 	}
@@ -969,7 +969,7 @@ class MAC_Tracker_Repository {
 	public function visual_review_rows( $limit = 120 ) {
 		$limit = max( 1, min( 300, absint( $limit ) ) );
 		$where = $this->visual_review_where( 'all' );
-		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.capture_bundle_json, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.note, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where} ORDER BY v.updated_at DESC LIMIT %d";
+		$sql = "SELECT p.*, v.screenshot_url, v.diagnostic_screenshot_url, v.diagnostic_captured_at, v.runner_type, v.capture_bundle_json, v.tone, v.tone_group, v.precise_tone, v.confidence AS tone_confidence, v.tone_reason, v.tone_status, v.note, v.ai_raw, v.ai_provider, v.ai_model, v.ai_confidence, v.capture_status, v.captured_at, v.updated_at AS visual_updated_at, v.pipeline_status, v.manual_locked, v.human_locked, v.approved_by, v.approved_at, v.approved_capture_revision, v.capture_revision, v.manual_tone, v.manual_updated_at, v.reviewer_tag, v.claimed_at, v.lease_until, v.next_retry_at, v.last_error_code, v.last_error_message, v.last_error_at, v.analyzed_at FROM {$this->projects} p INNER JOIN {$this->visuals} v ON v.project_id = p.id WHERE {$where} ORDER BY v.updated_at DESC LIMIT %d";
 		return (array) $this->wpdb->get_results( $this->wpdb->prepare( $sql, $limit ), ARRAY_A );
 	}
 
@@ -1255,7 +1255,7 @@ class MAC_Tracker_Repository {
 		return $this->save_claimed_visual( $snapshot_id, 'tone', $token, array( 'pipeline_status' => $needs_review ? 'needs_review' : 'classified', 'tone' => $tone, 'tone_group' => sanitize_text_field( (string) ( $metadata['tone_group'] ?? $tone ) ), 'precise_tone' => sanitize_text_field( (string) ( $metadata['precise_tone'] ?? '' ) ), 'confidence' => $confidence, 'tone_reason' => sanitize_text_field( $reason ), 'tone_status' => 'classified', 'analysis_capture_run_id' => $capture_run_id, 'ai_provider' => sanitize_key( (string) ( $metadata['provider'] ?? '' ) ), 'ai_model' => sanitize_text_field( (string) ( $metadata['model'] ?? '' ) ), 'ai_confidence' => $numeric_confidence ?: null, 'ai_raw' => (string) $raw, 'analyzed_at' => MAC_Tracker_Time::now_utc(), 'lease_until' => null, 'claimed_at' => null, 'job_token' => '', 'last_error_code' => '', 'last_error_message' => null, 'last_error_at' => null, 'last_failed_stage' => '' ) );
 	}
 
-	public function save_manual_visual_tone( $snapshot_id, $tone ) {
+	public function save_manual_visual_tone( $snapshot_id, $tone, $reviewer_tag = '' ) {
 		$tone = sanitize_text_field( (string) $tone );
 		$tone = $this->ensure_visual_tone( $tone );
 		$allowed = array_diff( $this->visual_tones(), array( 'Cần duyệt' ) );
@@ -1281,6 +1281,7 @@ class MAC_Tracker_Repository {
 			'approved_at' => MAC_Tracker_Time::now_utc(),
 			'approved_capture_revision' => (int) $this->wpdb->get_var( $this->wpdb->prepare( "SELECT capture_revision FROM {$this->visuals} WHERE project_id = %d", absint( $snapshot_id ) ) ),
 			'manual_tone' => $tone,
+			'reviewer_tag' => sanitize_text_field( (string) $reviewer_tag ),
 			'manual_updated_at' => MAC_Tracker_Time::now_utc(),
 			'analyzed_at' => MAC_Tracker_Time::now_utc(),
 			'lease_until' => null,
@@ -1299,7 +1300,7 @@ class MAC_Tracker_Repository {
 	}
 
 	/** Approve only valid, currently reviewable AI classifications from a selected Review tab. */
-	public function approve_visual_tones( array $snapshot_ids ) {
+	public function approve_visual_tones( array $snapshot_ids, $reviewer_tag = '' ) {
 		$ids = array_values( array_unique( array_filter( array_map( 'absint', $snapshot_ids ) ) ) );
 		if ( empty( $ids ) ) {
 			return 0;
@@ -1307,8 +1308,9 @@ class MAC_Tracker_Repository {
 		$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
 		$tones        = array_values( array_diff( $this->visual_tones(), array( 'Cần duyệt' ) ) );
 		$tone_tokens  = implode( ',', array_fill( 0, count( $tones ), '%s' ) );
-		$sql           = "UPDATE {$this->visuals} SET human_locked = 1, manual_locked = 0, approved_by = %d, approved_at = %s, approved_capture_revision = capture_revision, updated_at = %s WHERE project_id IN ({$placeholders}) AND human_locked = 0 AND manual_locked = 0 AND tone_status = 'classified' AND tone IN ({$tone_tokens})";
-		$args          = array_merge( array( get_current_user_id(), MAC_Tracker_Time::now_utc(), MAC_Tracker_Time::now_utc() ), $ids, $tones );
+		$reviewer_tag = sanitize_text_field( (string) $reviewer_tag );
+		$sql           = "UPDATE {$this->visuals} SET human_locked = 1, manual_locked = 0, approved_by = %d, approved_at = %s, approved_capture_revision = capture_revision, reviewer_tag = %s, updated_at = %s WHERE project_id IN ({$placeholders}) AND human_locked = 0 AND manual_locked = 0 AND tone_status = 'classified' AND tone IN ({$tone_tokens})";
+		$args          = array_merge( array( get_current_user_id(), MAC_Tracker_Time::now_utc(), $reviewer_tag, MAC_Tracker_Time::now_utc() ), $ids, $tones );
 		return (int) $this->wpdb->query( $this->wpdb->prepare( $sql, $args ) );
 	}
 

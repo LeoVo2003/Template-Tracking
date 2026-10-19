@@ -839,18 +839,19 @@ class MAC_Tracker_Admin {
 			$manual_tones = isset( $_POST['manual_tone'] ) && is_array( $_POST['manual_tone'] ) ? wp_unslash( $_POST['manual_tone'] ) : array();
 			$manual_saved = 0;
 			$valid_tones = array_diff( $this->tone_options(), array( 'Cần duyệt' ) );
+			$reviewer_tag = sanitize_text_field( wp_unslash( $_POST['reviewer_tag'] ?? '' ) );
 			foreach ( $manual_tones as $mid => $mtone ) {
 				$mid = absint( $mid );
 				$mtone = sanitize_text_field( $mtone );
 				if ( $mid > 0 && '' !== $mtone && in_array( $mtone, $valid_tones, true ) ) {
 					// Only save if this card is in the selection (or no selection = page)
 					if ( empty( $ids ) || in_array( $mid, $ids, true ) ) {
-						$res = $this->repository->save_manual_visual_tone( $mid, $mtone );
+						$res = $this->repository->save_manual_visual_tone( $mid, $mtone, $reviewer_tag );
 						if ( ! is_wp_error( $res ) && $res ) { $manual_saved++; }
 					}
 				}
 			}
-			$result = $this->repository->approve_visual_tones( $ids );
+			$result = $this->repository->approve_visual_tones( $ids, $reviewer_tag );
 			$total = (int) $result + $manual_saved;
 			if ( $total <= 0 ) {
 				return array( 'result' => new WP_Error( 'mac_tracker_visual_approve_empty', 'No eligible AI review cards were selected.' ), 'message' => 'No eligible AI review cards were selected.', 'dispatch' => false );
@@ -1721,6 +1722,12 @@ class MAC_Tracker_Admin {
 		$manual = ! empty( $row['manual_locked'] ) || '' !== trim( (string) ( $row['manual_tone'] ?? '' ) );
 		echo '<span class="' . esc_attr( $classes ) . '" style="' . esc_attr( $style ) . '" title="' . esc_attr( $title ) . '">' . $content . '</span>';
 		if ( $manual ) { echo '<span class="mac-tracker-tone-manual">Đã sửa tay</span>'; }
+		$reviewer = trim( (string) ( $row['reviewer_tag'] ?? '' ) );
+		if ( 'leo' === strtolower( $reviewer ) ) {
+			echo '<span class="mac-tracker-reviewer-tag" style="background:#1877F2;color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;margin-left:4px;white-space:nowrap;" title="Duyệt bởi Leo (auto)">🤖 Leo</span>';
+		} elseif ( '' !== $reviewer ) {
+			echo '<span class="mac-tracker-reviewer-tag" style="background:#6B7280;color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;margin-left:4px;white-space:nowrap;" title="Duyệt bởi ' . esc_attr( $reviewer ) . '">👤 ' . esc_html( $reviewer ) . '</span>';
+		}
 		if ( ! empty( $row['human_locked'] ) ) { return; }
 		if ( '' !== $precise_name && $precise_name !== $tone ) { echo '<span class="mac-tracker-tone-precise" title="Precise: ' . esc_attr( $precise_name ) . '">Group: ' . esc_html( $tone ) . '</span>'; }
 		$snapshot_id = (int) $row['id'];
