@@ -1724,9 +1724,9 @@ class MAC_Tracker_Admin {
 		if ( $manual ) { echo '<span class="mac-tracker-tone-manual">Đã sửa tay</span>'; }
 		$reviewer = trim( (string) ( $row['reviewer_tag'] ?? '' ) );
 		if ( 'leo' === strtolower( $reviewer ) ) {
-			echo '<span class="mac-tracker-reviewer-tag" style="background:#1877F2;color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;margin-left:4px;white-space:nowrap;" title="Duyệt bởi Leo (auto)">🤖 Leo</span>';
-		} elseif ( '' !== $reviewer ) {
-			echo '<span class="mac-tracker-reviewer-tag" style="background:#6B7280;color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;margin-left:4px;white-space:nowrap;" title="Duyệt bởi ' . esc_attr( $reviewer ) . '">👤 ' . esc_html( $reviewer ) . '</span>';
+			echo '<span class="mac-tracker-reviewer-tag" style="background:#1877F2;color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;margin-left:4px;white-space:nowrap;" title="Duyệt bởi Leo Muse (auto)">🤖 Leo Muse</span>';
+		} else {
+			echo '<span class="mac-tracker-reviewer-tag" style="background:#2D5016;color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;margin-left:4px;white-space:nowrap;" title="Duyệt bởi Leo">🦁 Leo</span>';
 		}
 		if ( ! empty( $row['human_locked'] ) ) { return; }
 		if ( '' !== $precise_name && $precise_name !== $tone ) { echo '<span class="mac-tracker-tone-precise" title="Precise: ' . esc_attr( $precise_name ) . '">Group: ' . esc_html( $tone ) . '</span>'; }
