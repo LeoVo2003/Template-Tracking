@@ -835,11 +835,27 @@ class MAC_Tracker_Admin {
 	/** Shared queue operation used by the normal form and the in-page AJAX controls. */
 	private function process_visual_action( $action, array $ids, array $manual_tones = array() ) {
 		if ( 'approve_selected' === $action ) {
+			// First, save any manual tone selections from the dropdowns.
+			$manual_tones = isset( $_POST['manual_tone'] ) && is_array( $_POST['manual_tone'] ) ? wp_unslash( $_POST['manual_tone'] ) : array();
+			$manual_saved = 0;
+			$valid_tones = array_diff( $this->tone_options(), array( 'Cần duyệt' ) );
+			foreach ( $manual_tones as $mid => $mtone ) {
+				$mid = absint( $mid );
+				$mtone = sanitize_text_field( $mtone );
+				if ( $mid > 0 && '' !== $mtone && in_array( $mtone, $valid_tones, true ) ) {
+					// Only save if this card is in the selection (or no selection = page)
+					if ( empty( $ids ) || in_array( $mid, $ids, true ) ) {
+						$res = $this->repository->save_manual_visual_tone( $mid, $mtone );
+						if ( ! is_wp_error( $res ) && $res ) { $manual_saved++; }
+					}
+				}
+			}
 			$result = $this->repository->approve_visual_tones( $ids );
-			if ( $result <= 0 ) {
+			$total = (int) $result + $manual_saved;
+			if ( $total <= 0 ) {
 				return array( 'result' => new WP_Error( 'mac_tracker_visual_approve_empty', 'No eligible AI review cards were selected.' ), 'message' => 'No eligible AI review cards were selected.', 'dispatch' => false );
 			}
-			return array( 'result' => $result, 'message' => sprintf( '%d review card(s) approved and locked.', (int) $result ), 'dispatch' => false );
+			return array( 'result' => $total, 'message' => sprintf( '%d review card(s) approved and locked.', $total ), 'dispatch' => false );
 		}
 		if ( preg_match( '/^approve_one_(\d+)$/', $action, $approve_match ) ) {
 			$result = $this->repository->approve_visual_tone( absint( $approve_match[1] ) );
