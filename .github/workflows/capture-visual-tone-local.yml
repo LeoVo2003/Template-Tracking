@@ -51,12 +51,13 @@ jobs:
           $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
           $npmCommand = Get-Command npm -ErrorAction SilentlyContinue
           if (-not $nodeCommand -or -not $npmCommand) {
-            throw "Local Visual runtime requires a persistent Node.js 20+ installation. Run: powershell -ExecutionPolicy Bypass -File scripts/setup-local-visual-runtime.ps1"
+            throw "Local Visual runtime requires a persistent patched Node.js installation (22.23.4+ / 24.22.1+ / 26.12.1+). Run: powershell -ExecutionPolicy Bypass -File scripts/setup-local-visual-runtime.ps1"
           }
           $nodeVersion = (node --version).Trim()
-          $nodeMajor = [int](($nodeVersion -replace '^v', '').Split('.')[0])
-          if ($nodeMajor -lt 20) {
-            throw "Local Visual runtime requires Node.js 20 or newer. Found $nodeVersion. Run: powershell -ExecutionPolicy Bypass -File scripts/setup-local-visual-runtime.ps1"
+          $nodeParsed = [version]($nodeVersion -replace '^v', '')
+          $patchedMinimum = @{ 22 = [version]'22.23.4'; 24 = [version]'24.22.1'; 26 = [version]'26.12.1' }
+          if (-not $patchedMinimum.ContainsKey($nodeParsed.Major) -or $nodeParsed -lt $patchedMinimum[$nodeParsed.Major]) {
+            throw "Local Visual runtime requires patched Node.js (22.23.4+ / 24.22.1+ / 26.12.1+, CVE-2026-111497). Found $nodeVersion. Run: powershell -ExecutionPolicy Bypass -File scripts/setup-local-visual-runtime.ps1"
           }
           $repoParent = Split-Path $env:GITHUB_WORKSPACE -Parent
           $runtimeRoot = Split-Path $repoParent -Parent

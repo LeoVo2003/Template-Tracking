@@ -24,14 +24,16 @@ if (-not (Test-Path -LiteralPath $RunnerRoot -PathType Container)) {
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
 $npmCommand = Get-Command npm -ErrorAction SilentlyContinue
 if (-not $nodeCommand -or -not $npmCommand) {
-    throw "Node.js and npm are required. Install one persistent Node.js 20+ runtime for this Windows user, then rerun this script."
+    throw "Node.js and npm are required. Install one persistent patched Node.js runtime (22.23.4+ / 24.22.1+ / 26.12.1+) for this Windows user, then rerun this script."
 }
 
 $nodeVersion = (& node --version).Trim()
 $npmVersion = (& npm --version).Trim()
-$nodeMajor = [int] (($nodeVersion -replace '^v', '').Split('.')[0])
-if ($nodeMajor -lt 20) {
-    throw "Node.js 20 or newer is required. Found: $nodeVersion"
+$nodeParsed = [version] ($nodeVersion -replace '^v', '')
+# CVE-2026-111497 (Brotli RCE): only patched lines are accepted; Node 20 and older are EOL and get no fix.
+$patchedMinimum = @{ 22 = [version]'22.23.4'; 24 = [version]'24.22.1'; 26 = [version]'26.12.1' }
+if (-not $patchedMinimum.ContainsKey($nodeParsed.Major) -or $nodeParsed -lt $patchedMinimum[$nodeParsed.Major]) {
+    throw "Patched Node.js is required (22.23.4+ / 24.22.1+ / 26.12.1+, CVE-2026-111497). Found: $nodeVersion"
 }
 
 $runnerConfigPath = Join-Path $RunnerRoot '.runner'
